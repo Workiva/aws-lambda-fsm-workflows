@@ -1,0 +1,29 @@
+machines:
+
+- name: encrypt_s3
+
+  states:
+
+  - name: check
+    initial: true
+    do_action: examples.encrypt_s3.actions.CheckIfFileExists
+    transitions:
+    - target: encrypt
+      event: done
+    - target: done
+      event: missing
+
+  - name: encrypt
+    do_action: examples.encrypt_s3.actions.EncryptFile
+    transitions:
+    - target: cleanup
+      event: done
+
+  - name: cleanup
+    do_action: examples.encrypt_s3.actions.RemoveOldFile
+    transitions:
+    - target: done
+      event: done
+
+  - name: done
+    final: true

@@ -1,0 +1,7 @@
+machines:
+- import: examples/docs/fsm.yaml
+- import: examples/tracer/fsm.yaml
+- import: examples/ecs/fsm.yaml
+- import: examples/encrypt_s3/fsm.yaml
+
+

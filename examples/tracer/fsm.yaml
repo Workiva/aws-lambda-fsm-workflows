@@ -1,0 +1,32 @@
+machines:
+
+- name: tracer
+
+  states:
+
+  - name: state1
+    entry_action: aws_lambda_fsm.action.Action
+    do_action: examples.tracer.actions.IncrementAction
+    exit_action: aws_lambda_fsm.action.Action
+    initial: true
+    transitions:
+    - target: state2
+      action: aws_lambda_fsm.action.Action
+      event: event1
+    - target: final
+      event: done
+
+  - name: state2
+    entry_action: aws_lambda_fsm.action.Action
+    do_action: examples.tracer.actions.IncrementAction
+    exit_action: aws_lambda_fsm.action.Action
+    transitions:
+    - target: state1
+      action: aws_lambda_fsm.action.Action
+      event: event1
+    - target: final
+      event: done
+
+  - name: final
+    do_action: aws_lambda_fsm.action.Action
+    final: true

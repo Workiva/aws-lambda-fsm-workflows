@@ -1,0 +1,2 @@
+machines:
+- import: examples/fsm.yaml

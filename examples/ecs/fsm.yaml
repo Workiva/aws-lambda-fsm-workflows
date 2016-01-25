@@ -1,0 +1,28 @@
+machines:
+
+- name: ecs
+
+  states:
+
+  - name: run
+    initial: true
+    entry_action: examples.ecs.actions.RunTaskAction
+    transitions:
+    - target: fireworks
+      event: done
+
+  - name: fireworks
+    do_action: examples.ecs.actions.Fireworks
+    transitions:
+    - target: run2
+      event: done
+
+  - name: run2
+    entry_action: examples.ecs.actions.RunTaskAction
+    transitions:
+    - target: fireworks2
+      event: done
+
+  - name: fireworks2
+    entry_action: examples.ecs.actions.Fireworks
+    final: true

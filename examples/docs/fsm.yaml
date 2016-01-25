@@ -1,0 +1,142 @@
+machines:
+
+- name: overview
+
+  states:
+
+  - name: FirstState
+    initial: true
+    entry_action: Action1
+    do_action: Action2
+    exit_action: Action3
+    transitions:
+    - target: SecondState
+      event: done
+    - target: ThirdState
+      event: skip
+
+  - name: SecondState
+    entry_action: Action4
+    do_action: Action5
+    exit_action: Action6
+    transitions:
+    - target: ThirdState
+      event: done
+
+  - name: ThirdState
+    final: true
+    entry_action: Action7
+    do_action: Action8
+    exit_action: Action9
+
+- name: description
+
+  states:
+
+  - name: StateName1
+    initial: true
+    entry_action: full.path.of.CodeClassToRunOnEntry
+    do_action: full.path.of.CodeClassToRunInState
+    exit_action: full.path.of.CodeClassToRunOnExit
+    transitions:
+    - target: StateName2
+      event: event
+
+  - name: StateName2
+    final: true
+    entry_action: full.path.of.CodeClassToRunOnEntry
+    do_action: full.path.of.CodeClassToRunInState
+    exit_action: full.path.of.CodeClassToRunOnExit
+
+- name: justification1
+
+  states:
+
+  - name: MakeDiskImage
+    initial: true
+    do_action: MakeDiskImage
+    transitions:
+    - target: CopyDiskImage
+      event: done
+    - target: Cleanup
+      event: fail
+
+  - name: CopyDiskImage
+    do_action: CopyDiskImage
+    transitions:
+    - target: BootMachine
+      event: done
+    - target: Cleanup
+      event: fail
+
+  - name: BootMachine
+    do_action: BootMachine
+    transitions:
+    - target: SetupNetwork
+      event: done
+    - target: Cleanup
+      event: fail
+
+  - name: SetupNetwork
+    do_action: SetupNetwork
+    transitions:
+    - target: SetupUsers
+      event: done
+    - target: Cleanup
+      event: fail
+
+  - name: SetupUsers
+    do_action: SetupUsers
+    transitions:
+    - target: RebootMachine
+      event: done
+    - target: Cleanup
+      event: fail
+
+  - name: RebootMachine
+    final: true
+    do_action: RebootMachine
+    transitions:
+    - target: Cleanup
+      event: fail
+
+  - name: Cleanup
+    final: true
+    do_action: Cleanup
+
+- name: machine_name                                   # identifiable name for the machine
+
+  states:                                              # heading for multiple states
+
+  - name: state1                                       # name of the state
+    entry_action: module.EntryActionClass              # class name of the action code to execute on entry
+    do_action: module.DoActionClass                    # class name of the action code to execute on arrival
+    exit_action: module.ExitActionClass                # class name of the action code to execute on exit
+    initial: true                                      # true for the initial state of the machine
+
+    transitions:                                       # heading for multiple transitions
+
+    - target: state2                                   # destination/target state for the transition
+      action: module.TransitionActionClass             # class name of the action code to execute on transition
+      event: event1                                    # event that trigger the transition
+    - target: final
+      event: done
+
+  - name: state2
+    entry_action: module.AnotherEntryActionClass
+    do_action: module.AnotherDoActionClass
+    exit_action: module.AnotherExitActionClass
+
+    transitions:
+
+    - target: state1
+      action: module.AnotherTransitionActionClass
+      event: event1
+    - target: final
+      event: done
+
+  - name: final
+    do_action: module.YetAnotherDoActionClass
+    final: true                                        # true for the final/terminal state(s) of the machine
+
+

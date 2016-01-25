@@ -1,0 +1,8 @@
+*.pyc
+.idea
+*.zip
+unit.xml
+.coverage
+settingslocal.py
+.DS_Store
+*.graffle
