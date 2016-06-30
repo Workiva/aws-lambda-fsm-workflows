@@ -1,11 +1,11 @@
 # system imports
-import os
-import time
-import logging
+import argparse
 import json
+import logging
+import sys
+import time
 
 # library imports
-import boto3
 
 # application imports
 from aws_lambda_fsm.constants import AWS_SQS
@@ -13,7 +13,12 @@ from aws_lambda_fsm.constants import AWS_KINESIS
 from aws_lambda_fsm.constants import AWS
 from aws_lambda_fsm.constants import PAYLOAD
 from aws_lambda_fsm.constants import SYSTEM_CONTEXT
+from aws_lambda_fsm.aws import get_connection
 from aws_lambda_fsm.aws import get_arn_from_arn_string
+
+import settings
+
+ALLOWED_DEST_SERVICES = [AWS.KINESIS, AWS.SNS]
 
 # TODO: local cache of processed message ids
 # TODO: handle partial batch kinesis failure
@@ -21,29 +26,57 @@ from aws_lambda_fsm.aws import get_arn_from_arn_string
 # TODO: handle partial batch sqs failure
 # TODO: start via supervisord
 
-logging.getLogger().setLevel(logging.INFO)
+# setup the command line args
+parser = argparse.ArgumentParser(description='Forwards messages from SQS to dest arn.')
+parser.add_argument('--sqs_queue_arn', default='PRIMARY_STREAM_SOURCE')
+parser.add_argument('--dest_arn', default='SECONDARY_STREAM_SOURCE')
+parser.add_argument('--log_level', default='INFO')
+parser.add_argument('--boto_log_level', default='INFO')
+args = parser.parse_args()
 
-sqs_arn_string = os.environ['SQS_ARN']
-dest_arn_string = os.environ['DEST_ARN']
+logging.basicConfig(
+    format='[%(levelname)s] %(asctime)-15s %(message)s',
+    level=int(args.log_level) if args.log_level.isdigit() else args.log_level,
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
-logging.info('SQS_ARN = %s', sqs_arn_string)
-logging.info('DEST_ARN = %s', dest_arn_string)
+logging.getLogger('boto3').setLevel(args.boto_log_level)
+logging.getLogger('botocore').setLevel(args.boto_log_level)
 
+# setup connections to AWS
+sqs_arn_string = getattr(settings, args.sqs_queue_arn)
 sqs_arn = get_arn_from_arn_string(sqs_arn_string)
-dest_arn = get_arn_from_arn_string(dest_arn_string)
-
-sqs = boto3.client(sqs_arn.service, region_name=sqs_arn.region_name)
-dest = boto3.client(dest_arn.service, region_name=sqs_arn.region_name)
-
-wait = 5
-backoff = 0
-
-response = sqs.get_queue_url(
+if sqs_arn.service != AWS.SQS:
+    logging.fatal("%s is not an SQS ARN", sqs_arn_string)
+    sys.exit(1)
+sqs_conn = get_connection(sqs_arn_string)
+response = sqs_conn.get_queue_url(
     QueueName=sqs_arn.resource.split(':')[-1]
 )
 sqs_queue_url = response[AWS_SQS.QueueUrl]
 
-logging.info('sqs queue url = %s', sqs_queue_url)
+logging.info('SQS ARN: %s', sqs_arn_string)
+logging.info('SQS endpoint: %s', settings.ENDPOINTS.get(AWS.SQS))
+logging.info('SQS queue: %s', sqs_arn.resource)
+logging.info('SQS queue url: %s', sqs_queue_url)
+
+dest_arn_string = getattr(settings, args.dest_arn)
+dest_arn = get_arn_from_arn_string(dest_arn_string)
+if dest_arn.service not in ALLOWED_DEST_SERVICES:
+    logging.fatal(
+        "%s is not a %s ARN",
+        dest_arn_string,
+        '/'.join(map(str.upper, ALLOWED_DEST_SERVICES))
+    )
+    sys.exit(1)
+dest_conn = get_connection(dest_arn_string)
+
+logging.info('Dest ARN: %s', dest_arn_string)
+logging.info('Dest endpoint: %s', settings.ENDPOINTS.get(dest_arn.service))
+logging.info('Dest resource: %s', dest_arn.resource)
+
+wait = 5
+backoff = 0
 
 # this service will run forever, echoing messages from SQS
 # onto another Amazon service.
@@ -55,7 +88,7 @@ while True:
 
         # receive up to 10 messages from SQS
         sqs_messages = []
-        response = sqs.receive_message(
+        response = sqs_conn.receive_message(
             QueueUrl=sqs_queue_url,
             MaxNumberOfMessages=10
         )
@@ -77,7 +110,7 @@ while True:
         # echo to SNS
         if dest_arn.service == AWS.SNS:
             for sqs_message in sqs_messages:
-                response = dest.publish(
+                response = dest_conn.publish(
                     TopicArn=dest_arn,
                     Message=sqs_message[AWS_SQS.MESSAGE.Body],
                 )
@@ -97,14 +130,14 @@ while True:
                         AWS_KINESIS.RECORD.PartitionKey: correlation_id
                     }
                 )
-            response = dest.put_records(
+            response = dest_conn.put_records(
                 StreamName=dest_arn.resource.split('/')[-1],
                 Records=records
             )
             logging.info(response)
 
         # after processing, the SQS messages need to be deleted
-        sqs.delete_message_batch(
+        sqs_conn.delete_message_batch(
             QueueUrl=sqs_queue_url,
             Entries=[
                 {

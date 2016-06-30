@@ -46,31 +46,16 @@ Depending on the configuration in `settings.py`, the following local services sh
     
 ### Running `fake_sns` (https://github.com/yourkarma/fake_sns)
 
-Apply the following patch
-
-    diff --git lib/fake_sns/server.rb lib/fake_sns/server.rb
-    index 6713789..bdaf074 100644
-    --- lib/fake_sns/server.rb
-    +++ lib/fake_sns/server.rb
-    @@ -56,6 +56,7 @@ module FakeSNS
-             database.transaction do
-               database.each_deliverable_message do |subscription, message|
-                 DeliverMessage.call(subscription: subscription, message: message, request: request, config: config)
-    +            database.messages.reset
-               end
-             end
-           rescue => e
-           
-and run the server with the following 
-
     $ fake_sns --database :memory:
     
-`fake_sns` does not automatically send the messages, do one needs to repeatedly use `curl`
+`fake_sns` does not automatically send the messages, so one needs to repeatedly use `curl`
 to step the state machines forward.
 
-
-    
     $ curl -X POST http://localhost:9292/drain # drain the messages
+
+### Running `fake_sqs` (https://github.com/iain/fake_sqs)
+
+    $ fake_sqs
     
 ### Running `dev_ecs` 
 

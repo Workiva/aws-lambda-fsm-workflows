@@ -5,12 +5,9 @@ from pip.req import parse_requirements
 def get_version():
     import imp
 
-    source_dir = 'aws_lambda_fsm'
+    pkg_meta = imp.load_source('_pkg_meta', 'aws_lambda_fsm/_pkg_meta.py')
 
-    with open('{}/_pkg_meta.py'.format(source_dir), 'rb') as fp:
-        mod = imp.load_source('_pkg_meta', source_dir, fp)
-
-    return mod.version
+    return pkg_meta.version
 
 
 def get_requirements(filename):
@@ -47,6 +44,7 @@ setup_args = dict(
              "tools/create_kinesis_stream.py",
              "tools/create_dynamodb_table.py",
              "tools/create_sns_topic.py",
+             "tools/create_sqs_queue.py",
              "tools/start_state_machine.py",
              "tools/yaml_to_graphviz.py"],
     url='http://github.com/Workiva/aws-lambda-fsm',
