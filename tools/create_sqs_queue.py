@@ -15,6 +15,7 @@ import sys
 from aws_lambda_fsm.constants import AWS
 from aws_lambda_fsm.aws import get_connection
 from aws_lambda_fsm.aws import get_arn_from_arn_string
+from aws_lambda_fsm.aws import validate_config
 
 import settings
 
@@ -34,6 +35,8 @@ logging.basicConfig(
 logging.getLogger('boto3').setLevel(args.boto_log_level)
 logging.getLogger('botocore').setLevel(args.boto_log_level)
 
+validate_config()
+
 # setup connections to AWS
 sqs_queue_arn = getattr(settings, args.sqs_queue_arn)
 logging.info('SQS queue ARN: %s', sqs_queue_arn)
@@ -41,7 +44,7 @@ logging.info('SQS endpoint: %s', settings.ENDPOINTS.get(AWS.SQS))
 if get_arn_from_arn_string(sqs_queue_arn).service != AWS.SQS:
     logging.fatal("%s is not an SQS ARN", sqs_queue_arn)
     sys.exit(1)
-sqs_conn = get_connection(sqs_queue_arn)
+sqs_conn = get_connection(sqs_queue_arn, disable_chaos=True)
 sqs_queue = get_arn_from_arn_string(sqs_queue_arn).resource
 logging.info('SQS queue: %s', sqs_queue)
 

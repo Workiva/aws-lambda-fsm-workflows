@@ -25,6 +25,7 @@ class SYSTEM_CONTEXT(object):
     CORRELATION_ID = 'correlation_id'
     STEPS = 'steps'
     RETRIES = 'retries'
+    MAX_RETRIES = 'max_retries'
     RESTARTED_AT = 'restarted_at'
     STARTED_AT = 'started_at'
     FINISHED_AT = 'finished_at'
@@ -32,6 +33,7 @@ class SYSTEM_CONTEXT(object):
     TABLE = 'table'
     TOPIC = 'topic'
     METRICS = 'metrics'
+    LEASE_PRIMARY = 'lease_primary'
 
 
 class OBJ(object):
@@ -77,6 +79,8 @@ class CONFIG(object):
     EVENT = 'event'
     TARGET = 'target'
     TOPIC = 'topic'
+    MAX_RETRIES = 'max_retries'
+    DEFAULT_MAX_RETRIES = 5
 
 
 class MACHINE(object):
@@ -87,6 +91,7 @@ class MACHINE(object):
     TABLE = 'table'
     METRICS = 'metrics'
     TOPIC = 'topic'
+    MAX_RETRIES = 'max_retries'
 
 
 ################################################################################
@@ -99,13 +104,17 @@ class STREAM_DATA(object):
     TIMESTAMP = 'timestamp'
 
 
-class RECOVERY_DATA(object):
+class RETRY_DATA(object):
     PARTITION = 'partition'
-    CORRELATION_ID = 'correlation_id'
-    SENT = 'sent'
+    CORRELATION_ID_STEPS = 'correlation_id_steps'
     RUN_AT = 'run_at'
     PAYLOAD = 'payload'
     RETRIES = 'retries'
+
+
+class CHECKPOINT_DATA(object):
+    CORRELATION_ID = 'correlation_id'
+    SENT = 'sent'
 
 
 class ENVIRONMENT_DATA(object):
@@ -118,12 +127,22 @@ class CACHE_DATA(object):
     VALUE = 'value'
 
 
+class LEASE_DATA(object):
+    LEASE_TIMEOUT = 60
+    KEY = 'ckey'
+    STATE = 'state'
+    FENCE = 'fence'
+    EXPIRES = 'expires'
+    LEASE_KEY_PREFIX = 'lease-'
+
+    class STATES(object):
+        LEASED = 'leased'
+        OPEN = 'open'
+
+
 ################################################################################
 # AWS Related
 ################################################################################
-
-class ENDPOINTS(object):
-    ENDPOINT_URL = 'endpoint_url'
 
 
 class AWS(object):
@@ -208,9 +227,11 @@ class AWS_SQS(object):
 class AWS_DYNAMODB(object):
     AttributeName = 'AttributeName'
     AttributeType = 'AttributeType'
+    Attributes = 'Attributes'
     NUMBER = 'N'
     STRING = 'S'
     BOOLEAN = 'BOOL'
+    NULL = 'NULL'
     EQUAL = 'EQ'
     LESS_THAN = 'LT'
     GREATER_THAN = 'GT'

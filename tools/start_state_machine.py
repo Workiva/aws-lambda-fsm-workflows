@@ -15,6 +15,7 @@ import sys
 # application imports
 from aws_lambda_fsm.aws import get_connection
 from aws_lambda_fsm.aws import get_arn_from_arn_string
+from aws_lambda_fsm.aws import validate_config
 from aws_lambda_fsm.client import start_state_machine
 from aws_lambda_fsm.client import start_state_machines
 from aws_lambda_fsm.constants import STATE
@@ -48,6 +49,8 @@ logging.basicConfig(
 logging.getLogger('boto3').setLevel(args.boto_log_level)
 logging.getLogger('botocore').setLevel(args.boto_log_level)
 
+validate_config()
+
 if args.num_machines > 1:
     # start things off
     context = json.loads(args.initial_context or "{}")
@@ -69,7 +72,7 @@ if args.checkpoint_shard_id and args.checkpoint_sequence_number:
         logging.fatal("%s is not a Kinesis ARN", kinesis_stream_arn)
         sys.exit(1)
     kinesis_conn = get_connection(kinesis_stream_arn)
-    kinesis_stream = get_arn_from_arn_string(kinesis_stream_arn).resource.split('/')[-1]
+    kinesis_stream = get_arn_from_arn_string(kinesis_stream_arn).slash_resource()
     logging.info('Kinesis stream: %s', kinesis_stream)
 
     # create a shard iterator for the specified shard and sequence number

@@ -77,6 +77,7 @@ class TestFSM(TestFsmBase):
         fsm = FSM(config_dict=self.CONFIG_DICT)
         self.assertEqual({
             'foo': {
+                'max_retries': 5,
                 'states': {
                     'a': fsm.machines['foo']['states']['a'],
                     'b': fsm.machines['foo']['states']['b'],
@@ -144,7 +145,8 @@ class TestFSM(TestFsmBase):
                                        'current_state': 'a',
                                        'correlation_id': 'foo',
                                        'retries': 'baz',
-                                       'steps': 'bar'},
+                                       'steps': 'bar',
+                                       'max_retries': 5},
                     'user_context': {},
                     'version': '0.1'}
         self.assertEqual(expected, instance.to_payload_dict())
@@ -202,7 +204,7 @@ class TestDispatchAndRetry(TestFsmBase):
         instance = self._dispatch(mock.Mock())
         mock_queue_error.assert_called_with(
             'duplicate',
-            'Message has been processed already.'
+            'Message has been processed already (True).'
         )
         mock_stop_retries.assert_called_with(
             instance,
@@ -255,7 +257,7 @@ class TestDispatchAndRetry(TestFsmBase):
         mock_send_next_event_for_dispatch.assert_called_with(
             instance,
             '{"system_context": {"correlation_id": "b", "current_event": "ok", "current_state": '
-            '"a", "machine_name": "foo", "metrics": "m", "retries": 0, "steps": 1000, "stream": '
+            '"a", "machine_name": "foo", "max_retries": 5, "metrics": "m", "retries": 0, "steps": 1000, "stream": '
             '"s", "table": "t", "topic": "z"}, "user_context": {}, "version": "0.1"}',
             'b',
             delay=0,
@@ -272,7 +274,9 @@ class TestDispatchAndRetry(TestFsmBase):
         )
         mock_set_message_dispatched.assert_called_with(
             'b',
-            999
+            999,
+            0,
+            primary=False
         )
 
     @mock.patch('aws_lambda_fsm.fsm.Context._queue_error')
@@ -291,7 +295,7 @@ class TestDispatchAndRetry(TestFsmBase):
         mock_send_next_event_for_dispatch.assert_called_with(
             instance,
             '{"system_context": {"correlation_id": "b", "current_event": "ok", "current_state": '
-            '"a", "machine_name": "foo", "metrics": "m", "retries": 0, "steps": 1000, "stream": "s", '
+            '"a", "machine_name": "foo", "max_retries": 5, "metrics": "m", "retries": 0, "steps": 1000, "stream": "s", '
             '"table": "t", "topic": "z"}, "user_context": {}, "version": "0.1"}',
             'b',
             delay=0,
@@ -308,7 +312,9 @@ class TestDispatchAndRetry(TestFsmBase):
         )
         mock_set_message_dispatched.assert_called_with(
             'b',
-            999
+            999,
+            0,
+            primary=True
         )
         mock_queue_error.assert_called_with(
             'cache',
@@ -320,19 +326,22 @@ class TestDispatchAndRetry(TestFsmBase):
     @mock.patch('aws_lambda_fsm.fsm.send_next_event_for_dispatch')
     @mock.patch('aws_lambda_fsm.fsm.set_message_dispatched')
     @mock.patch('aws_lambda_fsm.fsm.time')
+    @mock.patch('aws_lambda_fsm.fsm.random')
     def test_dispatch_raises_set_message_dispatched_after_kinesis_put(self,
+                                                                      mock_random,
                                                                       mock_time,
                                                                       mock_set_message_dispatched,
                                                                       mock_send_next_event_for_dispatch,
                                                                       mock_start_retries,
                                                                       mock_queue_error):
+        mock_random.uniform.return_value = 1.0
         mock_time.time.return_value = 1.0
         mock_set_message_dispatched.side_effect = Exception()
         instance = self._dispatch(mock_send_next_event_for_dispatch)
         mock_send_next_event_for_dispatch.assert_called_with(
             instance,
             '{"system_context": {"correlation_id": "b", "current_event": "ok", "current_state": '
-            '"a", "machine_name": "foo", "metrics": "m", "retries": 0, "steps": 1000, "stream": '
+            '"a", "machine_name": "foo", "max_retries": 5, "metrics": "m", "retries": 0, "steps": 1000, "stream": '
             '"s", "table": "t", "topic": "z"}, "user_context": {}, "version": "0.1"}',
             'b',
             delay=0,
@@ -369,12 +378,14 @@ class TestDispatchAndRetry(TestFsmBase):
         instance = self._dispatch(mock_send_next_event_for_dispatch)
         mock_set_message_dispatched.assert_called_with(
             'b',
-            999
+            999,
+            0,
+            primary=False
         )
         mock_send_next_event_for_dispatch.assert_called_with(
             instance,
             '{"system_context": {"correlation_id": "b", "current_event": "ok", "current_state": '
-            '"a", "machine_name": "foo", "metrics": "m", "retries": 0, "steps": 1000, "stream": '
+            '"a", "machine_name": "foo", "max_retries": 5, "metrics": "m", "retries": 0, "steps": 1000, "stream": '
             '"s", "table": "t", "topic": "z"}, "user_context": {}, "version": "0.1"}',
             'b',
             delay=0,
@@ -413,12 +424,14 @@ class TestDispatchAndRetry(TestFsmBase):
         instance = self._dispatch(mock_send_next_event_for_dispatch)
         mock_set_message_dispatched.assert_called_with(
             'b',
-            999
+            999,
+            0,
+            primary=False
         )
         mock_send_next_event_for_dispatch.assert_called_with(
             instance,
             '{"system_context": {"correlation_id": "b", "current_event": "ok", "current_state": '
-            '"a", "machine_name": "foo", "metrics": "m", "retries": 0, "steps": 1000, "stream": '
+            '"a", "machine_name": "foo", "max_retries": 5, "metrics": "m", "retries": 0, "steps": 1000, "stream": '
             '"s", "table": "t", "topic": "z"}, "user_context": {}, "version": "0.1"}',
             'b',
             delay=0,
@@ -441,101 +454,81 @@ class TestDispatchAndRetry(TestFsmBase):
 
 
 class TestDispatchExclusiveLock(TestFsmBase):
+
     @mock.patch('aws_lambda_fsm.fsm.uuid')
-    @mock.patch('aws_lambda_fsm.fsm.cache_add')
+    @mock.patch('aws_lambda_fsm.fsm.acquire_lease')
+    @mock.patch('aws_lambda_fsm.fsm.release_lease')
     @mock.patch('aws_lambda_fsm.fsm.Context._queue_error')
     @mock.patch('aws_lambda_fsm.fsm.Context._dispatch_and_retry')
-    def test_cache_add_False(self,
-                             mock_dispatch_and_retry,
-                             mock_queue_error,
-                             mock_cache_add,
-                             mock_uuid):
+    def test_lease_True(self,
+                        mock_dispatch_and_retry,
+                        mock_queue_error,
+                        mock_release_lease,
+                        mock_acquire_lease,
+                        mock_uuid):
         mock_uuid.uuid4.return_value.hex = 'bobloblaw'
-        mock_cache_add.return_value = False
+        mock_acquire_lease.return_value = 'foobar'
+        mock_release_lease.return_value = 'foobar'
         instance = Context('name')
         instance.dispatch('event', {'foo': 'bar'})
-        mock_cache_add.assert_called_with(
+        mock_acquire_lease.assert_called_with(
             'bobloblaw',
-            'bobloblaw'
+            0,
+            0,
+            primary=True
         )
-        mock_queue_error.assert_called_with(
-            'cache',
-            'Could not obtain exclusive lock.'
+        mock_release_lease.assert_called_with(
+            'bobloblaw',
+            0,
+            0,
+            'foobar',
+            primary=True
         )
+        self.assertFalse(mock_queue_error.called)
         mock_dispatch_and_retry.assert_called_with(
             'event',
             {'foo': 'bar'}
         )
 
     @mock.patch('aws_lambda_fsm.fsm.uuid')
-    @mock.patch('aws_lambda_fsm.fsm.cache_add')
+    @mock.patch('aws_lambda_fsm.fsm.acquire_lease')
+    @mock.patch('aws_lambda_fsm.fsm.release_lease')
     @mock.patch('aws_lambda_fsm.fsm.Context._queue_error')
-    @mock.patch('aws_lambda_fsm.fsm.Context._dispatch_and_retry')
-    def test_cache_add_0(self,
-                         mock_dispatch_and_retry,
+    @mock.patch('aws_lambda_fsm.fsm.Context._retry')
+    def test_lease_False(self,
+                         mock_retry,
                          mock_queue_error,
-                         mock_cache_add,
+                         mock_release_lease,
+                         mock_acquire_lease,
                          mock_uuid):
         mock_uuid.uuid4.return_value.hex = 'bobloblaw'
-        mock_cache_add.return_value = 0
+        mock_acquire_lease.return_value = False
+        mock_release_lease.return_value = False
         instance = Context('name')
         instance.dispatch('event', {'foo': 'bar'})
-        mock_queue_error.assert_called_with(
-            'cache',
-            'Executing without exclusive lock.'
+        mock_acquire_lease.assert_called_with(
+            'bobloblaw',
+            0,
+            0,
+            primary=False
         )
-        mock_dispatch_and_retry.assert_called_with(
-            'event',
+        mock_release_lease.assert_called_with(
+            'bobloblaw',
+            0,
+            0,
+            False,
+            primary=False
+        )
+        self.assertEqual(
+            [
+                mock.call('cache', 'System error acquiring primary=True lease.'),
+                mock.call('cache', 'Could not acquire lease. Retrying.'),
+                mock.call('cache', 'Could not release lease.')
+            ],
+            mock_queue_error.mock_calls
+        )
+        mock_retry.assert_called_with(
             {'foo': 'bar'}
-        )
-
-    @mock.patch('aws_lambda_fsm.fsm.uuid')
-    @mock.patch('aws_lambda_fsm.fsm.cache_add')
-    @mock.patch('aws_lambda_fsm.fsm.cache_get')
-    @mock.patch('aws_lambda_fsm.fsm.cache_delete')
-    @mock.patch('aws_lambda_fsm.fsm.Context._dispatch_and_retry')
-    def test_cache_add_True(self,
-                            mock_dispatch_and_retry,
-                            mock_cache_delete,
-                            mock_cache_get,
-                            mock_cache_add,
-                            mock_uuid):
-        mock_uuid.uuid4.return_value.hex = 'bobloblaw'
-        mock_cache_add.return_value = True
-        mock_cache_get.return_value = 'bobloblaw'
-        instance = Context('name')
-        instance.dispatch('event', {'foo': 'bar'})
-        mock_dispatch_and_retry.assert_called_with(
-            'event',
-            {'foo': 'bar'}
-        )
-        mock_cache_delete.assert_called_with(
-            'bobloblaw'
-        )
-
-    @mock.patch('aws_lambda_fsm.fsm.uuid')
-    @mock.patch('aws_lambda_fsm.fsm.cache_get')
-    @mock.patch('aws_lambda_fsm.fsm.cache_add')
-    @mock.patch('aws_lambda_fsm.fsm.Context._dispatch_and_retry')
-    @mock.patch('aws_lambda_fsm.fsm.Context._queue_error')
-    def test_cache_add_True_no_longer_own(self,
-                                          mock_queue_error,
-                                          mock_dispatch_and_retry,
-                                          mock_cache_add,
-                                          mock_cache_get,
-                                          mock_uuid):
-        mock_uuid.uuid4.return_value.hex = 'bobloblaw'
-        mock_cache_add.return_value = True
-        mock_cache_get.return_value = 'aaa111'
-        instance = Context('name')
-        instance.dispatch('event', {'foo': 'bar'})
-        mock_dispatch_and_retry.assert_called_with(
-            'event',
-            {'foo': 'bar'}
-        )
-        mock_queue_error.assert_called_with(
-            'cache',
-            'No longer own exclusive lock.'
         )
 
 
@@ -576,9 +569,12 @@ class TestContextPrimarySecondary(TestFsmBase):
 
     @mock.patch('aws_lambda_fsm.fsm.start_retries')
     @mock.patch('aws_lambda_fsm.fsm.time')
+    @mock.patch('aws_lambda_fsm.fsm.random')
     def test_start_retries_unhappy_path(self,
+                                        mock_random,
                                         mock_time,
                                         mock_start_retries):
+        mock_random.uniform.return_value = 1.0
         mock_start_retries.side_effect = ClientError({'Error': {'Code': 404}}, 'test')
         mock_time.time.return_value = 1.0
         instance = self._instance()
@@ -592,9 +588,12 @@ class TestContextPrimarySecondary(TestFsmBase):
 
     @mock.patch('aws_lambda_fsm.fsm.start_retries')
     @mock.patch('aws_lambda_fsm.fsm.time')
+    @mock.patch('aws_lambda_fsm.fsm.random')
     def test_start_retries_happy_path(self,
+                                      mock_random,
                                       mock_time,
                                       mock_start_retries):
+        mock_random.uniform.return_value = 1.0
         mock_time.time.return_value = 1.0
         instance = self._instance()
         instance._start_retries({'system_context': {'retries': 1}, 'user_context': {}}, {})
@@ -698,11 +697,14 @@ class TestRetry(TestFsmBase):
     @mock.patch('aws_lambda_fsm.fsm.start_retries')
     @mock.patch('aws_lambda_fsm.fsm.uuid')
     @mock.patch('aws_lambda_fsm.fsm.time')
+    @mock.patch('aws_lambda_fsm.fsm.random')
     def test_dispatch_exception_retries(self,
+                                        mock_random,
                                         mock_time,
                                         mock_uuid,
                                         mock_start_retries,
                                         mock_queue_error):
+        mock_random.uniform.return_value = 1.0
         instance = self._dispatch_client_error(mock_time, mock_uuid)
         mock_start_retries.assert_called_with(
             instance,
@@ -720,11 +722,14 @@ class TestRetry(TestFsmBase):
     @mock.patch('aws_lambda_fsm.fsm.start_retries')
     @mock.patch('aws_lambda_fsm.fsm.uuid')
     @mock.patch('aws_lambda_fsm.fsm.time')
+    @mock.patch('aws_lambda_fsm.fsm.random')
     def test_dispatch_exception_retries_raises(self,
+                                               mock_random,
                                                mock_time,
                                                mock_uuid,
                                                mock_start_retries,
                                                mock_queue_error):
+        mock_random.uniform.return_value = 1.0
         mock_start_retries.side_effect = ClientError({'Error': {'Code': 404}}, 'test')
         instance = self._dispatch_client_error(mock_time, mock_uuid)
         payload = '{"system_context": {"correlation_id": "b", "current_event": "e", "current_state": ' \

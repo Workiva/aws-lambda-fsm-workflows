@@ -8,19 +8,19 @@ amazonaws.com.
 
     ENDPOINTS = {
         'kinesis': {
-            'endpoint_url': 'http://localhost:4567'
+            'us-east-1': 'http://localhost:4567'
         },
         'dynamodb': {
-            'endpoint_url': 'http://localhost:7654'
+            'us-east-1': 'http://localhost:7654'
         },
         'elasticache': {
-            'endpoint_url': 'localhost:11211'
+            'us-east-1': 'localhost:11211'
         },
         'sns': {
-            'endpoint_url': 'http://localhost:9292'
+            'us-east-1': 'http://localhost:9292'
         },
         'ecs': {
-            'endpoint_url': 'http://localhost:8888'
+            'us-east-1': 'http://localhost:8888'
         }
     }
 

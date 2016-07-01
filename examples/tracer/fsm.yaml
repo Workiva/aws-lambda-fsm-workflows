@@ -1,6 +1,7 @@
 machines:
 
 - name: tracer
+  max_retries: 500
 
   states:
 

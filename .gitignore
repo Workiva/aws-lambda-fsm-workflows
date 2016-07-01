@@ -5,5 +5,6 @@
 unit.xml
 .coverage
 settingslocal.py
+settings.py
 .DS_Store
 *.graffle

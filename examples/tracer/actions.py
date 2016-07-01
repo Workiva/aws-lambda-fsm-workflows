@@ -32,9 +32,9 @@ class IncrementAction(Action):
             context['started_at'] = int(time.time())
 
         # when done, emit a dynamodb record
-        if context['count'] > 10:
+        if context['count'] > 100:
             table_arn = context['results_arn']
-            table_name = get_arn_from_arn_string(table_arn).resource.split('/')[-1]
+            table_name = get_arn_from_arn_string(table_arn).slash_resource()
             conn = get_connection(table_arn)
             conn.put_item(
                 TableName=table_name,

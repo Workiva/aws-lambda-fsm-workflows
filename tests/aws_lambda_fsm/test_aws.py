@@ -7,7 +7,6 @@ from botocore.exceptions import ClientError
 
 # application imports
 from aws_lambda_fsm.constants import AWS
-from aws_lambda_fsm.constants import ENDPOINTS
 from aws_lambda_fsm.aws import get_connection
 from aws_lambda_fsm.aws import retriable_entities
 from aws_lambda_fsm.aws import store_checkpoint
@@ -29,11 +28,11 @@ from aws_lambda_fsm.aws import get_secondary_checkpoint_source
 from aws_lambda_fsm.aws import _local
 from aws_lambda_fsm.aws import _get_service_connection
 from aws_lambda_fsm.aws import ChaosConnection
-from aws_lambda_fsm.aws import NoOpCache
 from aws_lambda_fsm.aws import get_arn_from_arn_string
-from aws_lambda_fsm.aws import cache_get
-from aws_lambda_fsm.aws import cache_add
-from aws_lambda_fsm.aws import cache_delete
+from aws_lambda_fsm.aws import _validate_config
+from aws_lambda_fsm.aws import validate_config
+from aws_lambda_fsm.aws import acquire_lease
+from aws_lambda_fsm.aws import release_lease
 
 
 class Connection(object):
@@ -43,10 +42,31 @@ class Connection(object):
         return 1
 
 
-def _get_test_arn(service):
+def _get_test_arn(service, resource='resourcetype/resourcename'):
     return ':'.join(
-        ['arn', 'aws', service, 'testing', '1234567890', 'resourcetype/resourcename']
+        ['arn', 'aws', service, 'testing', '1234567890', resource]
     )
+
+
+class TestArn(unittest.TestCase):
+
+    def test_slash_resource_missing(self):
+        arn = get_arn_from_arn_string('')
+        self.assertEqual(None, arn.slash_resource())
+
+    def test_slash_resource(self):
+        arn_string = _get_test_arn(AWS.KINESIS)
+        arn = get_arn_from_arn_string(arn_string)
+        self.assertEqual('resourcename', arn.slash_resource())
+
+    def test_colon_resource_missing(self):
+        arn = get_arn_from_arn_string('')
+        self.assertEqual(None, arn.colon_resource())
+
+    def test_colon_resource(self):
+        arn_string = _get_test_arn(AWS.KINESIS, resource='foo:bar')
+        arn = get_arn_from_arn_string(arn_string)
+        self.assertEqual('bar', arn.colon_resource())
 
 
 class TestAws(unittest.TestCase):
@@ -122,7 +142,7 @@ class TestAws(unittest.TestCase):
     def test_get_service_connection_memcache_exists(self, mock_settings):
         mock_settings.ENDPOINTS = {
             AWS.ELASTICACHE: {
-                ENDPOINTS.ENDPOINT_URL: 'foobar:1234'
+                'testing': 'foobar:1234'
             }
         }
         _local.elasticache_testing_connection = None
@@ -131,13 +151,24 @@ class TestAws(unittest.TestCase):
         self.assertIsNotNone(_local.elasticache_testing_connection)
 
     @mock.patch('aws_lambda_fsm.aws._get_connection_info')
-    def test_get_service_connection_memcache_not_exists(self,
-                                                        mock_get_connection_info):
-        mock_get_connection_info.return_value = 'elasticache', 'testing', None
-        _local.elasticache_testing_connection = None
-        conn = _get_service_connection(_get_test_arn(AWS.ELASTICACHE))
-        self.assertIsNone(conn)
-        self.assertIsNone(_local.elasticache_testing_connection)
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    def test_get_service_connection_chaos(self,
+                                          mock_settings,
+                                          mock_get_connection_info):
+        mock_get_connection_info.return_value = 'kinesis', 'testing', 'http://localhost:1234'
+        mock_settings.CHAOS = {'foo': 'bar'}
+        conn = _get_service_connection(_get_test_arn(AWS.DYNAMODB))
+        self.assertTrue(isinstance(conn, ChaosConnection))
+
+    @mock.patch('aws_lambda_fsm.aws._get_connection_info')
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    def test_get_service_connection_no_chaos(self,
+                                             mock_settings,
+                                             mock_get_connection_info):
+        mock_get_connection_info.return_value = 'kinesis', 'testing', 'http://localhost:1234'
+        mock_settings.CHAOS = {'foo': 'bar'}
+        conn = _get_service_connection(_get_test_arn(AWS.DYNAMODB), disable_chaos=True)
+        self.assertFalse(isinstance(conn, ChaosConnection))
 
     # get_connection
 
@@ -147,15 +178,10 @@ class TestAws(unittest.TestCase):
         _local.kinesis_connection = None
         conn = get_connection(_get_test_arn(AWS.KINESIS))
         self.assertIsNotNone(conn)
-        mock_get_service_connection.assert_called_with(_get_test_arn(AWS.KINESIS))
-
-    @mock.patch('aws_lambda_fsm.aws.settings')
-    def test_get_kinesis_connection_settings(self,
-                                             mock_settings):
-        mock_settings.USE_KINESIS = False
-        _local.kinesis_connection = None
-        conn = get_connection(_get_test_arn(AWS.KINESIS))
-        self.assertIsNone(conn)
+        mock_get_service_connection.assert_called_with(_get_test_arn(AWS.KINESIS),
+                                                       connect_timeout=60,
+                                                       read_timeout=60,
+                                                       disable_chaos=False)
 
     @mock.patch('aws_lambda_fsm.aws._get_service_connection')
     def test_get_memcache_connection(self,
@@ -163,15 +189,10 @@ class TestAws(unittest.TestCase):
         _local.elasticache_testing_connection = None
         conn = get_connection(_get_test_arn(AWS.ELASTICACHE))
         self.assertIsNotNone(conn)
-        mock_get_service_connection.assert_called_with(_get_test_arn(AWS.ELASTICACHE))
-
-    @mock.patch('aws_lambda_fsm.aws.settings')
-    def test_get_memcache_connection_settings(self,
-                                              mock_settings):
-        mock_settings.USE_ELASTICACHE = False
-        _local.elasticache_testing_connection = None
-        conn = get_connection(_get_test_arn(AWS.ELASTICACHE))
-        self.assertTrue(isinstance(conn, NoOpCache))
+        mock_get_service_connection.assert_called_with(_get_test_arn(AWS.ELASTICACHE),
+                                                       connect_timeout=60,
+                                                       read_timeout=60,
+                                                       disable_chaos=False)
 
     ##################################################
     # Functions
@@ -508,7 +529,7 @@ class TestAws(unittest.TestCase):
     def test_retriable_entities(self,
                                 mock_get_connection):
         mock_get_connection.return_value.query.return_value = {
-            'Items': [{'payload': {'S': 'a'}, 'correlation_id': {'S': 'b'}}]
+            'Items': [{'payload': {'S': 'a'}, 'correlation_id_steps': {'S': 'b'}}]
         }
         items = retriable_entities(_get_test_arn(AWS.DYNAMODB), 'b', 'c')
         self.assertTrue(items)
@@ -539,12 +560,13 @@ class TestAws(unittest.TestCase):
                                    mock_get_connection):
         mock_context = mock.Mock()
         mock_context.correlation_id = 'b'
+        mock_context.steps = 'z'
         mock_settings.PRIMARY_RETRY_SOURCE = _get_test_arn(AWS.DYNAMODB)
         start_retries(mock_context, 'c', 'd', primary=True)
         mock_get_connection.return_value.put_item.assert_called_with(
             Item={'partition': {'N': '15'},
                   'payload': {'S': 'd'},
-                  'correlation_id': {'S': 'b'},
+                  'correlation_id_steps': {'S': 'b-z'},
                   'run_at': {'N': 'c'}},
             TableName='resourcename'
         )
@@ -610,11 +632,12 @@ class TestAws(unittest.TestCase):
                                   mock_get_connection):
         mock_context = mock.Mock()
         mock_context.correlation_id = 'b'
+        mock_context.steps = 'z'
         mock_settings.PRIMARY_RETRY_SOURCE = _get_test_arn(AWS.DYNAMODB)
         stop_retries(mock_context, primary=True)
         mock_get_connection.return_value.delete_item.assert_called_with(
             Key={'partition': {'N': '15'},
-                 'correlation_id': {'S': 'b'}},
+                 'correlation_id_steps': {'S': 'b-z'}},
             TableName='resourcename'
         )
 
@@ -653,8 +676,7 @@ class TestAws(unittest.TestCase):
         mock_get_secondary_stream_source.return_value = _get_test_arn(AWS.DYNAMODB)
         store_checkpoint(mock_context, 'd', primary=False)
         mock_get_connection.return_value.put_item.assert_called_with(
-            Item={'partition': {'N': '3'},
-                  'sent': {'S': 'd'},
+            Item={'sent': {'S': 'd'},
                   'correlation_id': {'S': 'c'}},
             TableName='resourcename'
         )
@@ -673,7 +695,7 @@ class TestAws(unittest.TestCase):
     def test_set_message_dispatched_no_connection(self,
                                                   mock_get_connection):
         mock_get_connection.return_value = None
-        ret = set_message_dispatched('a', 'b')
+        ret = set_message_dispatched('a', 'b', 'c')
         self.assertFalse(ret)
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
@@ -681,10 +703,10 @@ class TestAws(unittest.TestCase):
     def test_set_message_dispatched_memcache(self,
                                              mock_get_primary_cache_source,
                                              mock_get_connection):
-        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.CLOUDWATCH)
-        ret = set_message_dispatched('a', 'b')
+        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
+        ret = set_message_dispatched('a', 'b', 'c')
         self.assertTrue(ret)
-        mock_get_connection.return_value.set.assert_called_with('a-b', True)
+        mock_get_connection.return_value.set.assert_called_with('a-b', 'a-b-c')
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
@@ -692,10 +714,38 @@ class TestAws(unittest.TestCase):
                                              mock_get_primary_cache_source,
                                              mock_get_connection):
         mock_get_primary_cache_source.return_value = _get_test_arn(AWS.DYNAMODB)
-        ret = set_message_dispatched('a', 'b')
+        ret = set_message_dispatched('a', 'b', 'c')
         self.assertTrue(ret)
         mock_get_connection.return_value.put_item.assert_called_with(
-            Item={'ckey': {'S': 'a-b'}, 'value': {'BOOL': True}},
+            Item={'ckey': {'S': 'a-b'}, 'value': {'S': 'a-b-c'}},
+            TableName='resourcename'
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_secondary_cache_source')
+    def test_set_message_dispatched_dynamodb_secondary(self,
+                                                       mock_get_secondary_cache_source,
+                                                       mock_get_connection):
+        mock_get_secondary_cache_source.return_value = _get_test_arn(AWS.DYNAMODB)
+        ret = set_message_dispatched('a', 'b', 'c', primary=False)
+        self.assertTrue(ret)
+        mock_get_connection.return_value.put_item.assert_called_with(
+            Item={'ckey': {'S': 'a-b'}, 'value': {'S': 'a-b-c'}},
+            TableName='resourcename'
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
+    def test_set_message_dispatched_dynamodb_error(self,
+                                                   mock_get_primary_cache_source,
+                                                   mock_get_connection):
+        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.DYNAMODB)
+        mock_get_connection.return_value.put_item.side_effect = \
+            ClientError({'Error': {'Code': 'ConditionalCheckFailedException'}}, 'Operation')
+        ret = set_message_dispatched('a', 'b', 'c')
+        self.assertEqual(0, ret)
+        mock_get_connection.return_value.put_item.assert_called_with(
+            Item={'ckey': {'S': 'a-b'}, 'value': {'S': 'a-b-c'}},
             TableName='resourcename'
         )
 
@@ -713,7 +763,7 @@ class TestAws(unittest.TestCase):
     def test_get_message_dispatched_memcache(self,
                                              mock_get_primary_cache_source,
                                              mock_get_connection):
-        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.CLOUDWATCH)
+        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
         mock_get_connection.return_value.get.return_value = 'foobar'
         ret = get_message_dispatched('a', 'b')
         self.assertEqual('foobar', ret)
@@ -725,7 +775,7 @@ class TestAws(unittest.TestCase):
                                              mock_get_primary_cache_source,
                                              mock_get_connection):
         mock_get_primary_cache_source.return_value = _get_test_arn(AWS.DYNAMODB)
-        mock_get_connection.return_value.get_item.return_value = {'Item': {'value': {'BOOL': 'foobar'}}}
+        mock_get_connection.return_value.get_item.return_value = {'Item': {'value': {'S': 'foobar'}}}
         ret = get_message_dispatched('a', 'b')
         self.assertEqual('foobar', ret)
         mock_get_connection.return_value.get_item.assert_called_with(
@@ -734,123 +784,391 @@ class TestAws(unittest.TestCase):
             Key={'ckey': {'S': 'a-b'}}
         )
 
-    # cache_get
-
     @mock.patch('aws_lambda_fsm.aws.get_connection')
-    def test_cache_get_no_connection(self,
-                                     mock_get_connection):
-        mock_get_connection.return_value = None
-        ret = cache_get('a')
-        self.assertFalse(ret)
-
-    @mock.patch('aws_lambda_fsm.aws.get_connection')
-    @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
-    def test_cache_get_memcache(self,
-                                mock_get_primary_cache_source,
-                                mock_get_connection):
-        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.CLOUDWATCH)
-        mock_get_connection.return_value.get.return_value = 'foobar'
-        ret = cache_get('a')
-        self.assertEqual('foobar', ret)
-        mock_get_connection.return_value.get.assert_called_with('a')
-
-    @mock.patch('aws_lambda_fsm.aws.get_connection')
-    @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
-    def test_cache_get_dynamodb(self,
-                                mock_get_primary_cache_source,
-                                mock_get_connection):
-        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.DYNAMODB)
+    @mock.patch('aws_lambda_fsm.aws.get_secondary_cache_source')
+    def test_get_message_dispatched_dynamodb_secondary(self,
+                                                       mock_get_secondary_cache_source,
+                                                       mock_get_connection):
+        mock_get_secondary_cache_source.return_value = _get_test_arn(AWS.DYNAMODB)
         mock_get_connection.return_value.get_item.return_value = {'Item': {'value': {'S': 'foobar'}}}
-        ret = cache_get('a')
+        ret = get_message_dispatched('a', 'b', primary=False)
         self.assertEqual('foobar', ret)
         mock_get_connection.return_value.get_item.assert_called_with(
             ConsistentRead=True,
             TableName='resourcename',
-            Key={'ckey': {'S': 'a'}}
+            Key={'ckey': {'S': 'a-b'}}
         )
 
-    # cache_add
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
+    def test_get_message_dispatched_dynamodb_error(self,
+                                                   mock_get_primary_cache_source,
+                                                   mock_get_connection):
+        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.DYNAMODB)
+        mock_get_connection.return_value.get_item.side_effect = \
+            ClientError({'Error': {'Code': 'ConditionalCheckFailedException'}}, 'Operation')
+        ret = get_message_dispatched('a', 'b')
+        self.assertEqual(None, ret)
+        mock_get_connection.return_value.get_item.assert_called_with(
+            ConsistentRead=True,
+            TableName='resourcename',
+            Key={'ckey': {'S': 'a-b'}}
+        )
+
+
+class LeaseMemcacheTest(unittest.TestCase):
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
-    def test_cache_add_no_connection(self,
-                                     mock_get_connection):
-        mock_get_connection.return_value = None
-        ret = cache_add('a', 'b')
+    @mock.patch('aws_lambda_fsm.aws.get_secondary_cache_source')
+    @mock.patch('aws_lambda_fsm.aws.time')
+    def test_aquire_lease_memcache_available_lose_secondary(self,
+                                                            mock_time,
+                                                            mock_get_secondary_cache_source,
+                                                            mock_get_connection):
+        mock_time.time.return_value = 999.
+        mock_get_secondary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
+        mock_get_connection.return_value.gets.return_value = None
+        mock_get_connection.return_value.cas.return_value = False
+        ret = acquire_lease('a', 1, 1, primary=False)
         self.assertFalse(ret)
+        mock_get_connection.return_value.gets.assert_called_with('lease-a')
+        mock_get_connection.return_value.cas.assert_called_with('lease-a', '1-1-1059')
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
-    def test_cache_add_memcache(self,
-                                mock_get_primary_cache_source,
-                                mock_get_connection):
-        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.CLOUDWATCH)
-        mock_get_connection.return_value.add.return_value = 'foobar'
-        ret = cache_add('a', 'b')
-        self.assertEqual('foobar', ret)
-        mock_get_connection.return_value.add.assert_called_with('a', 'b')
+    @mock.patch('aws_lambda_fsm.aws.time')
+    def test_aquire_lease_memcache_available_lose(self,
+                                                  mock_time,
+                                                  mock_get_primary_cache_source,
+                                                  mock_get_connection):
+        mock_time.time.return_value = 999.
+        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
+        mock_get_connection.return_value.gets.return_value = None
+        mock_get_connection.return_value.cas.return_value = False
+        ret = acquire_lease('a', 1, 1)
+        self.assertFalse(ret)
+        mock_get_connection.return_value.gets.assert_called_with('lease-a')
+        mock_get_connection.return_value.cas.assert_called_with('lease-a', '1-1-1059')
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
-    def test_cache_add_dynamodb(self,
-                                mock_get_primary_cache_source,
-                                mock_get_connection):
+    @mock.patch('aws_lambda_fsm.aws.time')
+    def test_aquire_lease_memcache_available_wins(self,
+                                                  mock_time,
+                                                  mock_get_primary_cache_source,
+                                                  mock_get_connection):
+        mock_time.time.return_value = 999.
+        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
+        mock_get_connection.return_value.gets.return_value = None
+        mock_get_connection.return_value.cas.return_value = True
+        ret = acquire_lease('a', 1, 1)
+        self.assertTrue(ret)
+        mock_get_connection.return_value.gets.assert_called_with('lease-a')
+        mock_get_connection.return_value.cas.assert_called_with('lease-a', '1-1-1059')
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
+    @mock.patch('aws_lambda_fsm.aws.time')
+    def test_aquire_lease_memcache_leased_expired_lose(self,
+                                                       mock_time,
+                                                       mock_get_primary_cache_source,
+                                                       mock_get_connection):
+        mock_time.time.return_value = 999.
+        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
+        mock_get_connection.return_value.gets.return_value = '99-99-0'
+        mock_get_connection.return_value.cas.return_value = False
+        ret = acquire_lease('a', 1, 1)
+        self.assertFalse(ret)
+        mock_get_connection.return_value.gets.assert_called_with('lease-a')
+        mock_get_connection.return_value.cas.assert_called_with('lease-a', '1-1-1059')
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
+    @mock.patch('aws_lambda_fsm.aws.time')
+    def test_aquire_lease_memcache_leased_expired_wins(self,
+                                                       mock_time,
+                                                       mock_get_primary_cache_source,
+                                                       mock_get_connection):
+        mock_time.time.return_value = 999.
+        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
+        mock_get_connection.return_value.gets.return_value = '99-99-0'
+        mock_get_connection.return_value.cas.return_value = True
+        ret = acquire_lease('a', 1, 1)
+        self.assertTrue(ret)
+        mock_get_connection.return_value.gets.assert_called_with('lease-a')
+        mock_get_connection.return_value.cas.assert_called_with('lease-a', '1-1-1059')
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
+    @mock.patch('aws_lambda_fsm.aws.time')
+    def test_aquire_lease_memcache_leased_owned_lose(self,
+                                                     mock_time,
+                                                     mock_get_primary_cache_source,
+                                                     mock_get_connection):
+        mock_time.time.return_value = 999.
+        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
+        mock_get_connection.return_value.gets.return_value = '99-99-99'
+        mock_get_connection.return_value.cas.return_value = False
+        ret = acquire_lease('a', 99, 99)
+        self.assertFalse(ret)
+        mock_get_connection.return_value.gets.assert_called_with('lease-a')
+        mock_get_connection.return_value.cas.assert_called_with('lease-a', '99-99-1059')
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
+    @mock.patch('aws_lambda_fsm.aws.time')
+    def test_aquire_lease_memcache_leased_owned_wins(self,
+                                                     mock_time,
+                                                     mock_get_primary_cache_source,
+                                                     mock_get_connection):
+        mock_time.time.return_value = 999.
+        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
+        mock_get_connection.return_value.gets.return_value = '99-99-99'
+        mock_get_connection.return_value.cas.return_value = True
+        ret = acquire_lease('a', 99, 99)
+        self.assertTrue(ret)
+        mock_get_connection.return_value.gets.assert_called_with('lease-a')
+        mock_get_connection.return_value.cas.assert_called_with('lease-a', '99-99-1059')
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
+    @mock.patch('aws_lambda_fsm.aws.time')
+    def test_aquire_lease_memcache_leased_fall_through(self,
+                                                       mock_time,
+                                                       mock_get_primary_cache_source,
+                                                       mock_get_connection):
+        mock_time.time.return_value = 999.
+        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
+        mock_get_connection.return_value.gets.return_value = '99-99-999999999'
+        ret = acquire_lease('a', 1, 1)
+        self.assertFalse(ret)
+        mock_get_connection.return_value.gets.assert_called_with('lease-a')
+        self.assertFalse(mock_get_connection.return_value.cas.called)
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_secondary_cache_source')
+    def test_release_lease_memcache_not_owned_secondary(self,
+                                                        mock_get_secondary_cache_source,
+                                                        mock_get_connection):
+        mock_get_secondary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
+        mock_get_connection.return_value.gets.return_value = None
+        mock_get_connection.return_value.cas.return_value = False
+        ret = release_lease('a', 1, 1, 'f', primary=False)
+        self.assertFalse(ret)
+        mock_get_connection.return_value.gets.assert_called_with('lease-a')
+        self.assertFalse(mock_get_connection.return_value.cas.called)
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
+    def test_release_lease_memcache_not_owned(self,
+                                              mock_get_primary_cache_source,
+                                              mock_get_connection):
+        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
+        mock_get_connection.return_value.gets.return_value = None
+        mock_get_connection.return_value.cas.return_value = False
+        ret = release_lease('a', 1, 1, 'f')
+        self.assertFalse(ret)
+        mock_get_connection.return_value.gets.assert_called_with('lease-a')
+        self.assertFalse(mock_get_connection.return_value.cas.called)
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
+    def test_release_lease_memcache_owned_self_loses(self,
+                                                     mock_get_primary_cache_source,
+                                                     mock_get_connection):
+        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
+        mock_get_connection.return_value.gets.return_value = '99-99-99'
+        mock_get_connection.return_value.cas.return_value = False
+        ret = release_lease('a', 99, 99, 'f')
+        self.assertFalse(ret)
+        mock_get_connection.return_value.gets.assert_called_with('lease-a')
+        mock_get_connection.return_value.cas.assert_called_with('lease-a', None)
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
+    def test_release_lease_memcache_owned_self_wins(self,
+                                                    mock_get_primary_cache_source,
+                                                    mock_get_connection):
+        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
+        mock_get_connection.return_value.gets.return_value = '99-99-99'
+        mock_get_connection.return_value.cas.return_value = True
+        ret = release_lease('a', 99, 99, 'f')
+        self.assertTrue(ret)
+        mock_get_connection.return_value.gets.assert_called_with('lease-a')
+        mock_get_connection.return_value.cas.assert_called_with('lease-a', None)
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
+    def test_release_lease_memcache_owned_other(self,
+                                                mock_get_primary_cache_source,
+                                                mock_get_connection):
+        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
+        mock_get_connection.return_value.gets.return_value = '99-99-99'
+        mock_get_connection.return_value.cas.return_value = True
+        ret = release_lease('a', 1, 1, 'f')
+        self.assertFalse(ret)
+        mock_get_connection.return_value.gets.assert_called_with('lease-a')
+        self.assertFalse(mock_get_connection.return_value.cas.called)
+
+
+class LeaseDynamodbTest(unittest.TestCase):
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
+    @mock.patch('aws_lambda_fsm.aws.time')
+    def test_aquire_lease_dynamodb_available(self,
+                                             mock_time,
+                                             mock_get_primary_cache_source,
+                                             mock_get_connection):
+        mock_time.time.return_value = 999.
         mock_get_primary_cache_source.return_value = _get_test_arn(AWS.DYNAMODB)
-        mock_get_connection.return_value.put_item.return_value = 'foobar'
-        ret = cache_add('a', 'b')
-        self.assertEqual(True, ret)
-        mock_get_connection.return_value.put_item.assert_called_with(
-            Item={'ckey': {'S': 'a'}, 'value': {'S': 'b'}},
-            ConditionExpression='attribute_not_exists(ckey)',
-            TableName='resourcename'
+        mock_get_connection.return_value.update_item.return_value = {'Attributes': {'fence': {'N': '22'}}}
+        ret = acquire_lease('a', 1, 1)
+        self.assertEqual('22', ret)
+        mock_get_connection.return_value.update_item.assert_called_with(
+            ReturnValues='ALL_NEW',
+            ConditionExpression='attribute_not_exists(lease_state) OR lease_state = :o OR expires < :t '
+                                'OR (lease_state = :l AND steps = :s AND retries = :r)',
+            TableName='resourcename',
+            UpdateExpression='SET fence = if_not_exists(fence, :z) + :f, expires = :e, lease_state = :l, '
+                             'steps = :s, retries = :r',
+            ExpressionAttributeValues={':l': {'S': 'leased'}, ':o': {'S': 'open'}, ':z': {'N': '0'},
+                                       ':t': {'N': '999'}, ':e': {'N': '1059'}, ':f': {'N': '1'},
+                                       ':r': {'N': '1'}, ':s': {'N': '1'}}, Key={'ckey': {'S': 'lease-a'}}
         )
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
-    def test_cache_add_dynamodb_exists(self,
-                                       mock_get_primary_cache_source,
-                                       mock_get_connection):
+    @mock.patch('aws_lambda_fsm.aws.time')
+    def test_aquire_lease_dynamodb_unavailable(self,
+                                               mock_time,
+                                               mock_get_primary_cache_source,
+                                               mock_get_connection):
+        mock_time.time.return_value = 999.
         mock_get_primary_cache_source.return_value = _get_test_arn(AWS.DYNAMODB)
-        mock_get_connection.return_value.put_item.side_effect = \
+        mock_get_connection.return_value.update_item.side_effect = \
             ClientError({'Error': {'Code': 'ConditionalCheckFailedException'}},
                         'Operation')
-        ret = cache_add('a', 'b')
-        self.assertEqual(False, ret)
-        mock_get_connection.return_value.put_item.assert_called_with(
-            Item={'ckey': {'S': 'a'}, 'value': {'S': 'b'}},
-            ConditionExpression='attribute_not_exists(ckey)',
-            TableName='resourcename'
+        ret = acquire_lease('a', 1, 1)
+        self.assertFalse(ret)
+        mock_get_connection.return_value.update_item.assert_called_with(
+            ReturnValues='ALL_NEW',
+            ConditionExpression='attribute_not_exists(lease_state) OR lease_state = :o OR expires < :t '
+                                'OR (lease_state = :l AND steps = :s AND retries = :r)',
+            TableName='resourcename',
+            UpdateExpression='SET fence = if_not_exists(fence, :z) + :f, expires = :e, lease_state = :l, '
+                             'steps = :s, retries = :r',
+            ExpressionAttributeValues={':l': {'S': 'leased'}, ':o': {'S': 'open'}, ':z': {'N': '0'},
+                                       ':t': {'N': '999'}, ':e': {'N': '1059'}, ':f': {'N': '1'},
+                                       ':r': {'N': '1'}, ':s': {'N': '1'}}, Key={'ckey': {'S': 'lease-a'}}
         )
 
-    # cache_delete
-
-    @mock.patch('aws_lambda_fsm.aws.get_connection')
-    def test_cache_delete_no_connection(self,
-                                        mock_get_connection):
-        mock_get_connection.return_value = None
-        ret = cache_delete('a')
-        self.assertFalse(ret)
-
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
-    def test_cache_deleta_memcache(self,
-                                   mock_get_primary_cache_source,
-                                   mock_get_connection):
-        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.CLOUDWATCH)
-        mock_get_connection.return_value.delete.return_value = 'foobar'
-        ret = cache_delete('a', 'b')
-        self.assertEqual('foobar', ret)
-        mock_get_connection.return_value.delete.assert_called_with('a')
-
-    @mock.patch('aws_lambda_fsm.aws.get_connection')
-    @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
-    def test_cache_delete_dynamodb(self,
-                                   mock_get_primary_cache_source,
-                                   mock_get_connection):
+    @mock.patch('aws_lambda_fsm.aws.time')
+    def test_release_lease_dynamodb_available(self,
+                                              mock_time,
+                                              mock_get_primary_cache_source,
+                                              mock_get_connection):
+        mock_time.time.return_value = 999.
         mock_get_primary_cache_source.return_value = _get_test_arn(AWS.DYNAMODB)
-        mock_get_connection.return_value.delete_item.return_value = 'foobar'
-        ret = cache_delete('a', 'b')
-        self.assertEqual(True, ret)
-        mock_get_connection.return_value.delete_item.assert_called_with(
+        mock_get_connection.return_value.update_item.return_value = 'foobar'
+        ret = release_lease('a', 1, 1, 'f')
+        self.assertTrue(ret)
+        mock_get_connection.return_value.update_item.assert_called_with(
+            ReturnValues='ALL_NEW',
+            ConditionExpression='lease_state = :l AND steps = :s AND retries = :r AND fence = :f',
             TableName='resourcename',
-            Key={'ckey': {'S': 'a'}}
+            UpdateExpression='SET lease_state = :o, steps = :null, retries = :null, expires = :null',
+            ExpressionAttributeValues={':l': {'S': 'leased'}, ':o': {'S': 'open'}, ':f': {'N': 'f'},
+                                       ':null': {'NULL': True}, ':r': {'N': '1'}, ':s': {'N': '1'}},
+            Key={'ckey': {'S': 'lease-a'}}
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
+    @mock.patch('aws_lambda_fsm.aws.time')
+    def test_release_lease_dynamodb_unavailable(self,
+                                                mock_time,
+                                                mock_get_primary_cache_source,
+                                                mock_get_connection):
+        mock_time.time.return_value = 999.
+        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.DYNAMODB)
+        mock_get_connection.return_value.update_item.side_effect = \
+            ClientError({'Error': {'Code': 'ConditionalCheckFailedException'}},
+                        'Operation')
+        ret = release_lease('a', 1, 1, 'f')
+        self.assertFalse(ret)
+        mock_get_connection.return_value.update_item.assert_called_with(
+            ReturnValues='ALL_NEW',
+            ConditionExpression='lease_state = :l AND steps = :s AND retries = :r AND fence = :f',
+            TableName='resourcename',
+            UpdateExpression='SET lease_state = :o, steps = :null, retries = :null, expires = :null',
+            ExpressionAttributeValues={':l': {'S': 'leased'}, ':o': {'S': 'open'}, ':f': {'N': 'f'},
+                                       ':null': {'NULL': True}, ':r': {'N': '1'}, ':s': {'N': '1'}},
+            Key={'ckey': {'S': 'lease-a'}}
+        )
+
+
+class ValidateConfigTest(unittest.TestCase):
+
+    @mock.patch('aws_lambda_fsm.aws._validate_config')
+    def test_validate_config_runs_once(self, mock_validate_config):
+        _local.validated_config = False
+        self.assertEqual(0, len(mock_validate_config.mock_calls))
+        validate_config()
+        self.assertEqual(6, len(mock_validate_config.mock_calls))
+        _local.validated_config = True
+        validate_config()
+        self.assertEqual(6, len(mock_validate_config.mock_calls))
+
+    @mock.patch('aws_lambda_fsm.aws._validate_config')
+    def test_validate_config(self, mock_validate_config):
+        _local.validated_config = False
+        validate_config()
+        mock_validate_config.assert_called_with(
+            'STREAM',
+            {'failover': True,
+             'required': True,
+             'primary': 'arn:partition:kinesis:testing:account:stream/resource',
+             'secondary': 'arn:partition:dynamodb:testing:account:table/resource',
+             'allowed': ['kinesis', 'dynamodb', 'sns', 'sqs']}
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.logger')
+    def test_required_failover_unset_sources(self, mock_logger):
+        _validate_config('KEY',
+                         {'required': True,
+                          'failover': True,
+                          'primary': None,
+                          'secondary': None,
+                          'allowed': ['foo']})
+        self.assertEqual(
+            [
+                mock.call.fatal('PRIMARY_%s_SOURCE is unset.',
+                                'KEY'),
+                mock.call.warning('SECONDARY_%s_SOURCE is unset (failover not configured).',
+                                  'KEY')
+            ],
+            mock_logger.mock_calls
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.logger')
+    def test_required_failover(self, mock_logger):
+        _validate_config('KEY',
+                         {'required': True,
+                          'failover': True,
+                          'primary': 'arn:partition:bar:testing:account:stream/resource',
+                          'secondary': 'arn:partition:bar:testing:account:stream/resource',
+                          'allowed': ['foo']})
+        self.assertEqual(
+            [
+                mock.call.fatal("PRIMARY_%s_SOURCE '%s' is not allowed.",
+                                'KEY', 'arn:partition:bar:testing:account:stream/resource'),
+                mock.call.fatal("SECONDARY_%s_SOURCE '%s' is not allowed.",
+                                'KEY', 'arn:partition:bar:testing:account:stream/resource'),
+                mock.call.warning('PRIMARY_%s_SOURCE = SECONDARY_%s_SOURCE (failover not configured optimally).',
+                                  'KEY', 'KEY')
+            ],
+            mock_logger.mock_calls
         )

@@ -9,12 +9,12 @@ from aws_lambda_fsm.fsm import Context
 from aws_lambda_fsm.fsm import FSM  # noqa
 from aws_lambda_fsm.aws import retriable_entities
 from aws_lambda_fsm.aws import get_primary_retry_source
-from aws_lambda_fsm.aws import get_arn_from_arn_string
+from aws_lambda_fsm.aws import validate_config
 from aws_lambda_fsm.constants import OBJ
 from aws_lambda_fsm.constants import STATE
 from aws_lambda_fsm.constants import AWS_LAMBDA
 from aws_lambda_fsm.constants import SYSTEM_CONTEXT
-from aws_lambda_fsm.constants import RECOVERY_DATA
+from aws_lambda_fsm.constants import RETRY_DATA
 from aws_lambda_fsm.constants import AWS
 from aws_lambda_fsm.constants import STREAM_DATA
 from aws_lambda_fsm.constants import AWS_DYNAMODB
@@ -22,6 +22,8 @@ from aws_lambda_fsm.config import get_settings
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
+
+validate_config()
 
 
 def _process_payload(payload_str, obj):
@@ -141,19 +143,18 @@ def lambda_timer_handler():
         # TODO: hide these details behind an interface
         # TODO: handle missing dynamodb tables
         retries_table_arn = get_primary_retry_source()
-        retries_table = get_arn_from_arn_string(retries_table_arn).resource.split('/')[-1]
         index = 'retries'
 
         # get this table name elsewhere...
         query = retriable_entities(
-            retries_table,
+            retries_table_arn,
             index,
             time.time()
         )
         entities = list(query)
 
     except Exception:  # pragma: no cover
-        # logger.exception('Error querying retry entities.')
+        logger.exception('Error querying retry entities.')
         entities = []
 
     if entities:
@@ -163,7 +164,7 @@ def lambda_timer_handler():
 
         try:
             obj = {OBJ.SOURCE: AWS.DYNAMODB_RETRY}
-            payload = entity[RECOVERY_DATA.PAYLOAD]
+            payload = entity[RETRY_DATA.PAYLOAD]
             _process_payload(payload, obj)
 
         # see comment in lambda_kinesis_handler

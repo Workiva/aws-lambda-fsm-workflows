@@ -4,6 +4,7 @@ clean:
 	echo Y | pycleaner
 	rm -f aws-lambda-fsm.zip
 	rm -f .coverage
+	ln -sf settings.py.example settings.py
 
 check-config:
 	if [ -e ~/.aws/config ]; then echo "~/.aws/config exists"; exit 1; fi
@@ -20,5 +21,5 @@ test: clean check-config
 	nosetests --logging-level=ERROR --with-xunit --xunit-file=unit.xml
 
 flake8:
-	flake8 --max-line-length=120 .
+	flake8 --max-line-length=120 --ignore=E000 --exclude=settingslocal.py .
 

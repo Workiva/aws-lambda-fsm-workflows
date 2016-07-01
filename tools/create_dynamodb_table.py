@@ -14,9 +14,12 @@ import sys
 # application imports
 from aws_lambda_fsm.aws import get_connection
 from aws_lambda_fsm.aws import get_arn_from_arn_string
+from aws_lambda_fsm.aws import validate_config
 from aws_lambda_fsm.constants import ENVIRONMENT_DATA
-from aws_lambda_fsm.constants import RECOVERY_DATA
+from aws_lambda_fsm.constants import RETRY_DATA
+from aws_lambda_fsm.constants import CHECKPOINT_DATA
 from aws_lambda_fsm.constants import CACHE_DATA
+from aws_lambda_fsm.constants import STREAM_DATA
 from aws_lambda_fsm.constants import AWS_DYNAMODB
 from aws_lambda_fsm.constants import AWS
 
@@ -40,6 +43,8 @@ logging.basicConfig(
 logging.getLogger('boto3').setLevel(args.boto_log_level)
 logging.getLogger('botocore').setLevel(args.boto_log_level)
 
+validate_config()
+
 # setup connections to AWS
 dynamodb_table_arn = getattr(settings, args.dynamodb_table_arn)
 logging.info('DynamoDB table ARN: %s', dynamodb_table_arn)
@@ -47,30 +52,32 @@ logging.info('DynamoDB endpoint: %s', settings.ENDPOINTS.get(AWS.DYNAMODB))
 if get_arn_from_arn_string(dynamodb_table_arn).service != AWS.DYNAMODB:
     logging.fatal("%s is not a DynamoDB ARN", dynamodb_table_arn)
     sys.exit(1)
-dynamodb_conn = get_connection(dynamodb_table_arn)
-dynamodb_table = get_arn_from_arn_string(dynamodb_table_arn).resource.split('/')[-1]
+dynamodb_conn = get_connection(dynamodb_table_arn, disable_chaos=True)
+dynamodb_table = get_arn_from_arn_string(dynamodb_table_arn).slash_resource()
 logging.info('DynamoDB table: %s', dynamodb_table)
 
-# # create a dynamodb table for examples/tracer
-# dynamodb_conn.create_table(
-#     TableName=dynamodb_table + '.results',
-#     AttributeDefinitions=[
-#         {
-#             AWS_DYNAMODB.AttributeName: RECOVERY_DATA.CORRELATION_ID,
-#             AWS_DYNAMODB.AttributeType: AWS_DYNAMODB.STRING
-#         },
-#     ],
-#     KeySchema=[
-#         {
-#             AWS_DYNAMODB.AttributeName: RECOVERY_DATA.CORRELATION_ID,
-#             AWS_DYNAMODB.KeyType: AWS_DYNAMODB.HASH
-#         }
-#     ],
-#     ProvisionedThroughput={
-#         AWS_DYNAMODB.ReadCapacityUnits: args.dynamodb_read_capacity_units,
-#         AWS_DYNAMODB.WriteCapacityUnites: args.dynamodb_write_capacity_units
-#     }
-# )
+if 'RESULTS' in args.dynamodb_table_arn:
+    # create a dynamodb table for examples/tracer
+    response = dynamodb_conn.create_table(
+        TableName=dynamodb_table,
+        AttributeDefinitions=[
+            {
+                AWS_DYNAMODB.AttributeName: 'correlation_id',
+                AWS_DYNAMODB.AttributeType: AWS_DYNAMODB.STRING
+            },
+        ],
+        KeySchema=[
+            {
+                AWS_DYNAMODB.AttributeName: 'correlation_id',
+                AWS_DYNAMODB.KeyType: AWS_DYNAMODB.HASH
+            }
+        ],
+        ProvisionedThroughput={
+            AWS_DYNAMODB.ReadCapacityUnits: args.dynamodb_read_capacity_units,
+            AWS_DYNAMODB.WriteCapacityUnites: args.dynamodb_write_capacity_units
+        }
+    )
+    logging.info(response)
 
 if 'CHECKPOINT' in args.dynamodb_table_arn:
     # create a dynamodb table for checkpoints
@@ -78,13 +85,13 @@ if 'CHECKPOINT' in args.dynamodb_table_arn:
         TableName=dynamodb_table,
         AttributeDefinitions=[
             {
-                AWS_DYNAMODB.AttributeName: RECOVERY_DATA.CORRELATION_ID,
+                AWS_DYNAMODB.AttributeName: CHECKPOINT_DATA.CORRELATION_ID,
                 AWS_DYNAMODB.AttributeType: AWS_DYNAMODB.STRING
             },
         ],
         KeySchema=[
             {
-                AWS_DYNAMODB.AttributeName: RECOVERY_DATA.CORRELATION_ID,
+                AWS_DYNAMODB.AttributeName: CHECKPOINT_DATA.CORRELATION_ID,
                 AWS_DYNAMODB.KeyType: AWS_DYNAMODB.HASH
             }
         ],
@@ -101,13 +108,13 @@ if 'STREAM' in args.dynamodb_table_arn:
         TableName=dynamodb_table,
         AttributeDefinitions=[
             {
-                AWS_DYNAMODB.AttributeName: RECOVERY_DATA.CORRELATION_ID,
+                AWS_DYNAMODB.AttributeName: STREAM_DATA.CORRELATION_ID,
                 AWS_DYNAMODB.AttributeType: AWS_DYNAMODB.STRING
             },
         ],
         KeySchema=[
             {
-                AWS_DYNAMODB.AttributeName: RECOVERY_DATA.CORRELATION_ID,
+                AWS_DYNAMODB.AttributeName: STREAM_DATA.CORRELATION_ID,
                 AWS_DYNAMODB.KeyType: AWS_DYNAMODB.HASH
             }
         ],
@@ -126,38 +133,38 @@ if 'RETRY' in args.dynamodb_table_arn:
         TableName=dynamodb_table,
         AttributeDefinitions=[
             {
-                AWS_DYNAMODB.AttributeName: RECOVERY_DATA.PARTITION,
+                AWS_DYNAMODB.AttributeName: RETRY_DATA.PARTITION,
                 AWS_DYNAMODB.AttributeType: AWS_DYNAMODB.NUMBER
             },
             {
-                AWS_DYNAMODB.AttributeName: RECOVERY_DATA.CORRELATION_ID,
+                AWS_DYNAMODB.AttributeName: RETRY_DATA.CORRELATION_ID_STEPS,
                 AWS_DYNAMODB.AttributeType: AWS_DYNAMODB.STRING
             },
             {
-                AWS_DYNAMODB.AttributeName: RECOVERY_DATA.RUN_AT,
+                AWS_DYNAMODB.AttributeName: RETRY_DATA.RUN_AT,
                 AWS_DYNAMODB.AttributeType: AWS_DYNAMODB.NUMBER
             },
         ],
         KeySchema=[
             {
-                AWS_DYNAMODB.AttributeName: RECOVERY_DATA.PARTITION,
+                AWS_DYNAMODB.AttributeName: RETRY_DATA.PARTITION,
                 AWS_DYNAMODB.KeyType: AWS_DYNAMODB.HASH
             },
             {
-                AWS_DYNAMODB.AttributeName: RECOVERY_DATA.CORRELATION_ID,
+                AWS_DYNAMODB.AttributeName: RETRY_DATA.CORRELATION_ID_STEPS,
                 AWS_DYNAMODB.KeyType: AWS_DYNAMODB.RANGE
-            }
+            },
         ],
         LocalSecondaryIndexes=[
             {
-                AWS_DYNAMODB.IndexName: RECOVERY_DATA.RETRIES,
+                AWS_DYNAMODB.IndexName: RETRY_DATA.RETRIES,
                 AWS_DYNAMODB.KeySchema: [
                     {
-                        AWS_DYNAMODB.AttributeName: RECOVERY_DATA.PARTITION,
+                        AWS_DYNAMODB.AttributeName: RETRY_DATA.PARTITION,
                         AWS_DYNAMODB.KeyType: AWS_DYNAMODB.HASH
                     },
                     {
-                        AWS_DYNAMODB.AttributeName: RECOVERY_DATA.RUN_AT,
+                        AWS_DYNAMODB.AttributeName: RETRY_DATA.RUN_AT,
                         AWS_DYNAMODB.KeyType: AWS_DYNAMODB.RANGE
                     }
                 ],

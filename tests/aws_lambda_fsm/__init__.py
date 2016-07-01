@@ -26,19 +26,19 @@ class TestSettings(object):
     AWS_CHAOS = {}
     ENDPOINTS = {
         'kinesis': {
-            'endpoint_url': 'invalid_endpoint'
+            'testing': 'invalid_endpoint'
         },
         'dynamodb': {
-            'endpoint_url': 'invalid_endpoint'
+            'testing': 'invalid_endpoint'
         },
         'elasticache': {
-            'endpoint_url': 'invalid_endpoint'
+            'testing': 'invalid_endpoint'
         },
         'sns': {
-            'endpoint_url': 'invalid_endpoint'
+            'testing': 'invalid_endpoint'
         },
         'cloudwatch': {
-            'endpoint_url': 'invalid_endpoint'
+            'testing': 'invalid_endpoint'
         }
     }
 

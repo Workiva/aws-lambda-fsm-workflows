@@ -24,7 +24,7 @@ def get_requirements(filename):
 
 
 def get_packages():
-    return find_packages(exclude=["tests.*", "tests", "examples"])
+    return find_packages(exclude=["tests.*", "tests", "examples", "examples.*"])
 
 
 def read_file(filename, mode='rb'):
@@ -41,6 +41,7 @@ setup_args = dict(
              "tools/fsm_sqs_to_arn.py",
              "tools/dev_lambda.py",
              "tools/dev_ecs.py",
+             "tools/create_resources.py",
              "tools/create_kinesis_stream.py",
              "tools/create_dynamodb_table.py",
              "tools/create_sns_topic.py",

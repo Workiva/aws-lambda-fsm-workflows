@@ -15,6 +15,7 @@ from aws_lambda_fsm.constants import PAYLOAD
 from aws_lambda_fsm.constants import SYSTEM_CONTEXT
 from aws_lambda_fsm.aws import get_connection
 from aws_lambda_fsm.aws import get_arn_from_arn_string
+from aws_lambda_fsm.aws import validate_config
 
 import settings
 
@@ -43,15 +44,17 @@ logging.basicConfig(
 logging.getLogger('boto3').setLevel(args.boto_log_level)
 logging.getLogger('botocore').setLevel(args.boto_log_level)
 
+validate_config()
+
 # setup connections to AWS
 sqs_arn_string = getattr(settings, args.sqs_queue_arn)
 sqs_arn = get_arn_from_arn_string(sqs_arn_string)
 if sqs_arn.service != AWS.SQS:
     logging.fatal("%s is not an SQS ARN", sqs_arn_string)
     sys.exit(1)
-sqs_conn = get_connection(sqs_arn_string)
+sqs_conn = get_connection(sqs_arn_string, disable_chaos=True)
 response = sqs_conn.get_queue_url(
-    QueueName=sqs_arn.resource.split(':')[-1]
+    QueueName=sqs_arn.colon_resource()
 )
 sqs_queue_url = response[AWS_SQS.QueueUrl]
 
@@ -69,7 +72,7 @@ if dest_arn.service not in ALLOWED_DEST_SERVICES:
         '/'.join(map(str.upper, ALLOWED_DEST_SERVICES))
     )
     sys.exit(1)
-dest_conn = get_connection(dest_arn_string)
+dest_conn = get_connection(dest_arn_string, disable_chaos=True)
 
 logging.info('Dest ARN: %s', dest_arn_string)
 logging.info('Dest endpoint: %s', settings.ENDPOINTS.get(dest_arn.service))
@@ -94,7 +97,7 @@ while True:
         )
         sqs_messages = response.get(AWS_SQS.Messages, [])
 
-        # if not SQS messages were received, then we simply wait a little bit
+        # if no SQS messages were received, then we simply wait a little bit
         # and try again. we wait to avoid hitting the SQS endpoint too often.
         if not sqs_messages:
             logging.info('No messages. Sleeping for %d seconds', wait)
@@ -131,7 +134,7 @@ while True:
                     }
                 )
             response = dest_conn.put_records(
-                StreamName=dest_arn.resource.split('/')[-1],
+                StreamName=dest_arn.slash_resource(),
                 Records=records
             )
             logging.info(response)

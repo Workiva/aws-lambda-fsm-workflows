@@ -14,6 +14,7 @@ import sys
 # application imports
 from aws_lambda_fsm.aws import get_connection
 from aws_lambda_fsm.aws import get_arn_from_arn_string
+from aws_lambda_fsm.aws import validate_config
 from aws_lambda_fsm.constants import AWS
 
 import settings
@@ -35,6 +36,8 @@ logging.basicConfig(
 logging.getLogger('boto3').setLevel(args.boto_log_level)
 logging.getLogger('botocore').setLevel(args.boto_log_level)
 
+validate_config()
+
 # setup connections to AWS
 kinesis_stream_arn = getattr(settings, args.kinesis_stream_arn)
 logging.info('Kinesis stream ARN: %s', kinesis_stream_arn)
@@ -42,8 +45,8 @@ logging.info('Kinesis endpoint: %s', settings.ENDPOINTS.get(AWS.KINESIS))
 if get_arn_from_arn_string(kinesis_stream_arn).service != AWS.KINESIS:
     logging.fatal("%s is not a Kinesis ARN", kinesis_stream_arn)
     sys.exit(1)
-kinesis_conn = get_connection(kinesis_stream_arn)
-kinesis_stream = get_arn_from_arn_string(kinesis_stream_arn).resource.split('/')[-1]
+kinesis_conn = get_connection(kinesis_stream_arn, disable_chaos=True)
+kinesis_stream = get_arn_from_arn_string(kinesis_stream_arn).slash_resource()
 logging.info('Kinesis stream: %s', kinesis_stream)
 
 # configure the stream

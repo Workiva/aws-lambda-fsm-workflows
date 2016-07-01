@@ -23,6 +23,7 @@ from aws_lambda_fsm.handler import lambda_timer_handler
 from aws_lambda_fsm.handler import lambda_sns_handler
 from aws_lambda_fsm.aws import get_connection
 from aws_lambda_fsm.aws import get_arn_from_arn_string
+from aws_lambda_fsm.aws import validate_config
 from aws_lambda_fsm.constants import AWS_KINESIS
 from aws_lambda_fsm.constants import AWS_DYNAMODB
 from aws_lambda_fsm.constants import AWS_LAMBDA
@@ -60,6 +61,8 @@ logging.basicConfig(
 logging.getLogger('boto3').setLevel(args.boto_log_level)
 logging.getLogger('botocore').setLevel(args.boto_log_level)
 
+validate_config()
+
 # setup connections to AWS
 if args.run_kinesis_lambda:
     kinesis_stream_arn = getattr(settings, args.kinesis_stream_arn)
@@ -68,8 +71,8 @@ if args.run_kinesis_lambda:
     if get_arn_from_arn_string(kinesis_stream_arn).service != AWS.KINESIS:
         logging.fatal("%s is not a Kinesis ARN", kinesis_stream_arn)
         sys.exit(1)
-    kinesis_conn = get_connection(kinesis_stream_arn)
-    kinesis_stream = get_arn_from_arn_string(kinesis_stream_arn).resource.split('/')[-1]
+    kinesis_conn = get_connection(kinesis_stream_arn, disable_chaos=True)
+    kinesis_stream = get_arn_from_arn_string(kinesis_stream_arn).slash_resource()
     logging.info('Kinesis stream: %s', kinesis_stream)
 
 if args.run_dynamodb_lambda:
@@ -79,8 +82,8 @@ if args.run_dynamodb_lambda:
     if get_arn_from_arn_string(dynamodb_table_arn).service != AWS.DYNAMODB:
         logging.fatal("%s is not a DynamoDB ARN", dynamodb_table_arn)
         sys.exit(1)
-    dynamodb_conn = get_connection(dynamodb_table_arn)
-    dynamodb_table = get_arn_from_arn_string(dynamodb_table_arn).resource.split('/')[-1]
+    dynamodb_conn = get_connection(dynamodb_table_arn, disable_chaos=True)
+    dynamodb_table = get_arn_from_arn_string(dynamodb_table_arn).slash_resource()
     logging.info('DynamoDB table: %s', dynamodb_table)
 
 if args.run_sns_lambda:
@@ -99,7 +102,7 @@ if args.run_sns_lambda:
     if get_arn_from_arn_string(sns_topic_arn).service != AWS.SNS:
         logging.fatal("%s is not an SNS ARN", sns_topic_arn)
         sys.exit(1)
-    sns_conn = get_connection(sns_topic_arn)
+    sns_conn = get_connection(sns_topic_arn, disable_chaos=True)
     sns_topic = get_arn_from_arn_string(sns_topic_arn).resource
     logging.info('SNS topic: %s', sns_topic)
     response = sns_conn.subscribe(

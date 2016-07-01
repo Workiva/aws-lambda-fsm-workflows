@@ -10,21 +10,18 @@ will fail.
 
 For example
 
+    PRIMARY_STREAM_SOURCE = 'arn:aws:kinesis:eu-west-1:663511558366:stream/aws-lambda-fsm'
+    PRIMARY_CACHE_SOURCE = 'arn:aws:dynamodb:eu-west-1:663511558366:table/aws-lambda-fsm.cache'
+
     from botocore.exceptions import ClientError
     
     AWS_CHAOS = {
-        'kinesis': {
-            ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'kinesis'): 0.1,
+        PRIMARY_STREAM_SOURCE': {
+            ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.1,
         },
-        'dynamodb': {
-            ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'dynamodb'): 0.1,
-        },
-        'memcache': {
-            False: 0.1
-        },
-        'cloudwatch': {
-            ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'cloudwatch'): 0.0,
-        },
+        PRIMARY_CACHE_SOURCE: {
+            ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.1,
+        }
     }
     
 This works locally and when deployed to AWS.

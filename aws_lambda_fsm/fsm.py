@@ -5,6 +5,7 @@ from threading import RLock
 import uuid
 import logging
 import time
+import random
 
 # library imports
 from botocore.exceptions import ClientError
@@ -20,9 +21,8 @@ from aws_lambda_fsm.aws import stop_retries
 from aws_lambda_fsm.aws import set_message_dispatched
 from aws_lambda_fsm.aws import get_message_dispatched
 from aws_lambda_fsm.aws import increment_error_counters
-from aws_lambda_fsm.aws import cache_add
-from aws_lambda_fsm.aws import cache_get
-from aws_lambda_fsm.aws import cache_delete
+from aws_lambda_fsm.aws import acquire_lease
+from aws_lambda_fsm.aws import release_lease
 from aws_lambda_fsm.constants import MACHINE
 from aws_lambda_fsm.constants import CONFIG
 from aws_lambda_fsm.constants import STATE
@@ -88,6 +88,10 @@ class FSM(object):
                     # pseudo-init, pseudo-final
                     self.machines[machine_name][MACHINE.STATES][STATE.PSEUDO_INIT] = State(STATE.PSEUDO_INIT)
                     self.machines[machine_name][MACHINE.STATES][STATE.PSEUDO_FINAL] = State(STATE.PSEUDO_FINAL)
+
+                # set the max-retries
+                self.machines[machine_name][MACHINE.MAX_RETRIES] = \
+                    int(machine_dict.get(CONFIG.MAX_RETRIES, CONFIG.DEFAULT_MAX_RETRIES))
 
                 # fetch these for use later
                 pseudo_init = self.machines[machine_name][MACHINE.STATES][STATE.PSEUDO_INIT]
@@ -169,17 +173,19 @@ class FSM(object):
         :return: an aws_lambda_fsm.fsm.Context instance.
         """
         initial_state = self.machines[machine_name][MACHINE.STATES][initial_state_name]
+        max_retries = self.machines[machine_name][MACHINE.MAX_RETRIES]
         return Context(machine_name,
                        initial_system_context=initial_system_context,
                        initial_user_context=initial_user_context,
-                       initial_state=initial_state)
+                       initial_state=initial_state,
+                       max_retries=max_retries)
 
 
 def _run_once(f):
     """
-    Decorator that uses a cache with .get()/.set() to flag an action as
-    already executed, and check to ensure that it hasn't been executed
-    before running (in the event of retries, multiple failures).
+    Decorator that uses a cache to flag an action as already executed, and check to
+    ensure that it hasn't been executed before running (in the event of retries,
+    multiple failures).
 
     :param f: a function/method to run only once.
     """
@@ -187,19 +193,22 @@ def _run_once(f):
 
         # abort if these message has already been processed and another event message
         # has already been emitted to drive the state machine forward
-        if get_message_dispatched(self.correlation_id,
-                                  self.steps):
-            self._queue_error(ERRORS.DUPLICATE, 'Message has been processed already.')
+        dispatched = \
+            get_message_dispatched(self.correlation_id, self.steps, primary=True) or \
+            get_message_dispatched(self.correlation_id, self.steps, primary=False)
+
+        if dispatched:
+            self._queue_error(ERRORS.DUPLICATE, 'Message has been processed already (%s).' % dispatched)
             return
 
         f(self, *args, **kwargs)
 
         # once the message is emitted, we want to make sure the current event is never sent again.
-        # the approach here is to simply use a cache to set a key like "correlation_id-steps-retries"
-        dispatched = set_message_dispatched(
-            self.correlation_id,
-            self.steps
-        )
+        # the approach here is to simply use a cache to set a key like "correlation_id-steps"
+        dispatched = \
+            set_message_dispatched(self.correlation_id, self.steps, self.retries, primary=True) and \
+            set_message_dispatched(self.correlation_id, self.steps, self.retries, primary=False)
+
         if not dispatched:
             self._queue_error(ERRORS.CACHE, 'Unable set message dispatched for idempotency.')
 
@@ -215,7 +224,7 @@ class Context(dict):
                  initial_system_context=None,
                  initial_user_context=None,
                  initial_state=None,
-                 max_retries=500):
+                 max_retries=None):
         """
         Construct a state machine instance.
 
@@ -242,8 +251,9 @@ class Context(dict):
         # immutable
         self.__system_context[SYSTEM_CONTEXT.MACHINE_NAME] = \
             self.__system_context.get(SYSTEM_CONTEXT.MACHINE_NAME, name)
+        self.__system_context[SYSTEM_CONTEXT.MAX_RETRIES] = \
+            self.__system_context.get(SYSTEM_CONTEXT.MAX_RETRIES, max_retries)
 
-        self.max_retries = max_retries
         self._errors = {}
 
     # Immutable properties
@@ -257,6 +267,10 @@ class Context(dict):
         if SYSTEM_CONTEXT.CORRELATION_ID not in self.__system_context:
             self.__system_context[SYSTEM_CONTEXT.CORRELATION_ID] = uuid.uuid4().hex
         return self.__system_context[SYSTEM_CONTEXT.CORRELATION_ID]
+
+    @property
+    def max_retries(self):
+        return self.__system_context[SYSTEM_CONTEXT.MAX_RETRIES]
 
     # Mutable properties
 
@@ -287,6 +301,16 @@ class Context(dict):
     @retries.setter
     def retries(self, retries):
         self.__system_context[SYSTEM_CONTEXT.RETRIES] = retries
+
+    @property
+    def lease_primary(self):
+        if SYSTEM_CONTEXT.LEASE_PRIMARY not in self.__system_context:
+            self.__system_context[SYSTEM_CONTEXT.LEASE_PRIMARY] = True
+        return self.__system_context[SYSTEM_CONTEXT.LEASE_PRIMARY]
+
+    @lease_primary.setter
+    def lease_primary(self, lease_primary):
+        self.__system_context[SYSTEM_CONTEXT.LEASE_PRIMARY] = lease_primary
 
     # Serialization helpers
 
@@ -334,9 +358,13 @@ class Context(dict):
         for primary in [True, False]:
             try:
                 # save the retry entity
+                # https://www.awsarchitectureblog.com/2015/03/backoff.html
+                # "full jitter"
+                cap, base, attempt = 60., 1., retry_system_context[SYSTEM_CONTEXT.RETRIES]
+                sleep = random.uniform(0, min(cap, base * 2 ** attempt))
                 return start_retries(
                     self,
-                    time.time() + retry_system_context[SYSTEM_CONTEXT.RETRIES] * 1.0,
+                    time.time() + sleep,
                     serialized,
                     primary=primary
                 )
@@ -548,44 +576,37 @@ class Context(dict):
 
     def dispatch(self, event, obj):
         """
-        Acquires an exclusive lock for the machine's correlation_id, and executes
-        all the machinery of the framework and all the user code. If the lock cannot
-        be acquired (it is non-blocking), then and error is logged/recorded.
+        Acquires an exclusive lease for the machine's correlation_id, and executes
+        all the machinery of the framework and all the user code.
 
         :param event: a str event.
         :param obj: a dict.
         """
-
-        # create a guid to add to memcache
-        guid = uuid.uuid4().hex
-        added = False
+        fence_token = None
 
         try:
-            # successful atomic add means the lock has been acquired
-            added = cache_add(self.correlation_id, guid)
-            if added is False:
-                # could not get the lock. something is going very wrong with this
-                # state machine.
-                self._queue_error(ERRORS.CACHE, 'Could not obtain exclusive lock.')
+            # attempt to acquire the lease and execute the state transition
+            fence_token = acquire_lease(self.correlation_id, self.steps, self.retries,
+                                        primary=self.lease_primary)
+            if fence_token == 0:
+                self._queue_error(ERRORS.CACHE, 'System error acquiring primary=%s lease.' % self.lease_primary)
+                self.lease_primary = not self.lease_primary
+                fence_token = acquire_lease(self.correlation_id, self.steps, self.retries,
+                                            primary=self.lease_primary)
 
-            # we can actually detect connectivity errors if a 0 is returned
-            elif added == 0:
-                self._queue_error(ERRORS.CACHE, 'Executing without exclusive lock.')
-
-            # execute the primary logic
-            self._dispatch_and_retry(event, obj)
+            if not fence_token:
+                # could not get the lease. something is going wrong
+                self._queue_error(ERRORS.CACHE, 'Could not acquire lease. Retrying.')
+                self._retry(obj)
+            else:
+                # lease acquired, execute the state transition
+                self._dispatch_and_retry(event, obj)
 
         finally:
-            # if nothing was added, there is nothing to delete
-            if added:
-                # grab the current value of the lock in order to see if we
-                # still own the lock. eg. memcache ejection could cause this value
-                # to differ from the value we added earlier
-                guid_in_cache = cache_get(self.correlation_id)
-                if guid_in_cache == guid:
-                    cache_delete(self.correlation_id)
-                else:
-                    self._queue_error(ERRORS.CACHE, 'No longer own exclusive lock.')
+            released = release_lease(self.correlation_id, self.steps, self.retries, fence_token,
+                                     primary=self.lease_primary)
+            if not released:
+                self._queue_error(ERRORS.CACHE, 'Could not release lease.')
 
     def initialize(self):
         """

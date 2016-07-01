@@ -12,19 +12,22 @@ from collections import namedtuple
 
 # library imports
 import boto3
+from botocore.endpoint import DEFAULT_TIMEOUT
 from botocore.exceptions import ClientError
+from botocore.client import Config
 
 # application imports
 from aws_lambda_fsm.constants import ENVIRONMENT_DATA
-from aws_lambda_fsm.constants import RECOVERY_DATA
+from aws_lambda_fsm.constants import RETRY_DATA
+from aws_lambda_fsm.constants import CHECKPOINT_DATA
 from aws_lambda_fsm.constants import CACHE_DATA
+from aws_lambda_fsm.constants import LEASE_DATA
 from aws_lambda_fsm.constants import STREAM_DATA
 from aws_lambda_fsm.constants import AWS_DYNAMODB
 from aws_lambda_fsm.constants import AWS_KINESIS
 from aws_lambda_fsm.constants import AWS_CLOUDWATCH
 from aws_lambda_fsm.constants import AWS_SQS
 from aws_lambda_fsm.constants import AWS
-from aws_lambda_fsm.constants import ENDPOINTS
 from aws_lambda_fsm.constants import ENVIRONMENT
 from aws_lambda_fsm.config import get_settings
 
@@ -64,16 +67,16 @@ class ChaosConnection(object):
     or returns a fixed (error) value.
     """
 
-    def __init__(self, service, client, chaos=None):
+    def __init__(self, resource_arn, connection, chaos=None):
         chaos = chaos or getattr(settings, 'AWS_CHAOS', {})
-        self.service = service
-        self.client = client
-        self.chaos = chaos.get(service, {})
+        self.resource_arn = resource_arn
+        self.wrapped_connection = connection
+        self.chaos = chaos.get(resource_arn, {})
         if os.environ.get('DISABLE_AWS_CHAOS'):
             self.chaos = {}  # pragma: no cover
 
     def __getattr__(self, attr):
-        original_attr = getattr(self.client, attr)
+        original_attr = getattr(self.wrapped_connection, attr)
         if self.chaos:
             if callable(original_attr):
                 for exception_or_return, percentage in self.chaos.iteritems():
@@ -82,7 +85,19 @@ class ChaosConnection(object):
         return original_attr
 
 
-Arn = namedtuple('Arn', ['arn', 'partition', 'service', 'region_name', 'account_id', 'resource'])
+class Arn(namedtuple('Arn', ['arn', 'partition', 'service', 'region_name', 'account_id', 'resource'])):
+
+    __slots__ = ()
+
+    def slash_resource(self):
+        if not self.resource:
+            return None
+        return self.resource.split('/')[-1]
+
+    def colon_resource(self):
+        if not self.resource:
+            return None
+        return self.resource.split(':')[-1]
 
 
 def get_arn_from_arn_string(arn):
@@ -96,7 +111,7 @@ def get_arn_from_arn_string(arn):
     if arn:
         parts = arn.split(':', 5)
         if len(parts) < 6:
-            parts += [None] * (6-len(parts))
+            parts += [None] * (6 - len(parts))
         return Arn(*parts)
     else:
         return Arn(None, None, None, None, None, None)
@@ -115,38 +130,31 @@ def _get_connection_info(service, region_name):
       like "http://localhost:1234"
     """
     endpoint_url = \
-        getattr(settings, 'ENDPOINTS', {}).get(service, {}).get(ENDPOINTS.ENDPOINT_URL) or \
+        getattr(settings, 'ENDPOINTS', {}).get(service, {}).get(region_name) or \
         os.environ.get(service.upper() + '_URI')
     region_name = 'testing' if endpoint_url else region_name
     return service, region_name, endpoint_url
 
 
-def _service_enabled(service):
-    """
-    Returns True if the service is enabled, and False otherwise. Provides
-    a simple short circuit for local testing when there are, for instance,
-    not local cloudwatch stubs to talk to.
-
-    :param service: an AWS service like "kinesis", or "dynamodb"
-    :return: True if the service is enabled, and False otherwise
-    """
-    attr = 'USE_' + service.upper()
-    return getattr(settings, attr, True)
-
-
-def _get_service_connection(resource_arn):
+def _get_service_connection(resource_arn,
+                            connect_timeout=DEFAULT_TIMEOUT,
+                            read_timeout=DEFAULT_TIMEOUT,
+                            disable_chaos=False):
     """
     Returns a connection to an AWS Service. Uses a local cache to help
     out with performance.
 
     :param resource_arn: an AWS resource ARN like
       'arn:partition:kinesis:region:account:resource'
+    :param connect_timeout: an int socket connect timeout for api calls
+    :param read_timeout: an int socket read timeout for api calls
+    :param disable_chaos: a bool indicating this connection should not have any chaos
     :return: a boto3 connection
     """
     arn = get_arn_from_arn_string(resource_arn)
     with _lock:
 
-        # the local var is of the form "_kinesis_eu-west-1_connection"
+        # the local var is of the form "kinesis_eu-west-1_connection"
         attr = arn.service + '_' + arn.region_name + '_connection'
         if not getattr(_local, attr, None):
 
@@ -161,26 +169,41 @@ def _get_service_connection(resource_arn):
             # is specified, since the memcache library doesn't have all the default
             # logic used in the boto3 library
             if service == AWS.ELASTICACHE:
-                if not endpoint_url:
-                    return None
                 endpoint_url = endpoint_url.split(',')
                 import memcache
                 connection = memcache.Client(endpoint_url)
 
             # actual AWS services with boto3 APIs
             else:
+                # set the timeouts via a config
+                config = Config(connect_timeout=connect_timeout,
+                                read_timeout=read_timeout)
+                # create a connection with the config
                 connection = \
-                    boto3.client(service, region_name=region_name, endpoint_url=endpoint_url)
+                    boto3.client(service,
+                                 region_name=region_name,
+                                 endpoint_url=endpoint_url,
+                                 config=config)
 
             # wrapped in a chaos connection if applicable
             if getattr(settings, 'AWS_CHAOS', {}):
-                connection = ChaosConnection(service, connection)  # pragma: no cover
+                connection = ChaosConnection(resource_arn, connection)  # pragma: no cover
 
             setattr(_local, attr, connection)
-        return getattr(_local, attr)
+
+        connection = getattr(_local, attr)
+
+        # if no chaos is requested, then just return the underlying boto client
+        if disable_chaos and isinstance(connection, ChaosConnection):
+            return connection.wrapped_connection
+
+        return connection
 
 
-def get_connection(resource_arn):
+def get_connection(resource_arn,
+                   connect_timeout=DEFAULT_TIMEOUT,
+                   read_timeout=DEFAULT_TIMEOUT,
+                   disable_chaos=False):
     """
     Returns a connection to an appropriate service ARN. Since the ARN
     has the region and service encoded, it is possible to figure out all
@@ -188,39 +211,18 @@ def get_connection(resource_arn):
 
     :param resource_arn: an AWS resource ARN like
       'arn:partition:kinesis:region:account:resource'
+    :param connect_timeout: an int socket connect timeout for api calls
+    :param read_timeout: an int socket read timeout for api calls
+    :param disable_chaos: a bool indicating this connection should not have any chaos
     :return: a boto3 connection
     """
     connection = None
-    service = get_arn_from_arn_string(resource_arn).service
-    # possibly short circuit if settings.USE_FOO is False
-    if _service_enabled(service):
-        connection = _get_service_connection(resource_arn)
-    # for now, always return _something_ for the cache layer
-    # even if that something is to do nothing.
-    if service == AWS.ELASTICACHE:
-        connection = connection or LOCAL_CACHE
+    if resource_arn:
+        connection = _get_service_connection(resource_arn,
+                                             connect_timeout=connect_timeout,
+                                             read_timeout=read_timeout,
+                                             disable_chaos=disable_chaos)
     return connection
-
-
-class NoOpCache(object):  # pragma: no cover
-    """
-    A cache object with an interface like memcache.Client, but
-    doesn't actually cache anything.
-    """
-    def add(self, key, value):
-        return True
-
-    def get(self, key):
-        return None
-
-    def set(self, key, value):
-        return True
-
-    def delete(self, key):
-        return True
-
-
-LOCAL_CACHE = NoOpCache()
 
 
 def _trace(func, *args, **kwargs):
@@ -243,14 +245,18 @@ def get_primary_cache_source():
     return settings.PRIMARY_CACHE_SOURCE
 
 
+def get_secondary_cache_source():
+    return settings.SECONDARY_CACHE_SOURCE
+
+
 def get_primary_stream_source():
     return os.environ.get(ENVIRONMENT.FSM_PRIMARY_STREAM_SOURCE) or \
-           settings.PRIMARY_STREAM_SOURCE
+        settings.PRIMARY_STREAM_SOURCE
 
 
 def get_secondary_stream_source():
     return os.environ.get(ENVIRONMENT.FSM_SECONDARY_STREAM_SOURCE) or \
-           settings.SECONDARY_STREAM_SOURCE
+        settings.SECONDARY_STREAM_SOURCE
 
 
 def get_primary_checkpoint_source():
@@ -281,6 +287,10 @@ def get_primary_metrics_source():
     return settings.PRIMARY_METRICS_SOURCE
 
 
+def get_secondary_metrics_source():
+    return settings.SECONDARY_METRICS_SOURCE
+
+
 def increment_error_counters(data, dimensions):
     """
     Increments an error counter in AWS CloudWatch.
@@ -302,52 +312,59 @@ def increment_error_counters(data, dimensions):
                 AWS_CLOUDWATCH.MetricName: name,
                 AWS_CLOUDWATCH.Dimensions: [
                     {AWS_CLOUDWATCH.Name: key, AWS_CLOUDWATCH.Value: val} for key, val in dimensions.iteritems()
-                    ],
+                ],
                 AWS_CLOUDWATCH.Timestamp: utcnow,
                 AWS_CLOUDWATCH.Value: value
             } for name, value in data.items()
-            ]
+        ]
     )
     return return_value
 
 
-def _set_message_dispatched_memcache(cache_arn, correlation_id, steps):
+def _set_message_dispatched_memcache(cache_arn, correlation_id, steps, retries):
     """Sets a flag in memcache"""
 
     memcache_conn = get_connection(cache_arn)
     if not memcache_conn:
         return  # pragma: no cover
 
-    key = '%s-%s' % (correlation_id, steps)
-    return_value = memcache_conn.set(key, True)
+    cache_key = '%s-%s' % (correlation_id, steps)
+    cache_value = '%s-%s-%s' % (correlation_id, steps, retries)
+    return_value = memcache_conn.set(cache_key, cache_value)
     return return_value
 
 
-def _set_message_dispatched_dynamodb(table_arn, correlation_id, steps):
+def _set_message_dispatched_dynamodb(table_arn, correlation_id, steps, retries):
     """Sets a flag in dynamodb"""
 
     dynamodb_conn = get_connection(table_arn)
     if not dynamodb_conn:
         return  # pragma: no cover
 
-    resource = get_arn_from_arn_string(table_arn).resource
-    table_name = resource.split('/')[-1]
+    table_name = get_arn_from_arn_string(table_arn).slash_resource()
     cache_key = '%s-%s' % (correlation_id, steps)
+    cache_value = '%s-%s-%s' % (correlation_id, steps, retries)
     item = {
         CACHE_DATA.KEY: {AWS_DYNAMODB.STRING: cache_key},
-        CACHE_DATA.VALUE: {AWS_DYNAMODB.BOOLEAN: True}
+        CACHE_DATA.VALUE: {AWS_DYNAMODB.STRING: cache_value}
     }
 
     # write the kinesis offset to dynamodb. this allows us to recover hung/incomplete fsms.
-    return_value = _trace(
-        dynamodb_conn.put_item,
-        TableName=table_name,
-        Item=item
-    )
-    return bool(return_value)
+    try:
+        _trace(
+            dynamodb_conn.put_item,
+            TableName=table_name,
+            Item=item
+        )
+        return True
+
+    except ClientError:
+        # memcache returns 0 on connectivity issues
+        logger.exception('')
+        return 0
 
 
-def set_message_dispatched(correlation_id, steps, primary=True):
+def set_message_dispatched(correlation_id, steps, retries, primary=True):
     """
     Sets a flag in cache to indicate that a message has been dispatched.
     This is used by the framework to ensure that actions are not executed
@@ -357,18 +374,21 @@ def set_message_dispatched(correlation_id, steps, primary=True):
     :param steps: an integer corresponding to the step in the fsm execution
     :return: True if cached and False otherwise
     """
-    source_arn = get_primary_cache_source()
+    if primary:
+        source_arn = get_primary_cache_source()
+    else:
+        source_arn = get_secondary_cache_source()
 
     service = get_arn_from_arn_string(source_arn).service
 
     if not service:  # pragma: no cover
         logger.warning("No cache source for primary=%s" % primary)
 
-    elif service == AWS.CLOUDWATCH:
-        return _set_message_dispatched_memcache(source_arn, correlation_id, steps)
+    elif service == AWS.ELASTICACHE:
+        return _set_message_dispatched_memcache(source_arn, correlation_id, steps, retries)
 
     elif service == AWS.DYNAMODB:
-        return _set_message_dispatched_dynamodb(source_arn, correlation_id, steps)
+        return _set_message_dispatched_dynamodb(source_arn, correlation_id, steps, retries)
 
 
 def _get_message_dispatched_memcache(cache_arn, correlation_id, steps):
@@ -378,8 +398,8 @@ def _get_message_dispatched_memcache(cache_arn, correlation_id, steps):
     if not memcache_conn:
         return False  # pragma: no cover
 
-    key = '%s-%s' % (correlation_id, steps)
-    return_value = memcache_conn.get(key)
+    cache_key = '%s-%s' % (correlation_id, steps)
+    return_value = memcache_conn.get(cache_key)
     return return_value
 
 
@@ -390,23 +410,28 @@ def _get_message_dispatched_dynamodb(table_arn, correlation_id, steps):
     if not dynamodb_conn:
         return  # pragma: no cover
 
-    resource = get_arn_from_arn_string(table_arn).resource
-    table_name = resource.split('/')[-1]
+    table_name = get_arn_from_arn_string(table_arn).slash_resource()
     cache_key = '%s-%s' % (correlation_id, steps)
     key = {
         CACHE_DATA.KEY: {AWS_DYNAMODB.STRING: cache_key},
     }
 
     # write the kinesis offset to dynamodb. this allows us to recover hung/incomplete fsms.
-    return_value = _trace(
-        dynamodb_conn.get_item,
-        ConsistentRead=True,
-        TableName=table_name,
-        Key=key
-    )
-    return return_value.get(AWS_DYNAMODB.Item, {}) \
-                       .get(CACHE_DATA.VALUE, {}) \
-                       .get(AWS_DYNAMODB.BOOLEAN, False)
+    try:
+        return_value = _trace(
+            dynamodb_conn.get_item,
+            ConsistentRead=True,
+            TableName=table_name,
+            Key=key
+        )
+        return return_value.get(AWS_DYNAMODB.Item, {}) \
+                           .get(CACHE_DATA.VALUE, {}) \
+                           .get(AWS_DYNAMODB.STRING, None)
+
+    except ClientError:
+        # memcache returns None on connectivity issues
+        logger.exception('')
+        return None
 
 
 def get_message_dispatched(correlation_id, steps, primary=True):
@@ -417,196 +442,313 @@ def get_message_dispatched(correlation_id, steps, primary=True):
     :param steps: an integer corresponding to the step in the fsm execution
     :return: True if cached and False otherwise
     """
-    source_arn = get_primary_cache_source()
+    if primary:
+        source_arn = get_primary_cache_source()
+    else:
+        source_arn = get_secondary_cache_source()
 
     service = get_arn_from_arn_string(source_arn).service
 
     if not service:  # pragma: no cover
         logger.warning("No cache source for primary=%s" % primary)
 
-    elif service == AWS.CLOUDWATCH:
+    elif service == AWS.ELASTICACHE:
         return _get_message_dispatched_memcache(source_arn, correlation_id, steps)
 
     elif service == AWS.DYNAMODB:
         return _get_message_dispatched_dynamodb(source_arn, correlation_id, steps)
 
 
-def _cache_add_memcache(cache_arn, key, value):
-    """Adds a value to memcache"""
+def _acquire_lease_memcache(cache_arn, correlation_id, steps, retries):
+    """
+    Acquires a lease from memcache.
+
+    # https://www.quora.com/What-is-the-best-way-to-implement-a-mutex-on-top-of-memcached
+    """
 
     memcache_conn = get_connection(cache_arn)
     if not memcache_conn:
         return  # pragma: no cover
 
-    return_value = memcache_conn.add(key, value)
-    return return_value
+    timestamp = int(time.time())
+    new_expires = timestamp + LEASE_DATA.LEASE_TIMEOUT
+    new_lease_value = '%d-%d-%d' % (steps, retries, new_expires)
+
+    # get the current value of the lease
+    memcache_key = LEASE_DATA.LEASE_KEY_PREFIX + correlation_id
+    current_lease_value = memcache_conn.gets(memcache_key)
+
+    # if there is already a lease holder, then we have a few options
+    if current_lease_value:
+
+        # split the current lease apart
+        current_steps, current_retries, current_expires = map(int, current_lease_value.split('-'))
+
+        # check if this process has already acquired the lease
+        if (current_steps, current_retries) == (steps, retries):
+            # this process has already acquired the lease, but we doubly
+            # make sure nothing else has acquired it in the meantime
+            return memcache_conn.cas(memcache_key, new_lease_value)
+
+        # the existing lease has expired, forcibly take it
+        if timestamp > current_expires:
+            return memcache_conn.cas(memcache_key, new_lease_value)
+
+        # default fall-through is the to re-try to acquire the lease
+        return False
+
+    else:
+
+        # if there is no current lease, then get the lease
+        return memcache_conn.cas(memcache_key, new_lease_value)
 
 
-def _cache_add_dynamodb(table_arn, key, value):
-    """Adds a value to DynamoDB cache"""
+def _acquire_lease_dynamodb(table_arn, correlation_id, steps, retries):
+    """
+    Acquires a lease from DynamoDB.
 
+    # http://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html
+    """
     dynamodb_conn = get_connection(table_arn)
     if not dynamodb_conn:
         return  # pragma: no cover
 
-    resource = get_arn_from_arn_string(table_arn).resource
-    table_name = resource.split('/')[-1]
-    item = {
-        CACHE_DATA.KEY: {AWS_DYNAMODB.STRING: key},
-        CACHE_DATA.VALUE: {AWS_DYNAMODB.STRING: value}
+    timestamp = int(time.time())
+    expires = timestamp + LEASE_DATA.LEASE_TIMEOUT
+
+    table_name = get_arn_from_arn_string(table_arn).slash_resource()
+    key = {
+        LEASE_DATA.KEY: {AWS_DYNAMODB.STRING: LEASE_DATA.LEASE_KEY_PREFIX + correlation_id}
     }
 
-    # add the value to memcache
     try:
+        # the conditions are:
+        #
+        # 1. entity doesn't exist yet, or
+        # 2. the lease is currently 'open', or
+        # 3. the lease has expired, or
+        # 4. this exact id,steps,retries task own the lease
+        cexp = 'attribute_not_exists(lease_state) OR ' \
+               'lease_state = :o OR ' \
+               'expires < :t OR ' \
+               '(lease_state = :l AND steps = :s AND retries = :r)'
+
+        # the updates are:
+        #
+        # 1. atomic increment on fence, and
+        # 2. expiration in the future, and
+        # 3. state to 'leased', and
+        # 4. steps, and
+        # 5. retries
+        uexp = 'SET fence = if_not_exists(fence, :z) + :f, ' \
+               'expires = :e, ' \
+               'lease_state = :l, ' \
+               'steps = :s, ' \
+               'retries = :r'
+
+        expression_attribute_values = {
+            # leased and open states
+            ':o': {AWS_DYNAMODB.STRING: LEASE_DATA.STATES.OPEN},
+            ':l': {AWS_DYNAMODB.STRING: LEASE_DATA.STATES.LEASED},
+
+            # current timestanp for conditional expiry check
+            ':t': {AWS_DYNAMODB.NUMBER: str(timestamp)},
+
+            # increment value for the fence, and a zero
+            ':f': {AWS_DYNAMODB.NUMBER: str(1)},
+            ':z': {AWS_DYNAMODB.NUMBER: str(0)},
+
+            # set the expiration every time
+            ':e': {AWS_DYNAMODB.NUMBER: str(expires)},
+
+            # set the owner parameters
+            ':s': {AWS_DYNAMODB.NUMBER: str(steps)},
+            ':r': {AWS_DYNAMODB.NUMBER: str(retries)},
+        }
+
         return_value = _trace(
-            dynamodb_conn.put_item,
+            dynamodb_conn.update_item,
             TableName=table_name,
-            Item=item,
-            ConditionExpression='attribute_not_exists(%s)' % CACHE_DATA.KEY
+            Key=key,
+            ConditionExpression=cexp,
+            UpdateExpression=uexp,
+            ExpressionAttributeValues=expression_attribute_values,
+            ReturnValues="ALL_NEW"
         )
-        return bool(return_value)
+
+        # the conditional update and atomic increment worked
+        return return_value[AWS_DYNAMODB.Attributes][LEASE_DATA.FENCE][AWS_DYNAMODB.NUMBER]
 
     except ClientError, e:
 
+        # operating as expected for entity already existing
         if e.response['Error']['Code'] != 'ConditionalCheckFailedException':
-            raise  # pragma: no cover
+            return False  # pragma: no cover
+
+        logger.exception('')
+        return 0
+
+
+def acquire_lease(correlation_id, steps, retries, primary=True):
+    """
+    Acquires a lease from cache.
+
+    :param correlation_id: a str guid for the fsm
+    :param steps: an integer corresponding to the step in the fsm execution
+    :param retries: an integer corresponding to the number of retries in the fsm execution
+    :return: True if the lease was release and False otherwise
+    """
+    if primary:
+        source_arn = get_primary_cache_source()
+    else:
+        source_arn = get_secondary_cache_source()
+
+    service = get_arn_from_arn_string(source_arn).service
+
+    if not service:  # pragma: no cover
+        logger.warning("No cache source for primary=%s" % primary)
+
+    elif service == AWS.ELASTICACHE:
+        return _acquire_lease_memcache(source_arn, correlation_id, steps, retries)
+
+    elif service == AWS.DYNAMODB:
+        return _acquire_lease_dynamodb(source_arn, correlation_id, steps, retries)
+
+
+def _release_lease_memcache(cache_arn, correlation_id, steps, retries):
+    """
+    Releases a lease from memcache.
+    """
+    memcache_conn = get_connection(cache_arn)
+    if not memcache_conn:
+        return  # pragma: no cover
+
+    # get the current value of the lease
+    memcache_key = LEASE_DATA.LEASE_KEY_PREFIX + correlation_id
+    current_lease_value = memcache_conn.gets(memcache_key)
+
+    # if there is already a lease holder, then we have a few options
+    if current_lease_value:
+
+        # split the current lease apart
+        current_steps, current_retries, current_time = map(int, current_lease_value.split('-'))
+
+        # check if this process still owns the lease, and then attempt
+        # to release it by setting the lease value to None sing cas, rather
+        # than just client.delete, which can race.
+        if (current_steps, current_retries) == (steps, retries):
+            return memcache_conn.cas(memcache_key, None)
+
+        # otherwise, something else owns the lease, so we can't release it
+        else:
+            return False
+
+    else:
+
+        # the lease is no longer owned by anyone
         return False
 
 
-def cache_add(key, value, primary=True):
+def _release_lease_dynamodb(table_arn, correlation_id, steps, retries, fence_token):
     """
-    Adds a value to cache. Returns True if it was added, and False otherwise.
+    Releases a lease from DynamoDB.
 
-    :param key: a str cache key
-    :param value: a str cache value
-    :return: True if added and False otherwise
+    # http://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html
     """
-
-    source_arn = get_primary_cache_source()
-
-    service = get_arn_from_arn_string(source_arn).service
-
-    if not service:  # pragma: no cover
-        logger.warning("No cache source for primary=%s" % primary)
-
-    elif service == AWS.CLOUDWATCH:
-        return _cache_add_memcache(source_arn, key, value)
-
-    elif service == AWS.DYNAMODB:
-        return _cache_add_dynamodb(source_arn, key, value)
-
-
-def _cache_get_memcache(cache_arn, cache_key):
-    """Gets a value from memcache"""
-
-    memcache_conn = get_connection(cache_arn)
-    if not memcache_conn:
-        return  # pragma: no cover
-
-    return_value = memcache_conn.get(cache_key)
-    return return_value
-
-
-def _cache_get_dynamodb(table_arn, cache_key):
-    """Gets a value from DynamoDB cache"""
-
     dynamodb_conn = get_connection(table_arn)
     if not dynamodb_conn:
         return  # pragma: no cover
 
-    resource = get_arn_from_arn_string(table_arn).resource
-    table_name = resource.split('/')[-1]
+    table_name = get_arn_from_arn_string(table_arn).slash_resource()
     key = {
-        CACHE_DATA.KEY: {AWS_DYNAMODB.STRING: cache_key},
+        LEASE_DATA.KEY: {AWS_DYNAMODB.STRING: LEASE_DATA.LEASE_KEY_PREFIX + correlation_id}
     }
 
-    # get the value from cache
-    return_value = _trace(
-        dynamodb_conn.get_item,
-        ConsistentRead=True,
-        TableName=table_name,
-        Key=key
-    )
-    return return_value.get(AWS_DYNAMODB.Item, {}) \
-                       .get(CACHE_DATA.VALUE, {}) \
-                       .get(AWS_DYNAMODB.STRING, None)
+    try:
+        # the conditions are:
+        #
+        # 1. the lease is currently 'leased', and
+        # 2. steps matches, and
+        # 3. retries matches
+        cexp = 'lease_state = :l AND ' \
+               'steps = :s AND ' \
+               'retries = :r'
+
+        # the updates are:
+        #
+        # 1. lease state to 'open', and
+        # 2. null steps, and
+        # 3. null retries, and
+        # 4. null expires
+        uexp = 'SET lease_state = :o, ' \
+               'steps = :null, ' \
+               'retries = :null, ' \
+               'expires = :null'
+
+        expression_attribute_values = {
+            # leased and open states
+            ':o': {AWS_DYNAMODB.STRING: LEASE_DATA.STATES.OPEN},
+            ':l': {AWS_DYNAMODB.STRING: LEASE_DATA.STATES.LEASED},
+
+            # null out all the other parameters
+            ':null': {AWS_DYNAMODB.NULL: True},
+
+            # used for conditional expression
+            ':s': {AWS_DYNAMODB.NUMBER: str(steps)},
+            ':r': {AWS_DYNAMODB.NUMBER: str(retries)},
+        }
+
+        if fence_token:
+            cexp += ' AND fence = :f'
+            expression_attribute_values[':f'] = {AWS_DYNAMODB.NUMBER: fence_token}
+
+        _trace(
+            dynamodb_conn.update_item,
+            TableName=table_name,
+            Key=key,
+            ConditionExpression=cexp,
+            UpdateExpression=uexp,
+            ExpressionAttributeValues=expression_attribute_values,
+            ReturnValues="ALL_NEW"
+        )
+
+        # the conditional update and atomic increment worked
+        return True
+
+    except ClientError, e:
+
+        # operating as expected for entity already existing
+        if e.response['Error']['Code'] != 'ConditionalCheckFailedException':
+            return False  # pragma: no cover
+
+        logger.exception('')
+        return 0
 
 
-def cache_get(key, primary=True):
+def release_lease(correlation_id, steps, retries, fence_token, primary=True):
     """
-    Gets a value from cache.
+    Releases a lease from cache.
 
-    :param key: a str cache key
-    :return: the str value in cache
+    :param correlation_id: a str guid for the fsm
+    :param steps: an integer corresponding to the step in the fsm execution
+    :param retries: an integer corresponding to the number of retries in the fsm execution
+    :return: True if the lease was acquired and False otherwise
     """
-
-    source_arn = get_primary_cache_source()
+    if primary:
+        source_arn = get_primary_cache_source()
+    else:
+        source_arn = get_secondary_cache_source()
 
     service = get_arn_from_arn_string(source_arn).service
 
     if not service:  # pragma: no cover
         logger.warning("No cache source for primary=%s" % primary)
 
-    elif service == AWS.CLOUDWATCH:
-        return _cache_get_memcache(source_arn, key)
+    elif service == AWS.ELASTICACHE:
+        return _release_lease_memcache(source_arn, correlation_id, steps, retries)
 
     elif service == AWS.DYNAMODB:
-        return _cache_get_dynamodb(source_arn, key)
-
-
-def _cache_delete_memcache(cache_arn, cache_key):
-    """Deletes a value from memcache"""
-
-    memcache_conn = get_connection(cache_arn)
-    if not memcache_conn:
-        return  # pragma: no cover
-
-    return_value = memcache_conn.delete(cache_key)
-    return return_value
-
-
-def _cache_delete_dynamodb(table_arn, cache_key):
-    """Deletes a value from DynamoDB cache"""
-
-    dynamodb_conn = get_connection(table_arn)
-    if not dynamodb_conn:
-        return  # pragma: no cover
-
-    resource = get_arn_from_arn_string(table_arn).resource
-    table_name = resource.split('/')[-1]
-    key = {
-        CACHE_DATA.KEY: {AWS_DYNAMODB.STRING: cache_key},
-    }
-
-    # delete the value from cache
-    return_value = _trace(
-        dynamodb_conn.delete_item,
-        TableName=table_name,
-        Key=key
-    )
-    return bool(return_value)
-
-
-def cache_delete(key, primary=True):
-    """
-    Gets a value from cache.
-
-    :param key: a str cache key
-    :return: the str value in cache
-    """
-
-    source_arn = get_primary_cache_source()
-
-    service = get_arn_from_arn_string(source_arn).service
-
-    if not service:  # pragma: no cover
-        logger.warning("No cache source for primary=%s" % primary)
-
-    elif service == AWS.CLOUDWATCH:
-        return _cache_delete_memcache(source_arn, key)
-
-    elif service == AWS.DYNAMODB:
-        return _cache_delete_dynamodb(source_arn, key)
+        return _release_lease_dynamodb(source_arn, correlation_id, steps, retries, fence_token)
 
 
 def _send_next_event_for_dispatch_kinesis(stream_arn, data, correlation_id):
@@ -624,8 +766,7 @@ def _send_next_event_for_dispatch_kinesis(stream_arn, data, correlation_id):
     if not kinesis_conn:
         return  # pragma: no cover
 
-    resource = get_arn_from_arn_string(stream_arn).resource
-    stream_name = resource.split('/')[-1]
+    stream_name = get_arn_from_arn_string(stream_arn).slash_resource()
     return_value = _trace(
         kinesis_conn.put_record,
         StreamName=stream_name,
@@ -656,8 +797,7 @@ def _send_next_event_for_dispatch_dynamodb(table_arn, data, correlation_id):
         STREAM_DATA.PAYLOAD: {AWS_DYNAMODB.STRING: data},
         STREAM_DATA.TIMESTAMP: {AWS_DYNAMODB.NUMBER: timestamp}
     }
-    resource = get_arn_from_arn_string(table_arn).resource
-    table_name = resource.split('/')[-1]
+    table_name = get_arn_from_arn_string(table_arn).slash_resource()
     return_value = _trace(
         dynamodb_conn.put_item,
         TableName=table_name,
@@ -764,8 +904,7 @@ def _send_next_events_for_dispatch_kinesis(stream_arn, all_data, correlation_ids
     if not kinesis_conn:
         return  # pragma: no cover
 
-    resource = get_arn_from_arn_string(stream_arn).resource
-    stream_name = resource.split('/')[-1]
+    stream_name = get_arn_from_arn_string(stream_arn).slash_resource()
     return_value = _trace(
         kinesis_conn.put_records,
         StreamName=stream_name,
@@ -794,8 +933,7 @@ def _send_next_events_for_dispatch_dynamodb(table_arn, all_data, correlation_ids
     if not dynamodb_conn:
         return  # pragma: no cover
 
-    resource = get_arn_from_arn_string(table_arn).resource
-    table_name = resource.split('/')[-1]
+    table_name = get_arn_from_arn_string(table_arn).slash_resource()
     request_items = {table_name: []}
     timestamp = str(int(time.time()))
     for data, correlation_id in zip(all_data, correlation_ids):
@@ -916,13 +1054,10 @@ def _store_checkpoint_dynamodb(table_arn, correlation_id, sent):
     if not dynamodb_conn:
         return  # pragma: no cover
 
-    resource = get_arn_from_arn_string(table_arn).resource
-    table_name = resource.split('/')[-1]
-    partition = int(hashlib.md5(correlation_id).hexdigest(), 16) % 16
+    table_name = get_arn_from_arn_string(table_arn).slash_resource()
     item = {
-        RECOVERY_DATA.PARTITION: {AWS_DYNAMODB.NUMBER: str(partition)},
-        RECOVERY_DATA.CORRELATION_ID: {AWS_DYNAMODB.STRING: correlation_id},
-        RECOVERY_DATA.SENT: {AWS_DYNAMODB.STRING: sent}
+        CHECKPOINT_DATA.CORRELATION_ID: {AWS_DYNAMODB.STRING: correlation_id},
+        CHECKPOINT_DATA.SENT: {AWS_DYNAMODB.STRING: sent}
     }
 
     # write the kinesis offset to dynamodb. this allows us to recover hung/incomplete fsms.
@@ -977,8 +1112,7 @@ def _store_environment_dynamodb(table_arn, environment):
         ENVIRONMENT_DATA.ENVIRONMENT: {AWS_DYNAMODB.STRING: serialized},
     }
 
-    resource = get_arn_from_arn_string(table_arn).resource
-    table_name = resource.split('/')[-1]
+    table_name = get_arn_from_arn_string(table_arn).slash_resource()
 
     # write the environment offset to dynamodb. this allows us lookup LARGE
     # envonments and get around 8192 character limits in ECS
@@ -1035,8 +1169,7 @@ def _load_environment_dynamodb(table_arn, guid):
         ENVIRONMENT_DATA.GUID: {AWS_DYNAMODB.STRING: guid}
     }
 
-    resource = get_arn_from_arn_string(table_arn).resource
-    table_name = resource.split('/')[-1]
+    table_name = get_arn_from_arn_string(table_arn).slash_resource()
 
     # load the environment from dynamodb
     item = _trace(
@@ -1074,7 +1207,7 @@ def load_environment(context, key, primary=True):
         return _load_environment_dynamodb(source, guid)
 
 
-def _start_retries_dynamodb(table_arn, correlation_id, run_at, payload):
+def _start_retries_dynamodb(table_arn, correlation_id, steps, run_at, payload):
     """
     Triggers retries for a state machine by sending a message to DynamoDB.
 
@@ -1090,13 +1223,13 @@ def _start_retries_dynamodb(table_arn, correlation_id, run_at, payload):
         return  # pragma: no cover
 
     partition = int(hashlib.md5(correlation_id).hexdigest(), 16) % 16
-    resource = get_arn_from_arn_string(table_arn).resource
-    table_name = resource.split('/')[-1]
+    table_name = get_arn_from_arn_string(table_arn).slash_resource()
+    correlation_id_steps = '%s-%s' % (correlation_id, steps)
     item = {
-        RECOVERY_DATA.PARTITION: {AWS_DYNAMODB.NUMBER: str(partition)},
-        RECOVERY_DATA.CORRELATION_ID: {AWS_DYNAMODB.STRING: correlation_id},
-        RECOVERY_DATA.RUN_AT: {AWS_DYNAMODB.NUMBER: str(run_at)},
-        RECOVERY_DATA.PAYLOAD: {AWS_DYNAMODB.STRING: payload}
+        RETRY_DATA.PARTITION: {AWS_DYNAMODB.NUMBER: str(partition)},
+        RETRY_DATA.CORRELATION_ID_STEPS: {AWS_DYNAMODB.STRING: correlation_id_steps},
+        RETRY_DATA.RUN_AT: {AWS_DYNAMODB.NUMBER: str(run_at)},
+        RETRY_DATA.PAYLOAD: {AWS_DYNAMODB.STRING: payload}
     }
 
     # write the kinesis offset to dynamodb. this allows us to recover hung/incomplete fsms.
@@ -1199,7 +1332,7 @@ def start_retries(context, run_at, payload, primary=True):
         return _start_retries_kinesis(source_arn, context.correlation_id, payload)
 
     elif service == AWS.DYNAMODB:
-        return _start_retries_dynamodb(source_arn, context.correlation_id, run_at, payload)
+        return _start_retries_dynamodb(source_arn, context.correlation_id, context.steps, run_at, payload)
 
     elif service == AWS.SNS:
         return _start_retries_sns(source_arn, context.correlation_id, payload)
@@ -1208,7 +1341,7 @@ def start_retries(context, run_at, payload, primary=True):
         return _start_retries_sqs(source_arn, context.correlation_id, run_at, payload)
 
 
-def _stop_retries_dynamodb(table_arn, correlation_id):
+def _stop_retries_dynamodb(table_arn, correlation_id, steps):
     """
     Stops retries for a state machine by deleting any persistent messages
     that trigger retires.
@@ -1216,6 +1349,7 @@ def _stop_retries_dynamodb(table_arn, correlation_id):
     :param table_arn: a str ARN for a DynamoDB table like
       'arn:partition:dynamodb:region:account:resource'
     :param correlation_id: the guid for the fsm
+    :param steps: the steps of the fsm
     :return: a return value from boto3 delete_item call
     """
     dynamodb_conn = get_connection(table_arn)
@@ -1223,11 +1357,11 @@ def _stop_retries_dynamodb(table_arn, correlation_id):
         return  # pragma: no cover
 
     partition = int(hashlib.md5(correlation_id).hexdigest(), 16) % 16
-    resource = get_arn_from_arn_string(table_arn).resource
-    table_name = resource.split('/')[-1]
+    table_name = get_arn_from_arn_string(table_arn).slash_resource()
+    correlation_id_steps = '%s-%s' % (correlation_id, steps)
     key = {
-        RECOVERY_DATA.PARTITION: {AWS_DYNAMODB.NUMBER: str(partition)},
-        RECOVERY_DATA.CORRELATION_ID: {AWS_DYNAMODB.STRING: correlation_id}
+        RETRY_DATA.PARTITION: {AWS_DYNAMODB.NUMBER: str(partition)},
+        RETRY_DATA.CORRELATION_ID_STEPS: {AWS_DYNAMODB.STRING: correlation_id_steps}
     }
 
     # delete a dynamodb entity
@@ -1260,7 +1394,7 @@ def stop_retries(context, primary=True):
         logger.warning("No retry source for primary=%s" % primary)
 
     elif service == AWS.DYNAMODB:
-        return _stop_retries_dynamodb(source_arn, context.correlation_id)
+        return _stop_retries_dynamodb(source_arn, context.correlation_id, context.steps)
 
 
 def retriable_entities(table_arn, index, run_at, limit=100):
@@ -1273,14 +1407,13 @@ def retriable_entities(table_arn, index, run_at, limit=100):
     :return:
     """
     # query for some dynamodb entities
-    dynamodb_conn = get_connection(table_arn)
+    dynamodb_conn = get_connection(table_arn, disable_chaos=True)
     if not dynamodb_conn:
         return []
 
     items = []
 
-    resource = get_arn_from_arn_string(table_arn).resource
-    table_name = resource.split('/')[-1]
+    table_name = get_arn_from_arn_string(table_arn).slash_resource()
 
     for partition in xrange(16):
 
@@ -1291,11 +1424,11 @@ def retriable_entities(table_arn, index, run_at, limit=100):
             ConsistentRead=True,
             IndexName=index,
             KeyConditions={
-                RECOVERY_DATA.PARTITION: {
+                RETRY_DATA.PARTITION: {
                     AWS_DYNAMODB.ComparisonOperator: AWS_DYNAMODB.EQUAL,
                     AWS_DYNAMODB.AttributeValueList: [{AWS_DYNAMODB.NUMBER: str(partition)}]
                 },
-                RECOVERY_DATA.RUN_AT: {
+                RETRY_DATA.RUN_AT: {
                     AWS_DYNAMODB.ComparisonOperator: AWS_DYNAMODB.LESS_THAN,
                     AWS_DYNAMODB.AttributeValueList: [{AWS_DYNAMODB.NUMBER: str(run_at)}]
                 }
@@ -1307,9 +1440,119 @@ def retriable_entities(table_arn, index, run_at, limit=100):
             # pull the payload out of the item
             items.append(
                 {
-                    RECOVERY_DATA.PAYLOAD: result[RECOVERY_DATA.PAYLOAD][AWS_DYNAMODB.STRING],
-                    RECOVERY_DATA.CORRELATION_ID: result[RECOVERY_DATA.CORRELATION_ID][AWS_DYNAMODB.STRING],
+                    RETRY_DATA.PAYLOAD: result[RETRY_DATA.PAYLOAD][AWS_DYNAMODB.STRING],
+                    RETRY_DATA.CORRELATION_ID_STEPS: result[RETRY_DATA.CORRELATION_ID_STEPS][AWS_DYNAMODB.STRING],
                 }
             )
 
     return items
+
+################################################################################
+# Configuration Validation
+################################################################################
+
+
+ALLOWED_STREAM_SERVICES = [AWS.KINESIS, AWS.DYNAMODB, AWS.SNS, AWS.SQS]
+ALLOWED_RETRY_SERVICES = [AWS.KINESIS, AWS.DYNAMODB, AWS.SNS, AWS.SQS]
+ALLOWED_CHECKPOINT_SERVICES = [AWS.DYNAMODB]
+ALLOWED_ENVIRONMENT_SERVICES = [AWS.DYNAMODB]
+ALLOWED_METRICS_SERVICES = [AWS.CLOUDWATCH]
+ALLOWED_CACHE_SERVICES = [AWS.ELASTICACHE, AWS.DYNAMODB]
+
+
+ALLOWED = 'allowed'
+PRIMARY = 'primary'
+SECONDARY = 'secondary'
+FAILOVER = 'failover'
+REQUIRED = 'required'
+
+
+ALLOWED_MAPPING = {
+
+    # required and support failover
+    'STREAM': {
+        ALLOWED: ALLOWED_STREAM_SERVICES,
+        REQUIRED: True,
+        FAILOVER: True,
+        PRIMARY: get_primary_stream_source(),
+        SECONDARY: get_secondary_stream_source(),
+    },
+    'RETRY': {
+        ALLOWED: ALLOWED_RETRY_SERVICES,
+        REQUIRED: True,
+        FAILOVER: True,
+        PRIMARY: get_primary_retry_source(),
+        SECONDARY: get_secondary_retry_source(),
+    },
+
+    # required and do not support failover
+    'CACHE': {
+        ALLOWED: ALLOWED_CACHE_SERVICES,
+        REQUIRED: True,
+        FAILOVER: False,
+        PRIMARY: get_primary_cache_source(),
+        SECONDARY: get_secondary_cache_source(),
+    },
+    'CHECKPOINT': {
+        ALLOWED: ALLOWED_CHECKPOINT_SERVICES,
+        REQUIRED: True,
+        FAILOVER: False,
+        PRIMARY: get_primary_checkpoint_source(),
+        SECONDARY: get_secondary_checkpoint_source(),
+    },
+
+    # not required and do not support failover
+    'ENVIRONMENT': {
+        ALLOWED: ALLOWED_ENVIRONMENT_SERVICES,
+        REQUIRED: False,
+        FAILOVER: False,
+        PRIMARY: get_primary_environment_source(),
+        SECONDARY: get_secondary_environment_source(),
+    },
+    'METRICS': {
+        ALLOWED: ALLOWED_METRICS_SERVICES,
+        REQUIRED: False,
+        FAILOVER: False,
+        PRIMARY: get_primary_metrics_source(),
+        SECONDARY: get_secondary_metrics_source(),
+    },
+}
+
+
+def _validate_config(key, data):
+    """
+    Validates the settings/config. Logs errors when problems are found.
+    """
+    primary = data[PRIMARY]
+    secondary = data[SECONDARY]
+    allowed = data[ALLOWED]
+    failover = data[FAILOVER]
+    required = data[REQUIRED]
+
+    if required and not primary:
+        logger.fatal("PRIMARY_%s_SOURCE is unset.", key)
+
+    primary_service = get_arn_from_arn_string(primary).service
+    if primary_service and primary_service not in allowed:
+        logger.fatal("PRIMARY_%s_SOURCE '%s' is not allowed.", key, primary)
+
+    secondary_service = get_arn_from_arn_string(secondary).service
+    if secondary_service and secondary_service not in allowed:
+        logger.fatal("SECONDARY_%s_SOURCE '%s' is not allowed.", key, secondary)
+
+    if failover and not secondary:
+        logger.warning("SECONDARY_%s_SOURCE is unset (failover not configured).", key)
+
+    if failover and secondary and primary == secondary:
+        logger.warning("PRIMARY_%s_SOURCE = SECONDARY_%s_SOURCE (failover not configured optimally).", key, key)
+
+
+def validate_config():
+    """
+    Validates the settings/config. Logs errors when problems are found.
+    """
+    with _lock:
+        if not getattr(_local, 'validated_config', None):
+            for key, data in sorted(ALLOWED_MAPPING.items()):
+                _validate_config(key, data)
+        _local.validated_config = True
