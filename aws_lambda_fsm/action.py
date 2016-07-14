@@ -1,4 +1,5 @@
 # system imports
+from functools import wraps
 import logging
 logger = logging.getLogger(__name__)
 
@@ -29,3 +30,33 @@ class Action(object):
         """
         logger.info('action.name=%s', self.name)
         return self.event
+
+
+def max_retry_event(event):
+    """
+    A decorator for `Action.execute` which catches an exception on the last
+    retry and instead returns the given event.
+
+    :param event: a str event.
+    :return: a decorator.
+
+    Example:
+        class MyAction(Action):
+            @max_retry_event('fail')
+            def execute(self, context, obj):
+                ...
+    """
+    def _max_retry_event(func):
+        @wraps(func)
+        def wrapper(self, context, obj):
+            try:
+                return func(self, context, obj)
+            except:
+                if context.retries >= context.max_retries:
+                    return event
+
+                raise
+
+        return wrapper
+
+    return _max_retry_event
