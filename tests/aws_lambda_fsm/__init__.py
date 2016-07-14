@@ -16,11 +16,11 @@ class TestSettings(object):
     PRIMARY_CACHE_SOURCE = 'arn:partition:elasticache:testing:account:resource'
     SECONDARY_CACHE_SOURCE = None
     PRIMARY_STREAM_SOURCE = 'arn:partition:kinesis:testing:account:stream/resource'
-    SECONDARY_STREAM_SOURCE = 'arn:partition:dynamodb:testing:account:table/resource'
+    SECONDARY_STREAM_SOURCE = None
     PRIMARY_CHECKPOINT_SOURCE = 'arn:partition:dynamodb:testing:account:table/resource'
     SECONDARY_CHECKPOINT_SOURCE = None
     PRIMARY_RETRY_SOURCE = 'arn:partition:dynamodb:testing:account:table/resource'
-    SECONDARY_RETRY_SOURCE = 'arn:partition:kinesis:testing:account:stream/resource'
+    SECONDARY_RETRY_SOURCE = None
     PRIMARY_ENVIRONMENT_SOURCE = 'arn:partition:dynamodb:testing:account:table/resource'
     SECONDARY_ENVIRONMENT_SOURCE = None
     AWS_CHAOS = {}

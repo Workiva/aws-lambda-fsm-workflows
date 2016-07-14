@@ -1131,7 +1131,7 @@ class ValidateConfigTest(unittest.TestCase):
             {'failover': True,
              'required': True,
              'primary': 'arn:partition:kinesis:testing:account:stream/resource',
-             'secondary': 'arn:partition:dynamodb:testing:account:table/resource',
+             'secondary': None,
              'allowed': ['kinesis', 'dynamodb', 'sns', 'sqs']}
         )
 
