@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+#
+# fsm_docker_runner.py
+#
+# Script that creates a docker container and returns an event.
+
 # system imports
 import os
 import base64

@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+#
+# fsm_sqs_to_arn.py
+#
+# Script that forwards messages from SQS to dest arn.
+
 # system imports
 import argparse
 import json
