@@ -12,6 +12,8 @@
 [//]: # (See the License for the specific language governing permissions and)
 [//]: # (limitations under the License.)
 
+[<< Settings](SETTINGS.md) | [Idempotency >>](IDEMPOTENCY.md)
+
 # Chaos
 
 In the spirit of [Netflix](https://www.netflix.com/)'s [Chaos Monkey](https://github.com/Netflix/SimianArmy/wiki/Chaos-Monkey), 
@@ -24,8 +26,8 @@ will fail.
 
 For example
 
-    PRIMARY_STREAM_SOURCE = 'arn:aws:kinesis:eu-west-1:663511558366:stream/aws-lambda-fsm'
-    PRIMARY_CACHE_SOURCE = 'arn:aws:dynamodb:eu-west-1:663511558366:table/aws-lambda-fsm.cache'
+    PRIMARY_STREAM_SOURCE = 'arn:aws:kinesis:eu-west-1:999999999999:stream/aws-lambda-fsm'
+    PRIMARY_CACHE_SOURCE = 'arn:aws:dynamodb:eu-west-1:999999999999:table/aws-lambda-fsm.cache'
 
     from botocore.exceptions import ClientError
     
@@ -39,3 +41,5 @@ For example
     }
     
 This works locally and when deployed to AWS.
+
+[<< Settings](SETTINGS.md) | [Idempotency >>](IDEMPOTENCY.md)

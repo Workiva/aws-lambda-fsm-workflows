@@ -12,6 +12,8 @@
 [//]: # (See the License for the specific language governing permissions and)
 [//]: # (limitations under the License.)
 
+[<< FSM YAML](YAML.md) | [Running on AWS >>](AWS.md)
+
 # Running Locally
 
 ## Settings
@@ -109,4 +111,5 @@ This injects a message into Kinesis/DynamoDB/SNS to kick off a state machine.
     $ workon aws-lambda-fsm
     $ python tools/start_state_machine.py --machine_name=tracer --kinesis_uri=http://localhost:4567 --dynamodb_uri=http://localhost:7654
 
+[<< FSM YAML](YAML.md) | [Running on AWS >>](AWS.md)
     

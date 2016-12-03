@@ -12,6 +12,8 @@
 [//]: # (See the License for the specific language governing permissions and)
 [//]: # (limitations under the License.)
 
+[<< Installing Dependencies](INSTALL.md) | [Chaos >>](CHAOS.md)
+
 # Settings
 
 The behaviour of the framework is controlled by a few important settings
@@ -82,3 +84,5 @@ AWS ARN for `dynamodb` is the preferred value since it
 AWS ARN for `cloudwatch` is the preferred value since it 
 
 1. is a tightly integrated AWS custom metrics solution
+
+[<< Installing Dependencies](INSTALL.md) | [Chaos >>](CHAOS.md)

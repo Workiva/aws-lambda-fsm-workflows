@@ -12,6 +12,8 @@
 [//]: # (See the License for the specific language governing permissions and)
 [//]: # (limitations under the License.)
 
+[<< Architecture](ARCHITECTURE.md) | [Justification >>](JUSTIFICATION.md)
+
 # Overview
 
 A framework for running Finite State Machines (FSMs) on AWS Lambda/Kinesis/DynamoDB/CloudWatch and Memcache. 
@@ -116,3 +118,4 @@ An AWS Lambda function executes for each transition. A diagram and listing of ea
 
     ThirdState.exit_action
  
+[<< Architecture](ARCHITECTURE.md) | [Justification >>](JUSTIFICATION.md)

@@ -12,6 +12,8 @@
 [//]: # (See the License for the specific language governing permissions and)
 [//]: # (limitations under the License.)
 
+[<< Idempotency](IDEMPOTENCY.md) | [Running Locally >>](LOCAL.md)
+
 # YAML Format
 
     machines:                                              # heading for multiple machines
@@ -53,3 +55,5 @@
 
 
 ![image](https://chart.googleapis.com/chart?cht=gv&chl=digraph+G+%7B%0Alabel%3D%22machine_name%22%0Alabelloc%3D%22t%22%0A%22__start__%22+%5Blabel%3D%22start%22%2Cshape%3Dcircle%2Cstyle%3Dfilled%2Cfillcolor%3Dblack%2Cfontcolor%3Dwhite%2Cfontsize%3D9%5D%3B%0A%22state1%22+%5Bshape%3DMrecord%2Clabel%3D%22%7Bstate1%7Centry%2F+module.EntryActionClass%5Cldo%2F+module.DoActionClass%5Clexit%2F+module.ExitActionClass%7D%22%5D%3B%0A%22__start__%22+-%3E+%22state1%22+%5Blabel%3D%22%22%5D%0A%22state1%22+-%3E+%22state2%22+%5Blabel%3D%22event1%2F+module.TransitionActionClass%22%5D%3B%0A%22state1%22+-%3E+%22final%22+%5Blabel%3D%22done%22%5D%3B%0A%22state2%22+%5Bshape%3DMrecord%2Clabel%3D%22%7Bstate2%7Centry%2F+module.AnotherEntryActionClass%5Cldo%2F+module.AnotherDoActionClass%5Clexit%2F+module.AnotherExitActionClass%7D%22%5D%3B%0A%22state2%22+-%3E+%22state1%22+%5Blabel%3D%22event1%2F+module.AnotherTransitionActionClass%22%5D%3B%0A%22state2%22+-%3E+%22final%22+%5Blabel%3D%22done%22%5D%3B%0A%22final%22+%5Bshape%3DMrecord%2Clabel%3D%22%7Bfinal%7Cdo%2F+module.YetAnotherDoActionClass%7D%22%5D%3B%0A%22final%22+-%3E+%22__end__%22+%5Blabel%3D%22%22%5D%0A%22__end__%22+%5Blabel%3D%22end%22%2Cshape%3Ddoublecircle%2Cstyle%3Dfilled%2Cfillcolor%3Dblack%2Cfontcolor%3Dwhite%2Cfontsize%3D9%5D%3B%0A%7D)
+
+[<< Idempotency](IDEMPOTENCY.md) | [Running Locally >>](LOCAL.md)

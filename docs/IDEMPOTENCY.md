@@ -12,6 +12,8 @@
 [//]: # (See the License for the specific language governing permissions and)
 [//]: # (limitations under the License.)
 
+[<< Chaos](CHAOS.md) | [FSM YAML >>](YAML.md)
+
 # Idempotency
 
 When writing FSM `Action`s, it is important to write them in such a way that they are 
@@ -85,6 +87,7 @@ you will need to establish requirements about expected behaviour, since
 `CurrentValueAction` has no side-effects, but can return different values each
 time if there are multiple writers.
     
+[<< Chaos](CHAOS.md) | [FSM YAML >>](YAML.md)
 
           
         
