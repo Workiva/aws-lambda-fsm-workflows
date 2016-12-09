@@ -26,7 +26,7 @@ from aws_lambda_fsm.config import get_current_configuration
 from aws_lambda_fsm.constants import CONFIG
 
 # setup the command line args
-parser = argparse.ArgumentParser(description='Turns a fsm.yaml file into a AWS Step Function JSON definition.')
+parser = argparse.ArgumentParser(description='Turns an fsm.yaml file into an AWS Step Function json definition.')
 parser.add_argument('--machine_name')
 parser.add_argument('--lambda_arn')
 args = parser.parse_args()

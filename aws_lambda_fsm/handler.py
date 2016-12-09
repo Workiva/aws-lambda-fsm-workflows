@@ -42,11 +42,11 @@ validate_config()
 
 def _process_payload(payload_str, obj):
     """
+    Internal function to turn a json fsm payload (from an AWS Lambda event),
+    into an fsm Context, and then dispatch the event and execute user code.
 
-    :param encoded:
-    :param obj:
-    :param lambda_context:
-    :return:
+    :param payload_str: a json string like '{"serialized": "data"}'
+    :param obj: a dict to pass to fsm Context.dispatch(...)
     """
     payload = json.loads(payload_str)
     logger.info('payload=%s', payload)
@@ -58,11 +58,13 @@ def _process_payload(payload_str, obj):
 
 def _process_payload_step(payload_str, obj):
     """
+    Internal function to turn a json fsm payload (from an AWS Lambda event),
+    into an fsm Context, and then dispatch the event and execute user code.
 
-    :param encoded:
-    :param obj:
-    :param lambda_context:
-    :return:
+    This function is ONLY used in the AWS Step Function execution path.
+
+    :param payload_str: a json string like '{"serialized": "data"}'
+    :param obj: a dict to pass to fsm Context.dispatch(...)
     """
     payload = json.loads(payload_str)
     logger.info('payload=%s', payload)
@@ -85,8 +87,7 @@ def lambda_api_handler(lambda_event):
     """
     AWS Lambda handler for executing state machines.
 
-    :param lambda_event:
-    :return:
+    :param lambda_event: a dict event from AWS Lambda
     """
     try:
         obj = {OBJ.SOURCE: AWS.GATEWAY}
@@ -104,8 +105,8 @@ def lambda_step_handler(lambda_event):
     """
     AWS Lambda handler for executing state machines.
 
-    :param lambda_event:
-    :return:
+    :param lambda_event: a dict event from AWS Lambda
+    :return: a dict event to pass along to AWS Step Functions orchestration
     """
     obj = {OBJ.SOURCE: AWS.STEP_FUNCTION}
     payload = json.dumps(lambda_event)  # Step Function just passes straight though
@@ -116,7 +117,7 @@ def lambda_kinesis_handler(lambda_event):
     """
     AWS Lambda handler for executing state machines.
 
-    :param lambda_event:
+    :param lambda_event: a dict event from AWS Lambda
     """
     if lambda_event[AWS_LAMBDA.Records]:
         logger.info('Processing %d records from kinesis...', len(lambda_event[AWS_LAMBDA.Records]))
@@ -140,7 +141,7 @@ def lambda_dynamodb_handler(lambda_event):
     """
     AWS Lambda handler for executing state machines.
 
-    :param lambda_event:
+    :param lambda_event: a dict event from AWS Lambda
     """
     if lambda_event[AWS_LAMBDA.Records]:
         logger.info('Processing %d records from dynamodb updates...', len(lambda_event[AWS_LAMBDA.Records]))
@@ -165,7 +166,7 @@ def lambda_sns_handler(lambda_event):
     """
     AWS Lambda handler for executing state machines.
 
-    :param lambda_event:
+    :param lambda_event: a dict event from AWS Lambda
     """
     if lambda_event[AWS_LAMBDA.Records]:
         logger.info('Processing %d records from sns updates...', len(lambda_event[AWS_LAMBDA.Records]))
