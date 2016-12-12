@@ -171,6 +171,7 @@ class AWS(object):
     ECS = 'ecs'
     GATEWAY = 'gateway'
     SQS = 'sqs'
+    STEP_FUNCTION = 'step_function'
 
 
 class AWS_ECS(object):

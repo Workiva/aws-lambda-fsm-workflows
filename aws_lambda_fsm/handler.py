@@ -42,11 +42,11 @@ validate_config()
 
 def _process_payload(payload_str, obj):
     """
+    Internal function to turn a json fsm payload (from an AWS Lambda event),
+    into an fsm Context, and then dispatch the event and execute user code.
 
-    :param encoded:
-    :param obj:
-    :param lambda_context:
-    :return:
+    :param payload_str: a json string like '{"serialized": "data"}'
+    :param obj: a dict to pass to fsm Context.dispatch(...)
     """
     payload = json.loads(payload_str)
     logger.info('payload=%s', payload)
@@ -56,12 +56,38 @@ def _process_payload(payload_str, obj):
     fsm.dispatch(current_event, obj)
 
 
+def _process_payload_step(payload_str, obj):
+    """
+    Internal function to turn a json fsm payload (from an AWS Lambda event),
+    into an fsm Context, and then dispatch the event and execute user code.
+
+    This function is ONLY used in the AWS Step Function execution path.
+
+    :param payload_str: a json string like '{"serialized": "data"}'
+    :param obj: a dict to pass to fsm Context.dispatch(...)
+    """
+    payload = json.loads(payload_str)
+    logger.info('payload=%s', payload)
+    obj[OBJ.PAYLOAD] = payload_str
+    fsm = Context.from_payload_dict(payload)
+    current_event = fsm.system_context().get(SYSTEM_CONTEXT.CURRENT_EVENT, STATE.PSEUDO_INIT)
+
+    # all retries etc. are handled by AWS Step Function infrastructure
+    # so this an entirely stripped down dispatch running ONLY the user
+    # Actions, and NONE of the framework's retry etc. code.
+    next_event = fsm.current_state.dispatch(fsm, current_event, obj)
+    if next_event:
+        fsm.current_event = next_event
+        data = fsm.to_payload_dict()
+        data[AWS.STEP_FUNCTION] = True
+        return data
+
+
 def lambda_api_handler(lambda_event):
     """
     AWS Lambda handler for executing state machines.
 
-    :param lambda_event:
-    :return:
+    :param lambda_event: a dict event from AWS Lambda
     """
     try:
         obj = {OBJ.SOURCE: AWS.GATEWAY}
@@ -75,11 +101,23 @@ def lambda_api_handler(lambda_event):
         logger.exception('Critical error handling lambda: %s', lambda_event)
 
 
+def lambda_step_handler(lambda_event):
+    """
+    AWS Lambda handler for executing state machines.
+
+    :param lambda_event: a dict event from AWS Lambda
+    :return: a dict event to pass along to AWS Step Functions orchestration
+    """
+    obj = {OBJ.SOURCE: AWS.STEP_FUNCTION}
+    payload = json.dumps(lambda_event)  # Step Function just passes straight though
+    return _process_payload_step(payload, obj)
+
+
 def lambda_kinesis_handler(lambda_event):
     """
     AWS Lambda handler for executing state machines.
 
-    :param lambda_event:
+    :param lambda_event: a dict event from AWS Lambda
     """
     if lambda_event[AWS_LAMBDA.Records]:
         logger.info('Processing %d records from kinesis...', len(lambda_event[AWS_LAMBDA.Records]))
@@ -103,7 +141,7 @@ def lambda_dynamodb_handler(lambda_event):
     """
     AWS Lambda handler for executing state machines.
 
-    :param lambda_event:
+    :param lambda_event: a dict event from AWS Lambda
     """
     if lambda_event[AWS_LAMBDA.Records]:
         logger.info('Processing %d records from dynamodb updates...', len(lambda_event[AWS_LAMBDA.Records]))
@@ -128,7 +166,7 @@ def lambda_sns_handler(lambda_event):
     """
     AWS Lambda handler for executing state machines.
 
-    :param lambda_event:
+    :param lambda_event: a dict event from AWS Lambda
     """
     if lambda_event[AWS_LAMBDA.Records]:
         logger.info('Processing %d records from sns updates...', len(lambda_event[AWS_LAMBDA.Records]))
@@ -294,6 +332,13 @@ def lambda_handler(lambda_event, lambda_context):
     # }
     elif 'Records' in lambda_event and lambda_event['Records'] and 'Sns' in lambda_event['Records'][0]:
         lambda_sns_handler(lambda_event)
+
+    # TODO: see if there is some other way to distinguish step function calls from api gateway calls
+    #       injecting a parameter is not ideal
+
+    # Step Functions
+    elif lambda_event.get(AWS.STEP_FUNCTION):
+        return lambda_step_handler(lambda_event)
 
     # API Gateway
     else:

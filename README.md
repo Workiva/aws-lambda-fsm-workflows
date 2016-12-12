@@ -14,7 +14,27 @@
 
 # AWS Lambda Finite State Machine Workflows
 
-A framework for running Finite State Machine (FSM) Workflows on 
+(This repo is maintained by an **SSAE 16 SOC 1 Type 2** compliant organization)
+
+***NEW!!!*** (Experimental) Support for [AWS Step Functions](https://aws.amazon.com/step-functions/)
+
+<img src="docs/images/yaml_to_json.png" width="66%" height="66%"/>
+
+    % python tools/yaml_to_json.py --machine_name=tracer --lambda_arn=arn:aws:lambda:us-east-1:999999999999:function:fsm
+    {
+      "Comment": "tracer",
+      "States": {
+        "state1": {
+          "Resource": "arn:aws:lambda:us-east-1:999999999999:function:fsm",
+          "Type": "Task",
+          "Next": "state1-choices"
+        },
+        ...
+      }
+      "StartAt": "state1"
+    }
+
+A Python 2.7 framework for running Finite State Machine (FSM) Workflows on 
 
 1. [AWS Lambda](https://aws.amazon.com/lambda/) for code execution,
 1. (Optionally) [AWS ECS](https://aws.amazon.com/ecs/) for long-running code execution,
@@ -29,6 +49,11 @@ A framework for running Finite State Machine (FSM) Workflows on
 1. (Optionally) [Memcache](https://aws.amazon.com/elasticache/) for idempotency
 1. (Optionally) [AWS DynamoDB](https://aws.amazon.com/dynamodb/) for idempotency
 1. (Optionally) [AWS CloudWatch](https://aws.amazon.com/cloudwatch/) for error and failure monitoring
+
+or
+
+1. [AWS Step Functions](https://aws.amazon.com/step-functions/) for orchestration and retries,
+1. [AWS Lambda](https://aws.amazon.com/lambda/) for code execution
 
 The FSM implementation is inspired by the paper:
 

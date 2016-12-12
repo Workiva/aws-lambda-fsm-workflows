@@ -12,6 +12,8 @@
 [//]: # (See the License for the specific language governing permissions and)
 [//]: # (limitations under the License.)
 
+[<< Running on AWS](AWS.md) | [TODO: >>](TODO.md)
+
 # Configuring Services
 
 Each of the AWS services requires some initial setup and configuration. This is accomplished with 
@@ -46,3 +48,4 @@ This creates an SNS topic to store fsm/event information.
     $ workon aws-lambda-fsm
     $ python tools/create_sns_topic.py --sns_topic_arn=PRIMARY_STREAM_SOURCE
     
+[<< Running on AWS](AWS.md) | [TODO: >>](TODO.md)

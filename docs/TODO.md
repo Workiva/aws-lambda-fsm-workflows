@@ -12,6 +12,8 @@
 [//]: # (See the License for the specific language governing permissions and)
 [//]: # (limitations under the License.)
 
+[<< Setup AWS Services](SETUP.md)
+
 # TODO:
 
     1. fsm.yaml validation tools
@@ -22,3 +24,5 @@
     1. handle partial failures of batch puts on kinesis and dynamodb and sqs
     1. process to cleanup dynamodb after the kinesis stream has been aged out
     1. how to handle a task bomb filling the shards
+
+[<< Setup AWS Services](SETUP.md)

@@ -12,6 +12,8 @@
 [//]: # (See the License for the specific language governing permissions and)
 [//]: # (limitations under the License.)
 
+[<< Justification](JUSTIFICATION.md) | [Settings >>](SETTINGS.md)
+
 # Install Dependencies
 
 ## Common Dependencies
@@ -98,4 +100,5 @@ Install `docker`, which acts like a local ECS service in conjunction with [dev_e
 
     $ ...
 
+[<< Justification](JUSTIFICATION.md) | [Settings >>](SETTINGS.md)
 
