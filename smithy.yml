@@ -1,0 +1,13 @@
+language: python
+
+artifacts:
+  - aws-lambda-fsm.zip
+
+test_reports:
+  - unit.xml
+
+requirements:
+  - requirements_dev.txt
+
+script:
+  make flake8 coverage
