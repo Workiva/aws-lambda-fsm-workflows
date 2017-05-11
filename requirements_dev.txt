@@ -20,5 +20,6 @@ coverage==4.0.3
 flake8==2.5.4
 boto==2.40.0
 python-memcached==1.57
+boto3
 
 -r requirements.txt
