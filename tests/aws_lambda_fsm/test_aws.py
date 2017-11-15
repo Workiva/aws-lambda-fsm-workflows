@@ -21,6 +21,7 @@ from botocore.exceptions import ClientError
 
 # application imports
 from aws_lambda_fsm.constants import AWS
+from aws_lambda_fsm.constants import AWS_SQS
 from aws_lambda_fsm.aws import get_connection
 from aws_lambda_fsm.aws import retriable_entities
 from aws_lambda_fsm.aws import store_checkpoint
@@ -42,6 +43,7 @@ from aws_lambda_fsm.aws import get_secondary_checkpoint_source
 from aws_lambda_fsm.aws import _local
 from aws_lambda_fsm.aws import _get_service_connection
 from aws_lambda_fsm.aws import _get_connection_info
+from aws_lambda_fsm.aws import _get_sqs_queue_url
 from aws_lambda_fsm.aws import ChaosConnection
 from aws_lambda_fsm.aws import get_arn_from_arn_string
 from aws_lambda_fsm.aws import _validate_config
@@ -249,6 +251,41 @@ class TestAws(unittest.TestCase):
                                                        read_timeout=60,
                                                        disable_chaos=False)
 
+    # _get_sqs_queue_url
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    def test_get_sqs_queue_url(self,
+                               mock_get_connection):
+        arn = _get_test_arn(AWS.SQS)
+        mock_get_connection.return_value.get_queue_url.return_value = {
+            AWS_SQS.QueueUrl: 'https://sqs.testing.amazonaws.com/1234567890/queuename'
+        }
+        expected = 'https://sqs.testing.amazonaws.com/1234567890/queuename'
+        actual = _get_sqs_queue_url(arn)
+        self.assertEqual(expected, actual)
+        self.assertEqual(expected, getattr(_local, 'url_for_' + arn))
+
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    def test_get_sqs_queue_url_uses_local_cache(self,
+                                                mock_get_connection):
+        arn = _get_test_arn(AWS.SQS)
+        mock_get_connection.return_value.get_queue_url.return_value = {
+            AWS_SQS.QueueUrl: 'https://sqs.testing.amazonaws.com/1234567890/queuename'
+        }
+        expected = 'https://sqs.testing.amazonaws.com/1234567890/queuename'
+        _get_sqs_queue_url(arn)
+        self.assertEqual(expected, getattr(_local, 'url_for_' + arn))
+        mock_get_connection.return_value.get_queue_url.return_value = {
+            AWS_SQS.QueueUrl: 'foobar'
+        }
+        _get_sqs_queue_url(arn)
+        self.assertEqual(expected, getattr(_local, 'url_for_' + arn))
+        delattr(_local, 'url_for_' + arn)
+        _get_sqs_queue_url(arn)
+        self.assertEqual('foobar', getattr(_local, 'url_for_' + arn))
+
+
     ##################################################
     # Functions
     ##################################################
@@ -349,6 +386,7 @@ class TestAws(unittest.TestCase):
                                         mock_get_primary_environment_source,
                                         mock_get_connection):
         mock_uuid.uuid4.return_value.hex = 'guid'
+        mock_context = mock.Mock()
         mock_context = mock.Mock()
         mock_get_primary_environment_source.return_value = _get_test_arn(AWS.DYNAMODB)
         store_environment(mock_context, {'a': 'b'})
@@ -489,14 +527,17 @@ class TestAws(unittest.TestCase):
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.get_primary_stream_source')
+    @mock.patch('aws_lambda_fsm.aws._get_sqs_queue_url')
     def test_send_next_event_for_dispatch_sqs(self,
+                                              mock_get_sqs_queue_url,
                                               mock_get_primary_stream_source,
                                               mock_get_connection):
         mock_context = mock.Mock()
         mock_get_primary_stream_source.return_value = _get_test_arn(AWS.SQS)
+        mock_get_sqs_queue_url.return_value = 'https://sqs.testing.amazonaws.com/1234567890/queuename'
         send_next_event_for_dispatch(mock_context, 'c', 'd')
         mock_get_connection.return_value.send_message.assert_called_with(
-            QueueUrl='https://sqs.testing.amazonaws.com/1234567890/resourcetype/resourcename',
+            QueueUrl='https://sqs.testing.amazonaws.com/1234567890/queuename',
             DelaySeconds=0,
             MessageBody='c'
         )
@@ -566,14 +607,17 @@ class TestAws(unittest.TestCase):
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.get_primary_stream_source')
+    @mock.patch('aws_lambda_fsm.aws._get_sqs_queue_url')
     def test_send_next_events_for_dispatch_sqs(self,
+                                               mock_get_sqs_queue_url,
                                                mock_get_primary_stream_source,
                                                mock_get_connection):
         mock_context = mock.Mock()
         mock_get_primary_stream_source.return_value = _get_test_arn(AWS.SQS)
+        mock_get_sqs_queue_url.return_value = 'https://sqs.testing.amazonaws.com/1234567890/queuename'
         send_next_events_for_dispatch(mock_context, ['c', 'cc'], ['d', 'dd'])
         mock_get_connection.return_value.send_message_batch.assert_called_with(
-            QueueUrl='https://sqs.testing.amazonaws.com/1234567890/resourcetype/resourcename',
+            QueueUrl='https://sqs.testing.amazonaws.com/1234567890/queuename',
             Entries=[{'DelaySeconds': 0, 'Id': 'd', 'MessageBody': 'c'},
                      {'DelaySeconds': 0, 'Id': 'dd', 'MessageBody': 'cc'}]
         )
@@ -657,15 +701,18 @@ class TestAws(unittest.TestCase):
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.settings')
+    @mock.patch('aws_lambda_fsm.aws._get_sqs_queue_url')
     def test_start_retries_sqs(self,
+                               mock_get_sqs_queue_url,
                                mock_settings,
                                mock_get_connection):
         mock_context = mock.Mock()
         mock_context.correlation_id = 'b'
         mock_settings.PRIMARY_RETRY_SOURCE = _get_test_arn(AWS.SQS)
+        mock_get_sqs_queue_url.return_value = 'https://sqs.testing.amazonaws.com/1234567890/queuename'
         start_retries(mock_context, 123, 'd', primary=True)
         mock_get_connection.return_value.send_message.assert_called_with(
-            QueueUrl='https://sqs.testing.amazonaws.com/1234567890/resourcetype/resourcename',
+            QueueUrl='https://sqs.testing.amazonaws.com/1234567890/queuename',
             DelaySeconds=0,
             MessageBody='d'
         )

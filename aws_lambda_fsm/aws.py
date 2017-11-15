@@ -845,6 +845,38 @@ def _send_next_event_for_dispatch_sns(topic_arn, data, correlation_id):
     return return_value
 
 
+def _get_sqs_queue_url(queue_arn):
+    """
+    Returns the SQS queue URL for the given ARN. SQS urls are not guaranteed to be easily
+    derivable from SQS ARNs, so we make a service call to make sure we have the correct
+    value.
+
+    :param queue_arn: an SQS queue ARN like 'arn:partition:sqs:testing:account:aws-lambda-fsm'
+    :return: a url like 'https://sqs.testing.amazonaws.com/account/aws-lambda-fsm'
+    """
+    sqs_conn = get_connection(queue_arn)
+    if not sqs_conn:
+        return  # pragma: no cover
+
+    arn = get_arn_from_arn_string(queue_arn)
+
+    # since this makes an external call, which may be expensive, we don't bother
+    # locking like in other locations where _local is mutated. the url never changes
+    # so looking it up in a couple threads simultaneously does not harm. also
+    # aws lambda dispatch model doesn't appear to use multiple threads anyway.
+
+    attr = 'url_for_' + queue_arn
+    if not getattr(_local, attr, None):
+        return_value = _trace(
+            sqs_conn.get_queue_url,
+            QueueName=arn.resource,
+            QueueOwnerAWSAccountId=arn.account_id
+        )
+        setattr(_local, attr, return_value[AWS_SQS.QueueUrl])
+
+    return getattr(_local, attr)
+
+
 def _send_next_event_for_dispatch_sqs(queue_arn, data, correlation_id, delay):
     """
     Sends an FSM event message onto SQS.
@@ -860,8 +892,7 @@ def _send_next_event_for_dispatch_sqs(queue_arn, data, correlation_id, delay):
     if not sqs_conn:
         return  # pragma: no cover
 
-    arn = get_arn_from_arn_string(queue_arn)
-    queue_url = AWS_SQS.URI_TEMPLATE % vars(arn)
+    queue_url = _get_sqs_queue_url(queue_arn)
     return_value = _trace(
         sqs_conn.send_message,
         QueueUrl=queue_url,
@@ -1003,8 +1034,7 @@ def _send_next_events_for_dispatch_sqs(queue_arn, all_data, correlation_ids, del
     if not sqs_conn:
         return  # pragma: no cover
 
-    arn = get_arn_from_arn_string(queue_arn)
-    queue_url = AWS_SQS.URI_TEMPLATE % vars(arn)
+    queue_url = _get_sqs_queue_url(queue_arn)
     entries = [
         {
             AWS_SQS.MESSAGE.Id: correlation_id,
@@ -1307,8 +1337,7 @@ def _start_retries_sqs(queue_arn, correlation_id, run_at, payload):
 
     # write the event and fsm state to sqs.
     sqs_conn = get_connection(queue_arn)
-    arn = get_arn_from_arn_string(queue_arn)
-    queue_url = AWS_SQS.URI_TEMPLATE % vars(arn)
+    queue_url = _get_sqs_queue_url(queue_arn)
     now = int(time.time())
     run_at_minus_now = max(0, run_at - now)  # might be negative
     delay_seconds = min(AWS_SQS.MAX_DELAY_SECONDS, run_at_minus_now)
