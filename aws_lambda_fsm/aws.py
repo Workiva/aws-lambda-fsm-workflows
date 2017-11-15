@@ -131,7 +131,7 @@ def get_arn_from_arn_string(arn):
         return Arn(None, None, None, None, None, None)
 
 
-def _get_connection_info(service, region_name):
+def _get_connection_info(service, region_name, resource_arn):
     """
     Returns the service, region_name and endpoint_url to use when creating
     a boto3 connection. In settings.ENDPOINTS it is possible to override
@@ -140,10 +140,12 @@ def _get_connection_info(service, region_name):
 
     :param service: an AWS service like "kinesis", or "dynamodb"
     :param region_name: an AWS region like "eu-west-1"
+    :param resource_arn: an AWS ARN like "arn:partition:elasticache:testing:account:cluster:aws-lambda-fsm"
     :return: a tuple of service, region_name, and and possibly endpoint url
       like "http://localhost:1234"
     """
     endpoint_url = \
+        getattr(settings, 'ENDPOINTS', {}).get(resource_arn) or \
         getattr(settings, 'ENDPOINTS', {}).get(service, {}).get(region_name) or \
         os.environ.get(service.upper() + '_URI')
     region_name = 'testing' if endpoint_url else region_name
@@ -174,7 +176,7 @@ def _get_service_connection(resource_arn,
 
             # determine the actual region_name and endpoint url if we are
             # running the services locally.
-            service, region_name, endpoint_url = _get_connection_info(arn.service, arn.region_name)
+            service, region_name, endpoint_url = _get_connection_info(arn.service, arn.region_name, resource_arn)
 
             logger.debug("Initializing connection for service: %s, region_name: %s, endpoint_url: %s",
                          service, region_name, endpoint_url)

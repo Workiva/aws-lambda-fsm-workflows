@@ -29,6 +29,7 @@ amazonaws.com.
         'dynamodb': {
             'us-east-1': 'http://localhost:7654'
         },
+        'arn:partition:elasticache:testing:account:cluster:aws-lambda-fsm': 'localhost:11211',
         'elasticache': {
             'us-east-1': 'localhost:11211'
         },
@@ -39,6 +40,10 @@ amazonaws.com.
             'us-east-1': 'http://localhost:8888'
         }
     }
+    
+The `settings.ENDPOINTS` dictionary is similar in structure to boto's `endpoints.json`
+but also allows specifying endpoints by ARN directly. Matches to full ARN take 
+precedence to matching the service and region.
 
 ## Running Services
 
