@@ -41,6 +41,7 @@ from aws_lambda_fsm.aws import get_primary_checkpoint_source
 from aws_lambda_fsm.aws import get_secondary_checkpoint_source
 from aws_lambda_fsm.aws import _local
 from aws_lambda_fsm.aws import _get_service_connection
+from aws_lambda_fsm.aws import _get_connection_info
 from aws_lambda_fsm.aws import ChaosConnection
 from aws_lambda_fsm.aws import get_arn_from_arn_string
 from aws_lambda_fsm.aws import _validate_config
@@ -140,6 +141,46 @@ class TestAws(unittest.TestCase):
         self.assertEqual(None, arn.region_name)
         self.assertEqual(None, arn.account_id)
         self.assertEqual(None, arn.resource)
+
+    # _get_connection_info
+
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    def test_get_connection_info_looks_up_by_arn(self,
+                                                 mock_settings):
+        mock_settings.ENDPOINTS = {'testarn': 'test://test:111/test'}
+        actual = _get_connection_info('testservice', 'testregion', 'testarn')
+        expected = 'testservice', 'testing', 'test://test:111/test'
+        self.assertEqual(expected, actual)
+
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    def test_get_connection_info_looks_up_by_service_and_region(self,
+                                                                mock_settings):
+        mock_settings.ENDPOINTS = {'testservice': {'testregion': 'test://test:111/test'}}
+        actual = _get_connection_info('testservice', 'testregion', 'testarn')
+        expected = 'testservice', 'testing', 'test://test:111/test'
+        self.assertEqual(expected, actual)
+
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    @mock.patch('aws_lambda_fsm.aws.os.environ')
+    def test_get_connection_info_looks_up_by_environ(self,
+                                                     mock_environ,
+                                                     mock_settings):
+        mock_settings.ENDPOINTS = {}
+        mock_environ.get.return_value = 'test://test:111/test'
+        actual = _get_connection_info('testservice', 'testregion', 'testarn')
+        expected = 'testservice', 'testing', 'test://test:111/test'
+        self.assertEqual(expected, actual)
+
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    @mock.patch('aws_lambda_fsm.aws.os.environ')
+    def test_get_connection_info_returns_original_if_no_endpoints(self,
+                                                                  mock_environ,
+                                                                  mock_settings):
+        mock_settings.ENDPOINTS = {}
+        mock_environ.get.return_value = None
+        actual = _get_connection_info('testservice', 'testregion', 'testarn')
+        expected = 'testservice', 'testregion', None
+        self.assertEqual(expected, actual)
 
     # _get_service_connection
 
