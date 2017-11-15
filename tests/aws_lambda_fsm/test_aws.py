@@ -265,7 +265,6 @@ class TestAws(unittest.TestCase):
         self.assertEqual(expected, actual)
         self.assertEqual(expected, getattr(_local, 'url_for_' + arn))
 
-
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     def test_get_sqs_queue_url_uses_local_cache(self,
                                                 mock_get_connection):
@@ -284,7 +283,6 @@ class TestAws(unittest.TestCase):
         delattr(_local, 'url_for_' + arn)
         _get_sqs_queue_url(arn)
         self.assertEqual('foobar', getattr(_local, 'url_for_' + arn))
-
 
     ##################################################
     # Functions
