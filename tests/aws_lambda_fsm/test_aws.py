@@ -191,7 +191,7 @@ class TestAws(unittest.TestCase):
         _local.kinesis_testing_connection = None
         conn = _get_service_connection(_get_test_arn(AWS.KINESIS))
         self.assertIsNotNone(conn)
-        self.assertIsNotNone(_local.kinesis_testing_connection)
+        self.assertIsNotNone(getattr(_local, 'connection_to_' + _get_test_arn(AWS.KINESIS)))
 
     @mock.patch('aws_lambda_fsm.aws.settings')
     def test_get_service_connection_memcache_exists(self, mock_settings):
@@ -203,7 +203,7 @@ class TestAws(unittest.TestCase):
         _local.elasticache_testing_connection = None
         conn = _get_service_connection(_get_test_arn(AWS.ELASTICACHE))
         self.assertIsNotNone(conn)
-        self.assertIsNotNone(_local.elasticache_testing_connection)
+        self.assertIsNotNone(getattr(_local, 'connection_to_' + _get_test_arn(AWS.ELASTICACHE)))
 
     @mock.patch('aws_lambda_fsm.aws._get_connection_info')
     @mock.patch('aws_lambda_fsm.aws.settings')

@@ -170,8 +170,8 @@ def _get_service_connection(resource_arn,
     arn = get_arn_from_arn_string(resource_arn)
     with _lock:
 
-        # the local var is of the form "kinesis_eu-west-1_connection"
-        attr = arn.service + '_' + arn.region_name + '_connection'
+        # the local var is the resource arn to accommodate multiple sources in the same region
+        attr = 'connection_to_' + resource_arn
         if not getattr(_local, attr, None):
 
             # determine the actual region_name and endpoint url if we are
