@@ -235,7 +235,6 @@ class AWS_SQS(object):
         Id = 'Id'
         DelaySeconds = 'DelaySeconds'
 
-    URI_TEMPLATE = 'https://%(service)s.%(region_name)s.amazonaws.com/%(account_id)s/%(resource)s'
     MAX_DELAY_SECONDS = 900
 
 

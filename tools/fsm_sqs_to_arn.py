@@ -135,8 +135,8 @@ while True:
         if dest_arn.service == AWS.SNS:
             for sqs_message in sqs_messages:
                 response = dest_conn.publish(
-                    TopicArn=dest_arn,
-                    Message=sqs_message[AWS_SQS.MESSAGE.Body],
+                    TopicArn=dest_arn_string,
+                    Message=json.dumps({"default": sqs_message[AWS_SQS.MESSAGE.Body]}),
                 )
                 logging.info(response)
 

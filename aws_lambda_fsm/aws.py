@@ -131,7 +131,7 @@ def get_arn_from_arn_string(arn):
         return Arn(None, None, None, None, None, None)
 
 
-def _get_connection_info(service, region_name):
+def _get_connection_info(service, region_name, resource_arn):
     """
     Returns the service, region_name and endpoint_url to use when creating
     a boto3 connection. In settings.ENDPOINTS it is possible to override
@@ -140,10 +140,12 @@ def _get_connection_info(service, region_name):
 
     :param service: an AWS service like "kinesis", or "dynamodb"
     :param region_name: an AWS region like "eu-west-1"
+    :param resource_arn: an AWS ARN like "arn:partition:elasticache:testing:account:cluster:aws-lambda-fsm"
     :return: a tuple of service, region_name, and and possibly endpoint url
       like "http://localhost:1234"
     """
     endpoint_url = \
+        getattr(settings, 'ENDPOINTS', {}).get(resource_arn) or \
         getattr(settings, 'ENDPOINTS', {}).get(service, {}).get(region_name) or \
         os.environ.get(service.upper() + '_URI')
     region_name = 'testing' if endpoint_url else region_name
@@ -168,13 +170,13 @@ def _get_service_connection(resource_arn,
     arn = get_arn_from_arn_string(resource_arn)
     with _lock:
 
-        # the local var is of the form "kinesis_eu-west-1_connection"
-        attr = arn.service + '_' + arn.region_name + '_connection'
+        # the local var is the resource arn to accommodate multiple sources in the same region
+        attr = 'connection_to_' + resource_arn
         if not getattr(_local, attr, None):
 
             # determine the actual region_name and endpoint url if we are
             # running the services locally.
-            service, region_name, endpoint_url = _get_connection_info(arn.service, arn.region_name)
+            service, region_name, endpoint_url = _get_connection_info(arn.service, arn.region_name, resource_arn)
 
             logger.debug("Initializing connection for service: %s, region_name: %s, endpoint_url: %s",
                          service, region_name, endpoint_url)
@@ -843,6 +845,38 @@ def _send_next_event_for_dispatch_sns(topic_arn, data, correlation_id):
     return return_value
 
 
+def _get_sqs_queue_url(queue_arn):
+    """
+    Returns the SQS queue URL for the given ARN. SQS urls are not guaranteed to be easily
+    derivable from SQS ARNs, so we make a service call to make sure we have the correct
+    value.
+
+    :param queue_arn: an SQS queue ARN like 'arn:partition:sqs:testing:account:aws-lambda-fsm'
+    :return: a url like 'https://sqs.testing.amazonaws.com/account/aws-lambda-fsm'
+    """
+    sqs_conn = get_connection(queue_arn)
+    if not sqs_conn:
+        return  # pragma: no cover
+
+    arn = get_arn_from_arn_string(queue_arn)
+
+    # since this makes an external call, which may be expensive, we don't bother
+    # locking like in other locations where _local is mutated. the url never changes
+    # so looking it up in a couple threads simultaneously does not harm. also
+    # aws lambda dispatch model doesn't appear to use multiple threads anyway.
+
+    attr = 'url_for_' + queue_arn
+    if not getattr(_local, attr, None):
+        return_value = _trace(
+            sqs_conn.get_queue_url,
+            QueueName=arn.resource,
+            QueueOwnerAWSAccountId=arn.account_id
+        )
+        setattr(_local, attr, return_value[AWS_SQS.QueueUrl])
+
+    return getattr(_local, attr)
+
+
 def _send_next_event_for_dispatch_sqs(queue_arn, data, correlation_id, delay):
     """
     Sends an FSM event message onto SQS.
@@ -858,8 +892,7 @@ def _send_next_event_for_dispatch_sqs(queue_arn, data, correlation_id, delay):
     if not sqs_conn:
         return  # pragma: no cover
 
-    arn = get_arn_from_arn_string(queue_arn)
-    queue_url = AWS_SQS.URI_TEMPLATE % vars(arn)
+    queue_url = _get_sqs_queue_url(queue_arn)
     return_value = _trace(
         sqs_conn.send_message,
         QueueUrl=queue_url,
@@ -1001,8 +1034,7 @@ def _send_next_events_for_dispatch_sqs(queue_arn, all_data, correlation_ids, del
     if not sqs_conn:
         return  # pragma: no cover
 
-    arn = get_arn_from_arn_string(queue_arn)
-    queue_url = AWS_SQS.URI_TEMPLATE % vars(arn)
+    queue_url = _get_sqs_queue_url(queue_arn)
     entries = [
         {
             AWS_SQS.MESSAGE.Id: correlation_id,
@@ -1305,8 +1337,7 @@ def _start_retries_sqs(queue_arn, correlation_id, run_at, payload):
 
     # write the event and fsm state to sqs.
     sqs_conn = get_connection(queue_arn)
-    arn = get_arn_from_arn_string(queue_arn)
-    queue_url = AWS_SQS.URI_TEMPLATE % vars(arn)
+    queue_url = _get_sqs_queue_url(queue_arn)
     now = int(time.time())
     run_at_minus_now = max(0, run_at - now)  # might be negative
     delay_seconds = min(AWS_SQS.MAX_DELAY_SECONDS, run_at_minus_now)
