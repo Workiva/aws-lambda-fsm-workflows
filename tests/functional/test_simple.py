@@ -87,9 +87,9 @@ class AWSStub(object):
 
     def get_message(self):
         return _AWS.primary_stream_source.recv() or \
-               _AWS.secondary_stream_source.recv() or \
-               _AWS.primary_retry_source.recv() or \
-               _AWS.secondary_retry_source.recv()
+            _AWS.secondary_stream_source.recv() or \
+            _AWS.primary_retry_source.recv() or \
+            _AWS.secondary_retry_source.recv()
 
     def send_next_event_for_dispatch(self, context, data, correlation_id, delay=0, primary=True):
         self._get_stream_source(primary).send(data)
@@ -138,6 +138,7 @@ class AWSStub(object):
         self.all_sources.reset()
         self.primary_cache.clear()
         self.secondary_cache.clear()
+
 
 def to_kinesis_message(data):
     return {
