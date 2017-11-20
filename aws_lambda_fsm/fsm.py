@@ -195,7 +195,7 @@ class FSM(object):
                        max_retries=max_retries)
 
 
-def _run_once(f):
+def _run_once_sucessfully(f):
     """
     Decorator that uses a cache to flag an action as already executed, and check to
     ensure that it hasn't been executed before running (in the event of retries,
@@ -384,7 +384,10 @@ class Context(dict):
                 )
             except ClientError:
                 # log an error to at least expose the error
-                self._queue_error(ERRORS.ERROR, 'Unable to save last payload for retry.', exc_info=True)
+                self._queue_error(
+                    ERRORS.ERROR,
+                    'Unable to save last payload for retry (primary=%s).' % primary,
+                    exc_info=True)
 
     def _stop_retries(self, obj):
         """
@@ -408,7 +411,10 @@ class Context(dict):
                     # if deleting the entity fails, the entity will be picked up again
                     # and retried. however, the idempotency code will detect the message
                     # has been already executed, and nothing terrible will happen.
-                    self._queue_error(ERRORS.ERROR, 'Unable to terminate retries.', exc_info=True)
+                    self._queue_error(
+                        ERRORS.ERROR,
+                        'Unable to terminate retries (primary=%s).' % primary,
+                        exc_info=True)
 
     def _store_checkpoint(self, obj):
         """
@@ -436,7 +442,10 @@ class Context(dict):
                     # will be missing the more recent executed state. recovering may be
                     # complicated, especially since the last transition has been marked as
                     # successfully dispatched
-                    self._queue_error(ERRORS.ERROR, 'Unable to save last sent data.', exc_info=True)
+                    self._queue_error(
+                        ERRORS.ERROR,
+                        'Unable to save last sent data (primary=%s).' % primary,
+                        exc_info=True)
 
     def _send_next_event_for_dispatch(self, serialized, obj):
         """
@@ -455,7 +464,10 @@ class Context(dict):
                     primary=primary
                 )
             except ClientError:
-                self._queue_error(ERRORS.ERROR, 'Unable to send next event.', exc_info=True)
+                self._queue_error(
+                    ERRORS.ERROR,
+                    'Unable to send next event (primary=%s).' % primary,
+                    exc_info=True)
                 if not primary:
                     raise
 
@@ -491,7 +503,7 @@ class Context(dict):
     # START: dispatch logic
     ################################################################################
 
-    @_run_once
+    @_run_once_sucessfully
     def _dispatch_to_current_state(self, event, obj):
         """
         Dispatches the event to the current state, then send the next event
@@ -553,14 +565,16 @@ class Context(dict):
         # determine how many times this has been retried, and if it has been retried
         # too many times, then stop it permanently
         if retry_system_context[SYSTEM_CONTEXT.RETRIES] <= self.max_retries:
-            self._queue_error(ERRORS.RETRY, 'More retries allowed. Retrying.')
+            self._queue_error(ERRORS.RETRY, 'More retries allowed (retry=%d, max=%d). Retrying.' %
+                              (retry_system_context[SYSTEM_CONTEXT.RETRIES], self.max_retries))
             self._start_retries(retry_data, obj)
 
         # if there are no more retries available, simply log an error, then delete
         # the retry entity from dynamodb. it will take human intervention to recover things
         # at this point.
         else:
-            self._queue_error(ERRORS.FATAL, 'No more retries allowed. Terminating.')
+            self._queue_error(ERRORS.FATAL, 'No more retries allowed (retry=%d, max=%d). Terminating.' %
+                              (retry_system_context[SYSTEM_CONTEXT.RETRIES], self.max_retries))
             self._stop_retries(obj)
 
     def _dispatch_and_retry(self, event, obj):

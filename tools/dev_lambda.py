@@ -28,6 +28,7 @@ import random
 import BaseHTTPServer
 import json
 import sys
+import subprocess
 
 # library imports
 
@@ -62,6 +63,8 @@ parser.add_argument('--run_dynamodb_lambda', type=int, default=0)
 parser.add_argument('--run_timer_lambda', type=int, default=0)
 parser.add_argument('--run_sns_lambda', type=int, default=0)
 parser.add_argument('--random_seed', type=int, default=0)
+parser.add_argument('--lambda_command', help='command to run lambda code (eg. docker run -v ' +
+                                             '"$PWD":/var/task lambci/lambda:python2.7 main.lambda_handler)')
 args = parser.parse_args()
 
 random.seed(args.random_seed)
@@ -180,7 +183,10 @@ while True:
                     lambda_event[AWS_LAMBDA.Records].append(tmp)
 
                 # and call the handler with the records
-                lambda_kinesis_handler(lambda_event)
+                if args.lambda_command:
+                    subprocess.call(['/bin/bash', '-c', args.lambda_command + " '" + json.dumps(lambda_event) + "'"])
+                else:
+                    lambda_kinesis_handler(lambda_event)
 
     if args.run_sns_lambda and sns_server:
 
@@ -196,7 +202,11 @@ while True:
                     }
                 ]
             }
-            lambda_sns_handler(lambda_event)
+
+            if args.lambda_command:
+                subprocess.call(['/bin/bash', '-c', args.lambda_command + " '" + json.dumps(lambda_event) + "'"])
+            else:
+                lambda_sns_handler(lambda_event)
 
     if args.run_dynamodb_lambda and dynamodb_conn:
 
@@ -242,6 +252,10 @@ while True:
 
             # and call the handler with the records
             if lambda_event[AWS_LAMBDA.Records]:
-                lambda_dynamodb_handler(lambda_event)
+
+                if args.lambda_command:
+                    subprocess.call(['/bin/bash', '-c', args.lambda_command + " '" + json.dumps(lambda_event) + "'"])
+                else:
+                    lambda_dynamodb_handler(lambda_event)
 
     time.sleep(args.sleep_time)

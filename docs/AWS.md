@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 
-[<< Running Locally](LOCAL.md) | [Setup AWS Services >>](SETUP.md)
+[<< Running Locally](LOCAL.md) | [Running on AWS Step Functions >>](STEP.md)
 
 # Running on AWS
 
@@ -118,4 +118,4 @@ You can use the `start_state_machine.py` script to start machines on AWS as well
     $ workon aws-lambda-fsm
     $ python tools/start_state_machine.py --machine_name=tracer
 
-[<< Running Locally](LOCAL.md) | [Setup AWS Services >>](SETUP.md)
+[<< Running Locally](LOCAL.md) | [Running on AWS Step Functions >>](STEP.md)

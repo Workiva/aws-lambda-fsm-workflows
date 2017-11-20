@@ -371,7 +371,7 @@ class TestDispatchAndRetry(TestFsmBase):
         )
         mock_queue_error.assert_called_with(
             'retry',
-            'More retries allowed. Retrying.'
+            'More retries allowed (retry=1, max=5). Retrying.'
         )
 
     @mock.patch('aws_lambda_fsm.fsm.Context._queue_error')
@@ -412,7 +412,7 @@ class TestDispatchAndRetry(TestFsmBase):
         )
         mock_queue_error.assert_called_with(
             'error',
-            'Unable to save last sent data.',
+            'Unable to save last sent data (primary=False).',
             exc_info=True
         )
         mock_stop_retries.assert_called_with(
@@ -458,7 +458,7 @@ class TestDispatchAndRetry(TestFsmBase):
         )
         mock_queue_error.assert_called_with(
             'error',
-            'Unable to terminate retries.',
+            'Unable to terminate retries (primary=False).',
             exc_info=True
         )
         mock_stop_retries.assert_called_with(
@@ -729,7 +729,7 @@ class TestRetry(TestFsmBase):
         )
         mock_queue_error.assert_called_with(
             'retry',
-            'More retries allowed. Retrying.'
+            'More retries allowed (retry=1, max=5). Retrying.'
         )
 
     @mock.patch('aws_lambda_fsm.fsm.Context._queue_error')
@@ -756,7 +756,7 @@ class TestRetry(TestFsmBase):
         )
         mock_queue_error.assert_called_with(
             'error',
-            'Unable to save last payload for retry.',
+            'Unable to save last payload for retry (primary=False).',
             exc_info=True
         )
 
@@ -795,7 +795,7 @@ class TestRetry(TestFsmBase):
         )
         mock_queue_error.assert_called_with(
             'error',
-            'Unable to terminate retries.',
+            'Unable to terminate retries (primary=False).',
             exc_info=True
         )
 
