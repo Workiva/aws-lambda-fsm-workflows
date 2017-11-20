@@ -53,7 +53,8 @@ class Messages(object):
             data
         )
 
-        # not threadsafe, yada yada
+
+# not threadsafe, yada yada
 class AWSStub(object):
 
     def __init__(self, messages):
@@ -141,7 +142,7 @@ class Test(unittest.TestCase):
         self._execute("simple", {})
         expected = [
             (('pseudo_init', 'pseudo_init', 0, 0), ()),
-            (('start', 'ok', 1, 0),                ())
+            (('start', 'ok', 1, 0), ())
         ]
         self.assertEqual(expected, _MESSAGES.trace())
 
@@ -149,19 +150,18 @@ class Test(unittest.TestCase):
         self._execute("simple", {'fail_at': [(0, 0)]})
         expected = [
             (('pseudo_init', 'pseudo_init', 0, 0), ()),
-            (('pseudo_init', 'pseudo_init', 0, 1), ()), # retry
-            (('start', 'ok', 1, 0),                ())
+            (('pseudo_init', 'pseudo_init', 0, 1), ()),  # retry
+            (('start', 'ok', 1, 0), ())
         ]
-        print _MESSAGES.trace()
         self.assertEqual(expected, _MESSAGES.trace())
 
     def test_looper(self, *args):
         self._execute("looper", {"loops": 3})
         expected = [
             (('pseudo_init', 'pseudo_init', 0, 0), (None,)),
-            (('start', 'ok', 1, 0),                (1,)),
-            (('start', 'ok', 2, 0),                (2,)),
-            (('start', 'done', 3, 0),              (3,))
+            (('start', 'ok', 1, 0), (1,)),
+            (('start', 'ok', 2, 0), (2,)),
+            (('start', 'done', 3, 0), (3,))
         ]
         self.assertEqual(expected, _MESSAGES.trace(('counter',)))
 
@@ -169,9 +169,9 @@ class Test(unittest.TestCase):
         self._execute("looper", {"loops": 3, 'fail_at': [(1, 0)]})
         expected = [
             (('pseudo_init', 'pseudo_init', 0, 0), (None,)),
-            (('start', 'ok', 1, 0),                (1,)),
-            (('start', 'ok', 1, 1),                (1,)), # retry
-            (('start', 'ok', 2, 0),                (2,)),
-            (('start', 'done', 3, 0),              (3,))
+            (('start', 'ok', 1, 0), (1,)),
+            (('start', 'ok', 1, 1), (1,)),  # retry
+            (('start', 'ok', 2, 0), (2,)),
+            (('start', 'done', 3, 0), (3,))
         ]
         self.assertEqual(expected, _MESSAGES.trace(('counter',)))

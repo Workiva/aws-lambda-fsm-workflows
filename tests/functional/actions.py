@@ -14,11 +14,13 @@
 
 from aws_lambda_fsm.action import Action
 
+
 class ReturnOK(Action):
     def execute(self, context, obj):
         if [context.steps, context.retries] in context.get('fail_at', []):
             raise Exception()
         return 'ok'
+
 
 class IncrementCounter(Action):
     def execute(self, context, obj):
