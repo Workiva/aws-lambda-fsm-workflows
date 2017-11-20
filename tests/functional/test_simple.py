@@ -17,6 +17,8 @@ import mock
 import base64
 import json
 
+from botocore.exceptions import ClientError
+
 from aws_lambda_fsm.client import start_state_machine
 from aws_lambda_fsm.fsm import FSM
 from aws_lambda_fsm.config import get_current_configuration
@@ -61,13 +63,20 @@ class AWSStub(object):
     def __init__(self):
         self.primary_stream_source = Messages()
         self.secondary_stream_source = Messages()
+        self.primary_stream_source_failure = False
+
         self.primary_retry_source = Messages()
         self.secondary_retry_source = Messages()
+        self.primary_retry_source_failure = False
+
         self.all_sources = Messages()
+
         self.primary_cache = {}
         self.secondary_cache = {}
 
     def _get_stream_source(self, primary):
+        if self.primary_stream_source_failure and primary:
+            raise ClientError({"Error": {}}, "mock")
         return {
             True: self.primary_stream_source,
             False: self.secondary_stream_source
@@ -86,10 +95,10 @@ class AWSStub(object):
         }[primary]
 
     def get_message(self):
-        return _AWS.primary_stream_source.recv() or \
-            _AWS.secondary_stream_source.recv() or \
-            _AWS.primary_retry_source.recv() or \
-            _AWS.secondary_retry_source.recv()
+        return AWS.primary_stream_source.recv() or \
+            AWS.secondary_stream_source.recv() or \
+            AWS.primary_retry_source.recv() or \
+            AWS.secondary_retry_source.recv()
 
     def send_next_event_for_dispatch(self, context, data, correlation_id, delay=0, primary=True):
         self._get_stream_source(primary).send(data)
@@ -138,6 +147,7 @@ class AWSStub(object):
         self.all_sources.reset()
         self.primary_cache.clear()
         self.secondary_cache.clear()
+        self.primary_stream_source_failure = False
 
 
 def to_kinesis_message(data):
@@ -150,30 +160,32 @@ def to_kinesis_message(data):
     }
 
 
-_AWS = AWSStub()
+AWS = AWSStub()
 
 
-@mock.patch("aws_lambda_fsm.client.send_next_event_for_dispatch", wraps=_AWS.send_next_event_for_dispatch)
-@mock.patch("aws_lambda_fsm.fsm.send_next_event_for_dispatch", wraps=_AWS.send_next_event_for_dispatch)
-@mock.patch("aws_lambda_fsm.fsm.set_message_dispatched", wraps=_AWS.set_message_dispatched)
-@mock.patch("aws_lambda_fsm.fsm.get_message_dispatched", wraps=_AWS.get_message_dispatched)
-@mock.patch("aws_lambda_fsm.fsm.acquire_lease", wraps=_AWS.acquire_lease)
-@mock.patch("aws_lambda_fsm.fsm.release_lease", wraps=_AWS.release_lease)
-@mock.patch("aws_lambda_fsm.fsm.start_retries", wraps=_AWS.start_retries)
-@mock.patch("aws_lambda_fsm.fsm.increment_error_counters", wraps=_AWS.increment_error_counters)
-@mock.patch("aws_lambda_fsm.fsm.store_checkpoint", wraps=_AWS.store_checkpoint)
+@mock.patch("aws_lambda_fsm.client.send_next_event_for_dispatch", wraps=AWS.send_next_event_for_dispatch)
+@mock.patch("aws_lambda_fsm.fsm.send_next_event_for_dispatch", wraps=AWS.send_next_event_for_dispatch)
+@mock.patch("aws_lambda_fsm.fsm.set_message_dispatched", wraps=AWS.set_message_dispatched)
+@mock.patch("aws_lambda_fsm.fsm.get_message_dispatched", wraps=AWS.get_message_dispatched)
+@mock.patch("aws_lambda_fsm.fsm.acquire_lease", wraps=AWS.acquire_lease)
+@mock.patch("aws_lambda_fsm.fsm.release_lease", wraps=AWS.release_lease)
+@mock.patch("aws_lambda_fsm.fsm.start_retries", wraps=AWS.start_retries)
+@mock.patch("aws_lambda_fsm.fsm.increment_error_counters", wraps=AWS.increment_error_counters)
+@mock.patch("aws_lambda_fsm.fsm.store_checkpoint", wraps=AWS.store_checkpoint)
 class Test(unittest.TestCase):
 
     def setUp(self):
-        _AWS.reset()
+        AWS.reset()
         FSM(get_current_configuration('tests/functional/fsm.yaml'))
 
-    def _execute(self, machine_name, context):
+    def _execute(self, machine_name, context, fail_primary=False):
         start_state_machine(machine_name, context)
-        message = _AWS.get_message()
+        if fail_primary:
+            AWS.primary_stream_source_failure = True
+        message = AWS.get_message()
         while message:
             handler.lambda_kinesis_handler(to_kinesis_message(message))
-            message = _AWS.get_message()
+            message = AWS.get_message()
 
     def test_simple(self, *args):
         self._execute("simple", {})
@@ -181,7 +193,23 @@ class Test(unittest.TestCase):
             (0, ('pseudo_init', 'pseudo_init', 0, 0), ()),
             (1, ('start', 'ok', 1, 0), ())
         ]
-        self.assertEqual(expected, _AWS.all_sources.trace())
+        self.assertEqual(expected, AWS.all_sources.trace())
+
+    def test_simple_with_primary_failure(self, *args):
+        self._execute("simple", {}, fail_primary=True)
+        expected = [
+            (0, ('pseudo_init', 'pseudo_init', 0, 0), ()),
+            (1, ('start', 'ok', 1, 0), ())
+        ]
+        self.assertEqual(expected, AWS.all_sources.trace())
+        expected = [
+            (0, ('pseudo_init', 'pseudo_init', 0, 0), ()),
+        ]
+        self.assertEqual(expected, AWS.primary_stream_source.trace())
+        expected = [
+            (0, ('start', 'ok', 1, 0), ())
+        ]
+        self.assertEqual(expected, AWS.secondary_stream_source.trace())
 
     def test_simple_with_failure(self, *args):
         self._execute("simple", {'fail_at': [(0, 0)]})
@@ -190,7 +218,7 @@ class Test(unittest.TestCase):
             (1, ('pseudo_init', 'pseudo_init', 0, 1), ()),  # retry
             (2, ('start', 'ok', 1, 0), ())
         ]
-        self.assertEqual(expected, _AWS.all_sources.trace())
+        self.assertEqual(expected, AWS.all_sources.trace())
 
     def test_looper(self, *args):
         self._execute("looper", {"loops": 3})
@@ -200,7 +228,27 @@ class Test(unittest.TestCase):
             (2, ('start', 'ok', 2, 0), (2,)),
             (3, ('start', 'done', 3, 0), (3,))
         ]
-        self.assertEqual(expected, _AWS.all_sources.trace(('counter',)))
+        self.assertEqual(expected, AWS.all_sources.trace(('counter',)))
+
+    def test_looper_with_primary_failure(self, *args):
+        self._execute("looper", {"loops": 3}, fail_primary=True)
+        expected = [
+            (0, ('pseudo_init', 'pseudo_init', 0, 0), (None,)),
+            (1, ('start', 'ok', 1, 0), (1,)),
+            (2, ('start', 'ok', 2, 0), (2,)),
+            (3, ('start', 'done', 3, 0), (3,))
+        ]
+        self.assertEqual(expected, AWS.all_sources.trace(('counter',)))
+        expected = [
+            (0, ('pseudo_init', 'pseudo_init', 0, 0), (None,)),
+        ]
+        self.assertEqual(expected, AWS.primary_stream_source.trace(('counter',)))
+        expected = [
+            (0, ('start', 'ok', 1, 0), (1,)),
+            (1, ('start', 'ok', 2, 0), (2,)),
+            (2, ('start', 'done', 3, 0), (3,))
+        ]
+        self.assertEqual(expected, AWS.secondary_stream_source.trace(('counter',)))
 
     def test_looper_with_failure(self, *args):
         self._execute("looper", {"loops": 3, 'fail_at': [(1, 0)]})
@@ -211,4 +259,4 @@ class Test(unittest.TestCase):
             (3, ('start', 'ok', 2, 0), (2,)),
             (4, ('start', 'done', 3, 0), (3,))
         ]
-        self.assertEqual(expected, _AWS.all_sources.trace(('counter',)))
+        self.assertEqual(expected, AWS.all_sources.trace(('counter',)))
