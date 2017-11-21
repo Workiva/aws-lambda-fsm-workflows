@@ -12,169 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import unittest
+# system imports
 import mock
-import base64
-import json
 
-from botocore.exceptions import ClientError
+# library imports
 
-from aws_lambda_fsm.client import start_state_machine
+# application imports
 from aws_lambda_fsm.fsm import FSM
 from aws_lambda_fsm.config import get_current_configuration
-from aws_lambda_fsm import handler
-
-
-class Messages(object):
-
-    def __init__(self):
-        self.messages = []
-        self.all_messages = []
-
-    def send(self, data):
-        self.messages.append(data)
-        self.all_messages.append(data)
-
-    def recv(self):
-        return self.messages.pop(0) if self.messages else None
-
-    def reset(self):
-        del self.messages[:]
-        del self.all_messages[:]
-
-    def trace(self, uvars=(), raw=False):
-        s = 'system_context'
-        u = 'user_context'
-        svars = ('current_state', 'current_event', 'steps', 'retries')
-        serialized = map(lambda x: json.loads(x), self.all_messages)
-        if raw:
-            return serialized
-        data = enumerate(serialized)
-        return map(
-            lambda x: (
-                x[0],
-                tuple(x[1][s][v] for v in svars),
-                tuple(x[1][u].get(v) for v in uvars)
-            ),
-            data
-        )
-
-
-# not threadsafe, yada yada
-class AWSStub(object):
-
-    def __init__(self):
-        self.primary_stream_source = Messages()
-        self.secondary_stream_source = Messages()
-        self.primary_stream_source_failure = False
-
-        self.primary_retry_source = Messages()
-        self.secondary_retry_source = Messages()
-        self.primary_retry_source_failure = False
-
-        self.all_sources = Messages()
-
-        self.primary_cache = {}
-        self.secondary_cache = {}
-
-        self.all_caches = {}
-
-        self.errors = Messages()
-
-    def _get_stream_source(self, primary):
-        if self.primary_stream_source_failure and primary:
-            raise ClientError({"Error": {}}, "mock")
-        return {
-            True: self.primary_stream_source,
-            False: self.secondary_stream_source
-        }[primary]
-
-    def _get_cache_source(self, primary):
-        return {
-            True: self.primary_cache,
-            False: self.secondary_cache
-        }[primary]
-
-    def _get_retry_source(self, primary):
-        if self.primary_retry_source_failure and primary:
-            raise ClientError({"Error": {}}, "mock")
-        return {
-            True: self.primary_retry_source,
-            False: self.secondary_retry_source
-        }[primary]
-
-    def get_message(self):
-        return AWS.primary_stream_source.recv() or \
-            AWS.secondary_stream_source.recv() or \
-            AWS.primary_retry_source.recv() or \
-            AWS.secondary_retry_source.recv()
-
-    def send_next_event_for_dispatch(self, context, data, correlation_id, delay=0, primary=True):
-        self._get_stream_source(primary).send(data)
-        self.all_sources.send(data)
-        return {'test': 'stub'}
-
-    def set_message_dispatched(self, correlation_id, steps, retries, primary=True):
-        key = '%s-%s' % (correlation_id, steps)
-        self._get_cache_source(primary)[key] = True
-        self.all_caches[key] = True
-        return True
-
-    def get_message_dispatched(self, correlation_id, steps, primary=True):
-        self._get_cache_source(primary).get('%s-%s' % (correlation_id, steps))
-
-    def acquire_lease(self, correlation_id, steps, retries, primary=True):
-        key = 'lease-%s-%s' % (correlation_id, steps)
-        if key in self._get_cache_source(primary):
-            return False
-        else:
-            self._get_cache_source(primary)[key] = True
-            self.all_caches[key] = True
-            return True
-
-    def release_lease(self, correlation_id, steps, retries, fence_token, primary=True):
-        key = 'lease-%s-%s' % (correlation_id, steps)
-        if key in self._get_cache_source(primary):
-            self._get_cache_source(primary).pop(key)
-            return True
-        else:
-            return False
-
-    def start_retries(self, context, run_at, payload, primary=True):
-        self._get_retry_source(primary).send(payload)
-        self.all_sources.send(payload)
-        return {'test': 'stub'}
-
-    def increment_error_counters(self, data, dimensions):
-        self.errors.send(json.dumps((data, dimensions)))
-        return {'test': 'stub'}
-
-    def store_checkpoint(self, context, sent, primary=True):
-        return {'test': 'stub'}
-
-    def reset(self):
-        self.primary_stream_source.reset()
-        self.secondary_stream_source.reset()
-        self.primary_retry_source.reset()
-        self.secondary_retry_source.reset()
-        self.all_sources.reset()
-        self.primary_cache.clear()
-        self.secondary_cache.clear()
-        self.all_caches.clear()
-        self.primary_stream_source_failure = False
-        self.primary_retry_source_failure = False
-        self.errors.reset()
-
-
-def to_kinesis_message(data):
-    return {
-        "Records": [{
-            "kinesis": {
-                "data": base64.b64encode(data)
-            }
-        }]
-    }
-
+from tests.functional.utils import AWSStub
+from tests.functional.utils import BaseFunctionalTest
 
 AWS = AWSStub()
 
@@ -188,29 +35,18 @@ AWS = AWSStub()
 @mock.patch("aws_lambda_fsm.fsm.start_retries", wraps=AWS.start_retries)
 @mock.patch("aws_lambda_fsm.fsm.increment_error_counters", wraps=AWS.increment_error_counters)
 @mock.patch("aws_lambda_fsm.fsm.store_checkpoint", wraps=AWS.store_checkpoint)
-class Test(unittest.TestCase):
+class Test(BaseFunctionalTest):
 
     def setUp(self):
         AWS.reset()
         FSM(get_current_configuration('tests/functional/fsm.yaml'))
-
-    def _execute(self, machine_name, context, fail_primary_stream_stream=False, fail_primary_stream_retry=False):
-        start_state_machine(machine_name, context, correlation_id='correlation_id')
-        if fail_primary_stream_stream:
-            AWS.primary_stream_source_failure = True
-        if fail_primary_stream_retry:
-            AWS.primary_retry_source_failure = True
-        message = AWS.get_message()
-        while message:
-            handler.lambda_kinesis_handler(to_kinesis_message(message))
-            message = AWS.get_message()
 
     ################################################################################
     # START: machine_name="simple"
     ################################################################################
 
     def test_simple(self, *args):
-        self._execute("simple", {})
+        self._execute(AWS, "simple", {})
 
         # check messages
         expected = [
@@ -239,7 +75,7 @@ class Test(unittest.TestCase):
         self.assertEqual(expected, AWS.errors.trace(raw=True))
 
     def test_simple_with_primary_failure(self, *args):
-        self._execute("simple", {}, fail_primary_stream_stream=True)
+        self._execute(AWS, "simple", {}, fail_primary_stream_stream=True)
 
         # check messages
         expected = [
@@ -278,7 +114,7 @@ class Test(unittest.TestCase):
         self.assertEqual(expected, AWS.errors.trace(raw=True))
 
     def test_simple_with_failure(self, *args):
-        self._execute("simple", {'fail_at': [(0, 0)]})
+        self._execute(AWS, "simple", {'fail_at': [(0, 0)]})
 
         # check messages
         expected = [
@@ -318,7 +154,7 @@ class Test(unittest.TestCase):
         self.assertEqual(expected, AWS.errors.trace(raw=True))
 
     def test_simple_with_failure_with_primary_retry_failure(self, *args):
-        self._execute("simple", {'fail_at': [(0, 0)]}, fail_primary_stream_retry=True)
+        self._execute(AWS, "simple", {'fail_at': [(0, 0)]}, fail_primary_stream_retry=True)
 
         # check messages
         expected = [
@@ -363,7 +199,7 @@ class Test(unittest.TestCase):
     ################################################################################
 
     def test_looper(self, *args):
-        self._execute("looper", {"loops": 3})
+        self._execute(AWS, "looper", {"loops": 3})
 
         # check messages
         expected = [
@@ -400,7 +236,7 @@ class Test(unittest.TestCase):
         self.assertEqual(expected, AWS.errors.trace(raw=True))
 
     def test_looper_with_primary_failure(self, *args):
-        self._execute("looper", {"loops": 3}, fail_primary_stream_stream=True)
+        self._execute(AWS, "looper", {"loops": 3}, fail_primary_stream_stream=True)
 
         # check messages
         expected = [
@@ -457,7 +293,7 @@ class Test(unittest.TestCase):
         self.assertEqual(expected, AWS.errors.trace(raw=True))
 
     def test_looper_with_failure(self, *args):
-        self._execute("looper", {"loops": 3, 'fail_at': [(1, 0)]})
+        self._execute(AWS, "looper", {"loops": 3, 'fail_at': [(1, 0)]})
 
         # check messages
         expected = [
@@ -500,7 +336,7 @@ class Test(unittest.TestCase):
         self.assertEqual(expected, AWS.errors.trace(raw=True))
 
     def test_looper_with_failure_with_primary_retry_failure(self, *args):
-        self._execute("looper", {"loops": 3, 'fail_at': [(1, 0)]}, fail_primary_stream_retry=True)
+        self._execute(AWS, "looper", {"loops": 3, 'fail_at': [(1, 0)]}, fail_primary_stream_retry=True)
 
         # check messages
         expected = [

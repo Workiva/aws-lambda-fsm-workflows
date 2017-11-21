@@ -63,7 +63,8 @@ parser.add_argument('--run_dynamodb_lambda', type=int, default=0)
 parser.add_argument('--run_timer_lambda', type=int, default=0)
 parser.add_argument('--run_sns_lambda', type=int, default=0)
 parser.add_argument('--random_seed', type=int, default=0)
-parser.add_argument('--lambda_command', help='command to run lambda code (eg. docker run -v "$PWD":/var/task lambci/lambda:python2.7 main.lambda_handler)')
+parser.add_argument('--lambda_command', help='command to run lambda code (eg. docker run -v ' +
+                                             '"$PWD":/var/task lambci/lambda:python2.7 main.lambda_handler)')
 args = parser.parse_args()
 
 random.seed(args.random_seed)
