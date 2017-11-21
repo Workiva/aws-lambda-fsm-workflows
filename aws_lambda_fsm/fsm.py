@@ -561,7 +561,8 @@ class Context(dict):
         # the retry entity from dynamodb. it will take human intervention to recover things
         # at this point.
         else:
-            self._queue_error(ERRORS.FATAL, 'No more retries allowed. Terminating.')
+            self._queue_error(ERRORS.FATAL, 'No more retries allowed (retry=%d, max=%d). Terminating.' %
+                              (retry_system_context[SYSTEM_CONTEXT.RETRIES], self.max_retries))
             self._stop_retries(obj)
 
     def _dispatch_and_retry(self, event, obj):
