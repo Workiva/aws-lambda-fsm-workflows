@@ -48,5 +48,11 @@ class Test(BaseFunctionalTest):
     def test_tracer(self, *args):
         self._execute(AWS, "tracer", {}, primary_chaos=0.5)
 
-        # check messages
+        # check answer
         self.assertEqual(101, AWS.all_sources.trace(('count',))[-1][-1][-1])
+
+        # check all the message streams processed data
+        self.assertTrue(len(AWS.primary_stream_source.all_messages) > 0)
+        self.assertTrue(len(AWS.secondary_stream_source.all_messages) > 0)
+        self.assertTrue(len(AWS.primary_retry_source.all_messages) > 0)
+        self.assertTrue(len(AWS.secondary_retry_source.all_messages) > 0)

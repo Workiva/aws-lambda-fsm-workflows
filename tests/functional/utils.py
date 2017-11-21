@@ -67,7 +67,6 @@ class AWSStub(object):
     def __init__(self):
         self.primary_stream_source = Messages()
         self.secondary_stream_source = Messages()
-
         self.primary_retry_source = Messages()
         self.secondary_retry_source = Messages()
 
