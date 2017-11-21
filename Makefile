@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-COVER_PACKAGE := `find aws_lambda_fsm -name "*.py" | grep -vE "vendor|tests|__init__|_pkg_meta" | sed s/[.]py// | sed s/[/]/./g | sed "s/aws_lambda_fsm/--cover-package aws_lambda_fsm/"`
+COVER_PACKAGE := `find aws_lambda_fsm -name "*.py" | grep -vE "vendor|tests|__init__|_pkg_meta|aws_lambda_fsm/utils.py" | sed s/[.]py// | sed s/[/]/./g | sed "s/aws_lambda_fsm/--cover-package aws_lambda_fsm/"`
 
 clean:
 	echo Y | pycleaner

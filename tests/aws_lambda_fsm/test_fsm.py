@@ -371,7 +371,7 @@ class TestDispatchAndRetry(TestFsmBase):
         )
         mock_queue_error.assert_called_with(
             'retry',
-            'More retries allowed. Retrying.'
+            'More retries allowed (retry=1, max=5). Retrying.'
         )
 
     @mock.patch('aws_lambda_fsm.fsm.Context._queue_error')
@@ -729,7 +729,7 @@ class TestRetry(TestFsmBase):
         )
         mock_queue_error.assert_called_with(
             'retry',
-            'More retries allowed. Retrying.'
+            'More retries allowed (retry=1, max=5). Retrying.'
         )
 
     @mock.patch('aws_lambda_fsm.fsm.Context._queue_error')

@@ -553,14 +553,16 @@ class Context(dict):
         # determine how many times this has been retried, and if it has been retried
         # too many times, then stop it permanently
         if retry_system_context[SYSTEM_CONTEXT.RETRIES] <= self.max_retries:
-            self._queue_error(ERRORS.RETRY, 'More retries allowed. Retrying.')
+            self._queue_error(ERRORS.RETRY, 'More retries allowed (retry=%d, max=%d). Retrying.' %
+                              (retry_system_context[SYSTEM_CONTEXT.RETRIES], self.max_retries))
             self._start_retries(retry_data, obj)
 
         # if there are no more retries available, simply log an error, then delete
         # the retry entity from dynamodb. it will take human intervention to recover things
         # at this point.
         else:
-            self._queue_error(ERRORS.FATAL, 'No more retries allowed. Terminating.')
+            self._queue_error(ERRORS.FATAL, 'No more retries allowed (retry=%d, max=%d). Terminating.' %
+                              (retry_system_context[SYSTEM_CONTEXT.RETRIES], self.max_retries))
             self._stop_retries(obj)
 
     def _dispatch_and_retry(self, event, obj):
