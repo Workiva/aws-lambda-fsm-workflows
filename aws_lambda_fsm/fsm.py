@@ -553,7 +553,8 @@ class Context(dict):
         # determine how many times this has been retried, and if it has been retried
         # too many times, then stop it permanently
         if retry_system_context[SYSTEM_CONTEXT.RETRIES] <= self.max_retries:
-            self._queue_error(ERRORS.RETRY, 'More retries allowed. Retrying.')
+            self._queue_error(ERRORS.RETRY, 'More retries allowed (retry=%d, max=%d). Retrying.' %
+                              (retry_system_context[SYSTEM_CONTEXT.RETRIES], self.max_retries))
             self._start_retries(retry_data, obj)
 
         # if there are no more retries available, simply log an error, then delete
