@@ -358,7 +358,6 @@ class Test(unittest.TestCase):
         ]
         self.assertEqual(expected, AWS.errors.trace(raw=True))
 
-
     ################################################################################
     # START: machine_name="looper"
     ################################################################################
