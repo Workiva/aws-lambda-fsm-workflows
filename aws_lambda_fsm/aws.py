@@ -460,15 +460,22 @@ def _set_message_dispatched_memcache(cache_arn, correlation_id, steps, retries):
 
 def _set_message_dispatched_redis(cache_arn, correlation_id, steps, retries):
     """Sets a flag in redis"""
+    import redis
 
     redis_conn = get_connection(cache_arn)
     if not redis_conn:
         return  # pragma: no cover
 
-    cache_key = '%s-%s' % (correlation_id, steps)
-    cache_value = '%s-%s-%s' % (correlation_id, steps, retries)
-    return_value = redis_conn.set(cache_key, cache_value)
-    return return_value
+    try:
+        cache_key = '%s-%s' % (correlation_id, steps)
+        cache_value = '%s-%s-%s' % (correlation_id, steps, retries)
+        return_value = redis_conn.set(cache_key, cache_value)
+        return return_value
+
+    except redis.exceptions.ConnectionError:
+        # memcache returns 0 on connectivity issues
+        logger.exception('')
+        return 0
 
 
 def _set_message_dispatched_dynamodb(table_arn, correlation_id, steps, retries):
@@ -548,14 +555,21 @@ def _get_message_dispatched_memcache(cache_arn, correlation_id, steps):
 
 def _get_message_dispatched_redis(cache_arn, correlation_id, steps):
     """Gets a flag from memcache"""
+    import redis
 
     redis_conn = get_connection(cache_arn)
     if not redis_conn:
         return False  # pragma: no cover
 
-    cache_key = '%s-%s' % (correlation_id, steps)
-    return_value = redis_conn.get(cache_key)
-    return return_value
+    try:
+        cache_key = '%s-%s' % (correlation_id, steps)
+        return_value = redis_conn.get(cache_key)
+        return return_value
+
+    except redis.exceptions.ConnectionError:
+        # memcache returns None on connectivity issues
+        logger.exception('')
+        return None
 
 
 def _get_message_dispatched_dynamodb(table_arn, correlation_id, steps):

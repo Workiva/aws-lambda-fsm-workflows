@@ -102,7 +102,7 @@ class TestArn(unittest.TestCase):
 
     def test_slash_resource_missing(self):
         arn = get_arn_from_arn_string('')
-        self.assertEqual(None, arn.slash_resource())
+        self.assertIsNone(arn.slash_resource())
 
     def test_slash_resource(self):
         arn_string = _get_test_arn(AWS.KINESIS)
@@ -111,7 +111,7 @@ class TestArn(unittest.TestCase):
 
     def test_colon_resource_missing(self):
         arn = get_arn_from_arn_string('')
-        self.assertEqual(None, arn.colon_resource())
+        self.assertIsNone(arn.colon_resource())
 
     def test_colon_resource(self):
         arn_string = _get_test_arn(AWS.KINESIS, resource='foo:bar')
@@ -164,18 +164,18 @@ class TestAws(unittest.TestCase):
         self.assertEqual('a', arn.arn)
         self.assertEqual('b', arn.partition)
         self.assertEqual('c', arn.service)
-        self.assertEqual(None, arn.region_name)
-        self.assertEqual(None, arn.account_id)
-        self.assertEqual(None, arn.resource)
+        self.assertIsNone(arn.region_name)
+        self.assertIsNone(arn.account_id)
+        self.assertIsNone(arn.resource)
 
     def test_get_arn_from_arn_string_no_string_at_all(self):
         arn = get_arn_from_arn_string(None)
-        self.assertEqual(None, arn.arn)
-        self.assertEqual(None, arn.partition)
-        self.assertEqual(None, arn.service)
-        self.assertEqual(None, arn.region_name)
-        self.assertEqual(None, arn.account_id)
-        self.assertEqual(None, arn.resource)
+        self.assertIsNone(arn.arn)
+        self.assertIsNone(arn.partition)
+        self.assertIsNone(arn.service)
+        self.assertIsNone(arn.region_name)
+        self.assertIsNone(arn.account_id)
+        self.assertIsNone(arn.resource)
 
     # _get_elasticache_engine_and_endpoint
 
@@ -218,8 +218,7 @@ class TestAws(unittest.TestCase):
         mock_settings.ENDPOINTS = {}
         mock_settings.ELASTICACHE_ENDPOINTS = {}
         actual = _get_elasticache_engine_and_endpoint(_get_test_arn(AWS.ELASTICACHE))
-        expected = None
-        self.assertEqual(expected, actual)
+        self.assertIsNone(actual)
 
     @mock.patch('aws_lambda_fsm.aws.settings')
     @mock.patch('aws_lambda_fsm.aws.boto3')
@@ -239,8 +238,7 @@ class TestAws(unittest.TestCase):
         mock_settings.ENDPOINTS = {}
         mock_settings.ELASTICACHE_ENDPOINTS = {}
         actual = _get_elasticache_engine_and_endpoint(_get_test_arn(AWS.ELASTICACHE))
-        expected = None
-        self.assertEqual(expected, actual)
+        self.assertIsNone(actual)
 
     @mock.patch('aws_lambda_fsm.aws.settings')
     @mock.patch('aws_lambda_fsm.aws.boto3')
@@ -438,9 +436,8 @@ class TestAws(unittest.TestCase):
         mock_get_connection.return_value.get_queue_url.return_value = {
             'foobar': 'https://sqs.testing.amazonaws.com/1234567890/queuename'
         }
-        expected = None
         actual = _get_sqs_queue_url(arn)
-        self.assertEqual(expected, actual)
+        self.assertIsNone(actual)
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     def test_get_sqs_queue_url_uses_local_cache(self,
@@ -973,7 +970,7 @@ class TestAws(unittest.TestCase):
                                                   mock_get_connection):
         mock_get_connection.return_value = None
         ret = set_message_dispatched('a', 'b', 'c')
-        self.assertFalse(ret)
+        self.assertIsNone(ret)
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
@@ -987,6 +984,17 @@ class TestAws(unittest.TestCase):
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
+    def test_set_message_dispatched_memcache_connection_error(self,
+                                                              mock_get_primary_cache_source,
+                                                              mock_get_connection):
+        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
+        mock_get_connection.return_value.set.return_value = 0
+        ret = set_message_dispatched('a', 'b', 'c')
+        self.assertTrue(0 is ret)
+        mock_get_connection.return_value.set.assert_called_with('a-b', 'a-b-c')
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
     @mock.patch('aws_lambda_fsm.aws.settings')
     def test_set_message_dispatched_redis(self,
                                           mock_settings,
@@ -996,6 +1004,20 @@ class TestAws(unittest.TestCase):
         mock_get_primary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
         ret = set_message_dispatched('a', 'b', 'c')
         self.assertTrue(ret)
+        mock_get_connection.return_value.set.assert_called_with('a-b', 'a-b-c')
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    def test_set_message_dispatched_redis_connection_error(self,
+                                                           mock_settings,
+                                                           mock_get_primary_cache_source,
+                                                           mock_get_connection):
+        mock_settings.ELASTICACHE_ENDPOINTS = ELASTICACHE_ENDPOINTS_REDIS
+        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
+        mock_get_connection.return_value.set.side_effect = redis.exceptions.ConnectionError
+        ret = set_message_dispatched('a', 'b', 'c')
+        self.assertTrue(0 is ret)
         mock_get_connection.return_value.set.assert_called_with('a-b', 'a-b-c')
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
@@ -1033,7 +1055,7 @@ class TestAws(unittest.TestCase):
         mock_get_connection.return_value.put_item.side_effect = \
             ClientError({'Error': {'Code': 'ConditionalCheckFailedException'}}, 'Operation')
         ret = set_message_dispatched('a', 'b', 'c')
-        self.assertEqual(0, ret)
+        self.assertTrue(0 is ret)
         mock_get_connection.return_value.put_item.assert_called_with(
             Item={'ckey': {'S': 'a-b'}, 'value': {'S': 'a-b-c'}},
             TableName='resourcename'
@@ -1061,6 +1083,17 @@ class TestAws(unittest.TestCase):
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
+    def test_get_message_dispatched_memcache_connection_error(self,
+                                                              mock_get_primary_cache_source,
+                                                              mock_get_connection):
+        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
+        mock_get_connection.return_value.get.return_value = None
+        ret = get_message_dispatched('a', 'b')
+        self.assertIsNone(ret)
+        mock_get_connection.return_value.get.assert_called_with('a-b')
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
     @mock.patch('aws_lambda_fsm.aws.settings')
     def test_get_message_dispatched_redis(self,
                                           mock_settings,
@@ -1071,6 +1104,20 @@ class TestAws(unittest.TestCase):
         mock_get_connection.return_value.get.return_value = 'foobar'
         ret = get_message_dispatched('a', 'b')
         self.assertEqual('foobar', ret)
+        mock_get_connection.return_value.get.assert_called_with('a-b')
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    def test_get_message_dispatched_redis_connection_error(self,
+                                                           mock_settings,
+                                                           mock_get_primary_cache_source,
+                                                           mock_get_connection):
+        mock_settings.ELASTICACHE_ENDPOINTS = ELASTICACHE_ENDPOINTS_REDIS
+        mock_get_primary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
+        mock_get_connection.return_value.get.side_effect = redis.exceptions.ConnectionError
+        ret = get_message_dispatched('a', 'b')
+        self.assertIsNone(ret)
         mock_get_connection.return_value.get.assert_called_with('a-b')
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
@@ -1112,7 +1159,7 @@ class TestAws(unittest.TestCase):
         mock_get_connection.return_value.get_item.side_effect = \
             ClientError({'Error': {'Code': 'ConditionalCheckFailedException'}}, 'Operation')
         ret = get_message_dispatched('a', 'b')
-        self.assertEqual(None, ret)
+        self.assertIsNone(ret)
         mock_get_connection.return_value.get_item.assert_called_with(
             ConsistentRead=True,
             TableName='resourcename',
