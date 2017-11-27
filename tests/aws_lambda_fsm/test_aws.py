@@ -1126,6 +1126,25 @@ class LeaseMemcacheTest(unittest.TestCase):
     @mock.patch('aws_lambda_fsm.aws.get_secondary_cache_source')
     @mock.patch('aws_lambda_fsm.aws.time')
     @mock.patch('aws_lambda_fsm.aws.settings')
+    def test_aquire_lease_memcache_failure(self,
+                                           mock_settings,
+                                           mock_time,
+                                           mock_get_secondary_cache_source,
+                                           mock_get_connection):
+        mock_settings.ENDPOINTS = ENDPOINTS_MEMCACHE
+        mock_time.time.return_value = 999.
+        mock_get_secondary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
+        mock_get_connection.return_value.gets.return_value = None
+        mock_get_connection.return_value.cas.return_value = 0
+        ret = acquire_lease('a', 1, 1, primary=False)
+        self.assertTrue(0 is ret)
+        mock_get_connection.return_value.gets.assert_called_with('lease-a')
+        mock_get_connection.return_value.cas.assert_called_with('lease-a', '1-1-1299', time=300)
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_secondary_cache_source')
+    @mock.patch('aws_lambda_fsm.aws.time')
+    @mock.patch('aws_lambda_fsm.aws.settings')
     def test_aquire_lease_memcache_available_lose_secondary(self,
                                                             mock_settings,
                                                             mock_time,
@@ -1276,6 +1295,22 @@ class LeaseMemcacheTest(unittest.TestCase):
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.get_secondary_cache_source')
     @mock.patch('aws_lambda_fsm.aws.settings')
+    def test_release_lease_memcache_failure(self,
+                                            mock_settings,
+                                            mock_get_secondary_cache_source,
+                                            mock_get_connection):
+        mock_settings.ENDPOINTS = ENDPOINTS_MEMCACHE
+        mock_get_secondary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
+        mock_get_connection.return_value.gets.return_value = "99-99-99"
+        mock_get_connection.return_value.cas.return_value = 0
+        ret = release_lease('a', 99, 99, 'f', primary=False)
+        self.assertTrue(0 is ret)
+        mock_get_connection.return_value.gets.assert_called_with('lease-a')
+        mock_get_connection.return_value.cas.assert_called_with('lease-a', None, time=1)
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_secondary_cache_source')
+    @mock.patch('aws_lambda_fsm.aws.settings')
     def test_release_lease_memcache_not_owned_secondary(self,
                                                         mock_settings,
                                                         mock_get_secondary_cache_source,
@@ -1355,6 +1390,31 @@ class LeaseMemcacheTest(unittest.TestCase):
 
 
 class LeaseRedisTest(unittest.TestCase):
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_secondary_cache_source')
+    @mock.patch('aws_lambda_fsm.aws.time')
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    def test_aquire_lease_redis_failure(self,
+                                        mock_settings,
+                                        mock_time,
+                                        mock_get_secondary_cache_source,
+                                        mock_get_connection):
+        mock_settings.ENDPOINTS = {}
+        mock_settings.ELASTICACHE_ENDPOINTS = ELASTICACHE_ENDPOINTS_REDIS
+        mock_time.time.return_value = 999.
+        mock_get_secondary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
+        mock_pipe = mock_get_connection.return_value.pipeline.return_value.__enter__.return_value
+        mock_pipe.get.return_value = None
+        mock_pipe.execute.side_effect = redis.exceptions.ConnectionError
+        ret = acquire_lease('a', 1, 1, primary=False)
+        self.assertTrue(0 is ret)
+        mock_pipe.watch.assert_called_with('lease-a')
+        mock_pipe.get.assert_called_with('lease-a')
+        mock_pipe.multi.assert_called_with()
+        mock_pipe.expire.assert_called_with('lease-a', 300)
+        mock_pipe.set.assert_called_with('lease-a', '1-1-1299')
+        mock_pipe.execute.assert_called_with()
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.get_secondary_cache_source')
@@ -1551,6 +1611,27 @@ class LeaseRedisTest(unittest.TestCase):
         self.assertFalse(mock_pipe.expire.called)
         self.assertFalse(mock_pipe.set.called)
         self.assertFalse(mock_pipe.execute.called)
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_secondary_cache_source')
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    def test_release_lease_redis_failure(self,
+                                         mock_settings,
+                                         mock_get_secondary_cache_source,
+                                         mock_get_connection):
+        mock_settings.ENDPOINTS = {}
+        mock_settings.ELASTICACHE_ENDPOINTS = ELASTICACHE_ENDPOINTS_REDIS
+        mock_get_secondary_cache_source.return_value = _get_test_arn(AWS.ELASTICACHE)
+        mock_pipe = mock_get_connection.return_value.pipeline.return_value.__enter__.return_value
+        mock_pipe.get.return_value = '99-99-99'
+        mock_pipe.execute.side_effect = redis.exceptions.ConnectionError
+        ret = release_lease('a', 99, 99, 'f', primary=False)
+        self.assertTrue(0 is ret)
+        mock_pipe.watch.assert_called_with('lease-a')
+        mock_pipe.get.assert_called_with('lease-a')
+        mock_pipe.multi.assert_called_with()
+        mock_pipe.delete.assert_called_with('lease-a')
+        mock_pipe.execute.assert_called_with()
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.get_secondary_cache_source')

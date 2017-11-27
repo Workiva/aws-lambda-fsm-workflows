@@ -725,6 +725,10 @@ def _acquire_lease_redis(cache_arn, correlation_id, steps, retries):
         except redis.WatchError:
             return False
 
+        except redis.exceptions.ConnectionError:
+            logger.exception('')
+            return 0
+
 
 def _acquire_lease_dynamodb(table_arn, correlation_id, steps, retries):
     """
@@ -819,7 +823,8 @@ def acquire_lease(correlation_id, steps, retries, primary=True):
     :param correlation_id: a str guid for the fsm
     :param steps: an integer corresponding to the step in the fsm execution
     :param retries: an integer corresponding to the number of retries in the fsm execution
-    :return: True if the lease was release and False otherwise
+    :return: True if the lease was acquired, False if the lease was not acquired and 0 if
+        there was some sort of systems/communication error.
     """
     if primary:
         source_arn = get_primary_cache_source()
@@ -928,6 +933,10 @@ def _release_lease_redis(cache_arn, correlation_id, steps, retries):
         except redis.WatchError:
             return False
 
+        except redis.exceptions.ConnectionError:
+            logger.exception('')
+            return 0
+
 
 def _release_lease_dynamodb(table_arn, correlation_id, steps, retries, fence_token):
     """
@@ -1012,7 +1021,8 @@ def release_lease(correlation_id, steps, retries, fence_token, primary=True):
     :param correlation_id: a str guid for the fsm
     :param steps: an integer corresponding to the step in the fsm execution
     :param retries: an integer corresponding to the number of retries in the fsm execution
-    :return: True if the lease was acquired and False otherwise
+    :return: True if the lease was released, False if the lease was not released and 0 if
+        there was some sort of systems/communication error.
     """
     if primary:
         source_arn = get_primary_cache_source()
