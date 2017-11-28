@@ -45,68 +45,179 @@ class Test(BaseFunctionalTest):
     # START: machine_name="tracer"
     ################################################################################
 
-    def test_tracer_primary_stream_down(self, *args):
+    def test_primary_cache_down(self, *args):
+        self._execute(AWS, "tracer", {}, primary_cache_chaos=1.0)
+
+        # check answer
+        self.assertEqual(101, AWS.all_sources.trace(('count',))[-1][-1][-1])
+
+        # check streams processed data
+        self.assertTrue(len(AWS.primary_stream_source.all_messages) > 1)
+        self.assertTrue(len(AWS.secondary_stream_source.all_messages) == 0)
+        self.assertTrue(len(AWS.primary_retry_source.all_messages) > 1)
+        self.assertTrue(len(AWS.secondary_retry_source.all_messages) == 0)
+        self.assertTrue(len(AWS.primary_cache) == 0)
+        self.assertTrue(len(AWS.secondary_cache) > 1)
+
+    def test_primary_cache_major_downage(self, *args):
+        self._execute(AWS, "tracer", {}, primary_cache_chaos=0.75)
+
+        # check answer
+        self.assertEqual(101, AWS.all_sources.trace(('count',))[-1][-1][-1])
+
+        # check streams processed data
+        self.assertTrue(len(AWS.primary_stream_source.all_messages) > 1)
+        self.assertTrue(len(AWS.secondary_stream_source.all_messages) == 0)
+        self.assertTrue(len(AWS.primary_retry_source.all_messages) > 1)
+        self.assertTrue(len(AWS.secondary_retry_source.all_messages) == 0)
+        self.assertTrue(len(AWS.primary_cache) > 1)
+        self.assertTrue(len(AWS.secondary_cache) > 1)
+
+    def test_secondary_cache_down(self, *args):
+        self._execute(AWS, "tracer", {}, secondary_cache_chaos=1.0)
+
+        # check answer
+        self.assertEqual(101, AWS.all_sources.trace(('count',))[-1][-1][-1])
+
+        # check streams processed data
+        self.assertTrue(len(AWS.primary_stream_source.all_messages) > 1)
+        self.assertTrue(len(AWS.secondary_stream_source.all_messages) == 0)
+        self.assertTrue(len(AWS.primary_retry_source.all_messages) > 1)
+        self.assertTrue(len(AWS.secondary_retry_source.all_messages) == 0)
+        self.assertTrue(len(AWS.primary_cache) > 1)
+        self.assertTrue(len(AWS.secondary_cache) == 0)
+
+    def test_secondary_cache_major_downage(self, *args):
+        self._execute(AWS, "tracer", {}, secondary_cache_chaos=0.75)
+
+        # check answer
+        self.assertEqual(101, AWS.all_sources.trace(('count',))[-1][-1][-1])
+
+        # check streams processed data
+        self.assertTrue(len(AWS.primary_stream_source.all_messages) > 1)
+        self.assertTrue(len(AWS.secondary_stream_source.all_messages) == 0)
+        self.assertTrue(len(AWS.primary_retry_source.all_messages) > 1)
+        self.assertTrue(len(AWS.secondary_retry_source.all_messages) == 0)
+        self.assertTrue(len(AWS.primary_cache) > 1)
+        self.assertTrue(len(AWS.secondary_cache) > 1)
+
+    def test_cache_major_downage(self, *args):
+        self._execute(AWS, "tracer", {}, primary_cache_chaos=0.75, secondary_cache_chaos=0.75)
+
+        # check answer
+        self.assertEqual(101, AWS.all_sources.trace(('count',))[-1][-1][-1])
+
+        # check streams processed data
+        self.assertTrue(len(AWS.primary_stream_source.all_messages) > 1)
+        self.assertTrue(len(AWS.secondary_stream_source.all_messages) == 0)
+        self.assertTrue(len(AWS.primary_retry_source.all_messages) > 1)
+        self.assertTrue(len(AWS.secondary_retry_source.all_messages) == 0)
+        self.assertTrue(len(AWS.primary_cache) > 1)
+        self.assertTrue(len(AWS.secondary_cache) > 1)
+
+    def test_cache_total_downage(self, *args):
+        self._execute(AWS, "tracer", {}, primary_cache_chaos=1.0, secondary_cache_chaos=1.0)
+
+        # check streams processed data
+        self.assertTrue(len(AWS.primary_stream_source.all_messages) == 1)
+        self.assertTrue(len(AWS.secondary_stream_source.all_messages) == 0)
+        self.assertTrue(len(AWS.primary_retry_source.all_messages) > 1)
+        self.assertTrue(len(AWS.secondary_retry_source.all_messages) == 0)
+        self.assertTrue(len(AWS.primary_cache) == 0)
+        self.assertTrue(len(AWS.secondary_cache) == 0)
+
+    def test_primary_stream_down(self, *args):
         self._execute(AWS, "tracer", {}, primary_stream_chaos=1.0)
 
         # check answer
         self.assertEqual(101, AWS.all_sources.trace(('count',))[-1][-1][-1])
 
-        # check all the secondary message streams processed data
+        # check streams processed data
         self.assertTrue(len(AWS.primary_stream_source.all_messages) == 1)
         self.assertTrue(len(AWS.secondary_stream_source.all_messages) > 1)
         self.assertTrue(len(AWS.primary_retry_source.all_messages) > 1)
         self.assertTrue(len(AWS.secondary_retry_source.all_messages) == 0)
 
-    def test_tracer_primary_retry_down(self, *args):
+    def test_primary_retry_down(self, *args):
         self._execute(AWS, "tracer", {}, primary_retry_chaos=1.0)
 
         # check answer
         self.assertEqual(101, AWS.all_sources.trace(('count',))[-1][-1][-1])
 
-        # check all the secondary message streams processed data
+        # check streams processed data
         self.assertTrue(len(AWS.primary_stream_source.all_messages) > 1)
         self.assertTrue(len(AWS.secondary_stream_source.all_messages) == 0)
         self.assertTrue(len(AWS.primary_retry_source.all_messages) == 0)
         self.assertTrue(len(AWS.secondary_retry_source.all_messages) > 1)
 
-    def test_tracer_secondary_stream_down(self, *args):
+    def test_secondary_stream_down(self, *args):
         self._execute(AWS, "tracer", {}, secondary_stream_chaos=1.0)
 
         # check answer
         self.assertEqual(101, AWS.all_sources.trace(('count',))[-1][-1][-1])
 
-        # check the primary message streams processed data
+        # check streams processed data
         self.assertTrue(len(AWS.primary_stream_source.all_messages) > 1)
         self.assertTrue(len(AWS.secondary_stream_source.all_messages) == 0)
         self.assertTrue(len(AWS.primary_retry_source.all_messages) > 1)
         self.assertTrue(len(AWS.secondary_retry_source.all_messages) == 0)
 
-    def test_tracer_secondary_retry_down(self, *args):
+    def test_secondary_retry_down(self, *args):
         self._execute(AWS, "tracer", {}, secondary_retry_chaos=1.0)
 
         # check answer
         self.assertEqual(101, AWS.all_sources.trace(('count',))[-1][-1][-1])
 
-        # check all the secondary message streams processed data
+        # check streams processed data
         self.assertTrue(len(AWS.primary_stream_source.all_messages) > 1)
         self.assertTrue(len(AWS.secondary_stream_source.all_messages) == 0)
         self.assertTrue(len(AWS.primary_retry_source.all_messages) > 1)
         self.assertTrue(len(AWS.secondary_retry_source.all_messages) == 0)
 
-    def test_tracer_total_stream_downage(self, *args):
+    def test_total_stream_downage(self, *args):
         self._execute(AWS, "tracer", {}, primary_stream_chaos=1.0, secondary_stream_chaos=1.0)
 
-        # check no streams processed data
+        # check answer
+        self.assertEqual(101, AWS.all_sources.trace(('count',))[-1][-1][-1])
+
+        # check streams processed data
         self.assertTrue(len(AWS.primary_stream_source.all_messages) == 1)
         self.assertTrue(len(AWS.secondary_stream_source.all_messages) == 0)
         self.assertTrue(len(AWS.primary_retry_source.all_messages) > 1)
         self.assertTrue(len(AWS.secondary_retry_source.all_messages) == 0)
 
-    def test_tracer_total_retry_downage(self, *args):
+    def test_major_stream_downage(self, *args):
+        self._execute(AWS, "tracer", {}, primary_stream_chaos=1.0, secondary_stream_chaos=0.75)
+
+        # check answer
+        self.assertEqual(101, AWS.all_sources.trace(('count',))[-1][-1][-1])
+
+        # check streams processed data
+        self.assertTrue(len(AWS.primary_stream_source.all_messages) == 1)
+        self.assertTrue(len(AWS.secondary_stream_source.all_messages) > 1)
+        self.assertTrue(len(AWS.primary_retry_source.all_messages) > 1)
+        self.assertTrue(len(AWS.secondary_retry_source.all_messages) == 0)
+
+    def test_total_retry_downage(self, *args):
         self._execute(AWS, "tracer", {}, primary_retry_chaos=1.0, secondary_retry_chaos=1.0)
 
-        # check no streams processed data
+        # check answer
+        self.assertEqual(101, AWS.all_sources.trace(('count',))[-1][-1][-1])
+
+        # check streams processed data
         self.assertTrue(len(AWS.primary_stream_source.all_messages) >= 1)
         self.assertTrue(len(AWS.secondary_stream_source.all_messages) == 0)
         self.assertTrue(len(AWS.primary_retry_source.all_messages) == 0)
         self.assertTrue(len(AWS.secondary_retry_source.all_messages) == 0)
+
+    def test_major_retry_downage(self, *args):
+        self._execute(AWS, "tracer", {}, primary_retry_chaos=1.0, secondary_retry_chaos=0.75)
+
+        # check answer
+        self.assertEqual(101, AWS.all_sources.trace(('count',))[-1][-1][-1])
+
+        # check streams processed data
+        self.assertTrue(len(AWS.primary_stream_source.all_messages) >= 1)
+        self.assertTrue(len(AWS.secondary_stream_source.all_messages) == 0)
+        self.assertTrue(len(AWS.primary_retry_source.all_messages) == 0)
+        self.assertTrue(len(AWS.secondary_retry_source.all_messages) >= 0)

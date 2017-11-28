@@ -275,7 +275,8 @@ class TestDispatchAndRetry(TestFsmBase):
             '"s", "table": "t", "topic": "z"}, "user_context": {}, "version": "0.1"}',
             'b',
             delay=0,
-            primary=True
+            primary=True,
+            recovering=False
         )
         mock_store_checkpoint.assert_called_with(
             instance,
@@ -313,7 +314,8 @@ class TestDispatchAndRetry(TestFsmBase):
             '"table": "t", "topic": "z"}, "user_context": {}, "version": "0.1"}',
             'b',
             delay=0,
-            primary=True
+            primary=True,
+            recovering=False
         )
         mock_store_checkpoint.assert_called_with(
             instance,
@@ -324,11 +326,12 @@ class TestDispatchAndRetry(TestFsmBase):
             instance,
             primary=True
         )
-        mock_set_message_dispatched.assert_called_with(
-            'b',
-            999,
-            0,
-            primary=True
+
+        mock_set_message_dispatched.assert_has_calls(
+            [
+                mock.call('b', 999, 0, primary=True),
+                mock.call('b', 999, 0, primary=False)
+            ]
         )
         mock_queue_error.assert_called_with(
             'cache',
@@ -359,7 +362,8 @@ class TestDispatchAndRetry(TestFsmBase):
             '"s", "table": "t", "topic": "z"}, "user_context": {}, "version": "0.1"}',
             'b',
             delay=0,
-            primary=True
+            primary=True,
+            recovering=False
         )
         mock_start_retries.assert_called_with(
             instance,
@@ -367,7 +371,8 @@ class TestDispatchAndRetry(TestFsmBase):
             '{"system_context": {"correlation_id": "b", "current_event": "e", "current_state": '
             '"s", "machine_name": "foo", "metrics": "m", "retries": 1, "steps": 999, "stream": '
             '"s", "table": "t", "topic": "z"}, "user_context": {}, "version": "0.1"}',
-            primary=True
+            primary=True,
+            recovering=False
         )
         mock_queue_error.assert_called_with(
             'retry',
@@ -403,7 +408,8 @@ class TestDispatchAndRetry(TestFsmBase):
             '"s", "table": "t", "topic": "z"}, "user_context": {}, "version": "0.1"}',
             'b',
             delay=0,
-            primary=True
+            primary=True,
+            recovering=False
         )
         mock_store_checkpoint.assert_called_with(
             instance,
@@ -449,7 +455,8 @@ class TestDispatchAndRetry(TestFsmBase):
             '"s", "table": "t", "topic": "z"}, "user_context": {}, "version": "0.1"}',
             'b',
             delay=0,
-            primary=True
+            primary=True,
+            recovering=False
         )
         mock_store_checkpoint.assert_called_with(
             instance,
@@ -597,7 +604,8 @@ class TestContextPrimarySecondary(TestFsmBase):
             {},
             2.0,
             '{"system_context": {"retries": 1}, "user_context": {}}',
-            primary=False
+            primary=False,
+            recovering=False
         )
 
     @mock.patch('aws_lambda_fsm.fsm.start_retries')
@@ -615,7 +623,8 @@ class TestContextPrimarySecondary(TestFsmBase):
             {},
             2.0,
             '{"system_context": {"retries": 1}, "user_context": {}}',
-            primary=True
+            primary=True,
+            recovering=False
         )
 
     @mock.patch('aws_lambda_fsm.fsm.stop_retries')
@@ -655,7 +664,8 @@ class TestContextPrimarySecondary(TestFsmBase):
             'a',
             'foobar',
             delay=0,
-            primary=True
+            primary=True,
+            recovering=False
         )
 
     @mock.patch('aws_lambda_fsm.fsm.send_next_event_for_dispatch')
@@ -664,13 +674,14 @@ class TestContextPrimarySecondary(TestFsmBase):
         mock_send_next_event_for_dispatch.side_effect = ClientError({'Error': {'Code': 404}}, 'test')
         instance = self._instance()
         # raise out the errors
-        self.assertRaises(ClientError, instance._send_next_event_for_dispatch, 'a', {})
+        self.assertRaises(ClientError, instance._send_next_event_for_dispatch, 'a', {}, recovering=True)
         mock_send_next_event_for_dispatch.assert_called_with(
             {},
             'a',
             'foobar',
             delay=0,
-            primary=False
+            primary=False,
+            recovering=True
         )
 
 
@@ -725,7 +736,8 @@ class TestRetry(TestFsmBase):
             101.0,
             '{"system_context": {"correlation_id": "b", "current_event": "e", "current_state": '
             '"s", "machine_name": "m", "retries": 1, "steps": 999}, "user_context": {}}',
-            primary=True
+            primary=True,
+            recovering=False
         )
         mock_queue_error.assert_called_with(
             'retry',
@@ -753,6 +765,7 @@ class TestRetry(TestFsmBase):
             101.0,
             payload,
             primary=False,
+            recovering=True
         )
         mock_queue_error.assert_called_with(
             'error',

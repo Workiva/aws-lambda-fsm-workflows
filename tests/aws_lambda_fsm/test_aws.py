@@ -481,6 +481,20 @@ class TestAws(unittest.TestCase):
         )
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_primary_retry_source')
+    def test_send_next_event_for_dispatch_kinesis_recovering(self,
+                                                             mock_get_primary_retry_source,
+                                                             mock_get_connection):
+        mock_context = mock.Mock()
+        mock_get_primary_retry_source.return_value = _get_test_arn(AWS.KINESIS)
+        send_next_event_for_dispatch(mock_context, 'c', 'd', recovering=True)
+        mock_get_connection.return_value.put_record.assert_called_with(
+            PartitionKey='d',
+            Data='c',
+            StreamName='resourcename'
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.get_secondary_stream_source')
     def test_send_next_event_for_dispatch_kinesis_secondary(self,
                                                             mock_get_secondary_stream_source,
@@ -488,6 +502,20 @@ class TestAws(unittest.TestCase):
         mock_context = mock.Mock()
         mock_get_secondary_stream_source.return_value = _get_test_arn(AWS.KINESIS)
         send_next_event_for_dispatch(mock_context, 'c', 'd', primary=False)
+        mock_get_connection.return_value.put_record.assert_called_with(
+            PartitionKey='d',
+            Data='c',
+            StreamName='resourcename'
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_secondary_retry_source')
+    def test_send_next_event_for_dispatch_kinesis_secondary_recovering(self,
+                                                                       mock_get_secondary_retry_source,
+                                                                       mock_get_connection):
+        mock_context = mock.Mock()
+        mock_get_secondary_retry_source.return_value = _get_test_arn(AWS.KINESIS)
+        send_next_event_for_dispatch(mock_context, 'c', 'd', primary=False, recovering=True)
         mock_get_connection.return_value.put_record.assert_called_with(
             PartitionKey='d',
             Data='c',
@@ -670,6 +698,24 @@ class TestAws(unittest.TestCase):
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.settings')
+    def test_start_retries_primary_recovering(self,
+                                              mock_settings,
+                                              mock_get_connection):
+        mock_context = mock.Mock()
+        mock_context.correlation_id = 'b'
+        mock_context.steps = 'z'
+        mock_settings.PRIMARY_STREAM_SOURCE = _get_test_arn(AWS.DYNAMODB)
+        start_retries(mock_context, 'c', 'd', primary=True, recovering=True)
+        mock_get_connection.return_value.put_item.assert_called_with(
+            Item={'partition': {'N': '15'},
+                  'payload': {'S': 'd'},
+                  'correlation_id_steps': {'S': 'b-z'},
+                  'run_at': {'N': 'c'}},
+            TableName='resourcename'
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.settings')
     def test_start_retries_secondary(self,
                                      mock_settings,
                                      mock_get_connection):
@@ -677,6 +723,21 @@ class TestAws(unittest.TestCase):
         mock_context.correlation_id = 'b'
         mock_settings.SECONDARY_RETRY_SOURCE = _get_test_arn(AWS.KINESIS)
         start_retries(mock_context, 'c', 'd', primary=False)
+        mock_get_connection.return_value.put_record.assert_called_with(
+            PartitionKey='b',
+            Data='d',
+            StreamName='resourcename'
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    def test_start_retries_secondary_recovering(self,
+                                                mock_settings,
+                                                mock_get_connection):
+        mock_context = mock.Mock()
+        mock_context.correlation_id = 'b'
+        mock_settings.SECONDARY_STREAM_SOURCE = _get_test_arn(AWS.KINESIS)
+        start_retries(mock_context, 'c', 'd', primary=False, recovering=True)
         mock_get_connection.return_value.put_record.assert_called_with(
             PartitionKey='b',
             Data='d',

@@ -902,7 +902,7 @@ def _send_next_event_for_dispatch_sqs(queue_arn, data, correlation_id, delay):
     return return_value
 
 
-def send_next_event_for_dispatch(context, data, correlation_id, delay=0, primary=True):
+def send_next_event_for_dispatch(context, data, correlation_id, delay=0, primary=True, recovering=False):
     """
     Sends an FSM event message onto Kinesis or DynamoDB or SNS.
 
@@ -911,12 +911,20 @@ def send_next_event_for_dispatch(context, data, correlation_id, delay=0, primary
     :param correlation_id: the guid for the fsm
     :param primary: if True, use the primary stream source, and if False
       use the secondary stream source
+    :param recovering: if True, use the primary retry source, and if False
+      use the secondary retry source
     :return: see above.
     """
     if primary:
-        source_arn = get_primary_stream_source()
+        if recovering:
+            source_arn = get_primary_retry_source()
+        else:
+            source_arn = get_primary_stream_source()
     else:
-        source_arn = get_secondary_stream_source()
+        if recovering:
+            source_arn = get_secondary_retry_source()
+        else:
+            source_arn = get_secondary_stream_source()
 
     service = get_arn_from_arn_string(source_arn).service
 
@@ -1351,7 +1359,7 @@ def _start_retries_sqs(queue_arn, correlation_id, run_at, payload):
     return return_value
 
 
-def start_retries(context, run_at, payload, primary=True):
+def start_retries(context, run_at, payload, primary=True, recovering=False):
     """
     Triggers retries for a state machine by sending a message to a "run_at"
     parameter designating when to run the retry.
@@ -1361,12 +1369,20 @@ def start_retries(context, run_at, payload, primary=True):
     :param payload: the retry payload (serialized fsm context)
     :param primary: if True, use the primary retries source, and if False
       use the retries environment source
+    :param recovering: if True, use the primary stream source, and if False
+      use the secondary stream source
     :return: see above.
     """
     if primary:
-        source_arn = get_primary_retry_source()
+        if recovering:
+            source_arn = get_primary_stream_source()
+        else:
+            source_arn = get_primary_retry_source()
     else:
-        source_arn = get_secondary_retry_source()
+        if recovering:
+            source_arn = get_secondary_stream_source()
+        else:
+            source_arn = get_secondary_retry_source()
 
     service = get_arn_from_arn_string(source_arn).service
 

@@ -64,6 +64,7 @@ class ERRORS(object):
     CACHE = 'cache'
     RETRY = 'retry'
     DUPLICATE = 'duplicate'
+    DISPATCH = 'dispatch'
 
 
 ################################################################################

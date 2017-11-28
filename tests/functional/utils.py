@@ -114,13 +114,19 @@ class AWSStub(object):
             self.primary_retry_source.recv() or \
             self.secondary_retry_source.recv()
 
-    def send_next_event_for_dispatch(self, context, data, correlation_id, delay=0, primary=True):
-        self._get_stream_source(primary).send(data)
+    def send_next_event_for_dispatch(self, context, data, correlation_id, delay=0, primary=True, recovering=False):
+        if recovering:
+            self._get_retry_source(primary).send(data)
+        else:
+            self._get_stream_source(primary).send(data)
         self.all_sources.send(data)
         return {'test': 'stub'}
 
-    def start_retries(self, context, run_at, payload, primary=True):
-        self._get_retry_source(primary).send(payload)
+    def start_retries(self, context, run_at, payload, primary=True, recovering=False):
+        if recovering:
+            self._get_stream_source(primary).send(payload)
+        else:
+            self._get_retry_source(primary).send(payload)
         self.all_sources.send(payload)
         return {'test': 'stub'}
 
