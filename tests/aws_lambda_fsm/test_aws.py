@@ -54,8 +54,10 @@ from aws_lambda_fsm.aws import release_lease
 
 class Connection(object):
     _method_to_api_mapping = {'find_things': 'FindThingsApi'}
+    called = False
 
     def find_things(self):
+        self.called = True
         return 1
 
 
@@ -110,6 +112,22 @@ class TestAws(unittest.TestCase):
         connection = ChaosConnection('kinesis', connection, chaos={'kinesis': {'zap': 1.0}})
         ret = connection.find_things()
         self.assertEqual('zap', ret)
+
+    @mock.patch('aws_lambda_fsm.aws.random')
+    def test_chaos_run_function(self, mock_random):
+        mock_random.uniform.return_value = 0.1
+        connection = Connection()
+        connection = ChaosConnection('kinesis', connection, chaos={'kinesis': {'zap': 1.0}})
+        connection.find_things()
+        self.assertTrue(connection.called)
+
+    @mock.patch('aws_lambda_fsm.aws.random')
+    def test_chaos_dont_run_function(self, mock_random):
+        mock_random.uniform.return_value = 0.9
+        connection = Connection()
+        connection = ChaosConnection('kinesis', connection, chaos={'kinesis': {'zap': 1.0}})
+        connection.find_things()
+        self.assertFalse(connection.called)
 
     ##################################################
     # Connection Functions

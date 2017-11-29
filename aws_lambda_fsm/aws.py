@@ -65,10 +65,14 @@ class ChaosFunction(object):
     Used by ChaosConnection when a error is to be returned.
     """
 
-    def __init__(self, exception_or_return):
+    def __init__(self, exception_or_return, wrapped_function):
         self.exception_or_return = exception_or_return
+        self.wrapped_function = wrapped_function
 
     def __call__(self, *args, **kwargs):
+        # 50% of the time, actually call the function
+        if random.uniform(0.0, 1.0) < 0.5:
+            self.wrapped_function(*args, **kwargs)
         if isinstance(self.exception_or_return, Exception):
             raise self.exception_or_return
         else:
@@ -95,7 +99,7 @@ class ChaosConnection(object):
             if callable(original_attr):
                 for exception_or_return, percentage in self.chaos.iteritems():
                     if random.uniform(0.0, 1.0) < percentage:
-                        return ChaosFunction(exception_or_return)
+                        return ChaosFunction(exception_or_return, original_attr)
         return original_attr
 
 
