@@ -69,12 +69,12 @@ class ECSTaskEntryAction(Action):
            'task_details': {                            # dictionary of all the states that run images
               'state_name_1': {                         # first state name (as in fsm.yaml)
                                                         # cluster to run image for state_name_1
-                'cluster_arn': 'arn:aws:ecs:eu-west-1:663511558366:cluster/marina',
-                'container_image': 'drydock.workiva.org/workiva/gce_validation:49516' # image for state_name_1
+                'cluster_arn': 'arn:aws:ecs:region:1234567890:cluster/foobar',
+                'container_image': 'host/corp/image:12345' # image for state_name_1
               },
               'state_name_2': {                         # second state name (as in fsm.yaml)
-                'cluster_arn': 'arn:aws:ecs:eu-west-1:663511558366:cluster/marina',
-                'container_image': 'drydock.workiva.org/workiva/foobar:12345',
+                'cluster_arn': 'arn:aws:ecs:eu-west-1:1234567890:cluster/foobar',
+                'container_image': 'host/corp/image:12345',
                 'runner_task_definition': 'my_runner',  # alternative docker image runner task name
                 'runner_container_name': 'my_runner'    # alternative docker image runner container name
               }
