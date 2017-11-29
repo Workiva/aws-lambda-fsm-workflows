@@ -207,9 +207,9 @@ def _run_once_sucessfully(f):
 
         # abort if these message has already been processed and another event message
         # has already been emitted to drive the state machine forward
-        p = get_message_dispatched(self.correlation_id, self.steps, primary=True)
-        s = get_message_dispatched(self.correlation_id, self.steps, primary=False)
-        dispatched = p or s
+        primary = get_message_dispatched(self.correlation_id, self.steps, primary=True)
+        secondary = get_message_dispatched(self.correlation_id, self.steps, primary=False)
+        dispatched = primary or secondary
 
         if dispatched:
             self._queue_error(ERRORS.DUPLICATE, 'Message has been processed already (%s).' % dispatched)
@@ -219,9 +219,9 @@ def _run_once_sucessfully(f):
 
         # once the message is emitted, we want to make sure the current event is never sent again.
         # the approach here is to simply use a cache to set a key like "correlation_id-steps"
-        p = set_message_dispatched(self.correlation_id, self.steps, self.retries, primary=True)
-        s = set_message_dispatched(self.correlation_id, self.steps, self.retries, primary=False)
-        dispatched = p and s
+        primary = set_message_dispatched(self.correlation_id, self.steps, self.retries, primary=True)
+        secondary = set_message_dispatched(self.correlation_id, self.steps, self.retries, primary=False)
+        dispatched = primary and secondary  # 'and' is correct here. it just triggers an alarm.
 
         if not dispatched:
             self._queue_error(ERRORS.CACHE, 'Unable set message dispatched for idempotency.')

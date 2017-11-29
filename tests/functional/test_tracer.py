@@ -45,6 +45,48 @@ class Test(BaseFunctionalTest):
     # START: machine_name="tracer"
     ################################################################################
 
+    def test_primary_cache_empty(self, *args):
+        self._execute(AWS, "tracer", {}, empty_primary_cache=True)
+
+        # check answer
+        self.assertEqual(101, AWS.all_sources.trace(('count',))[-1][-1][-1])
+
+        # check streams processed data
+        self.assertTrue(len(AWS.primary_stream_source.all_messages) > 1)
+        self.assertTrue(len(AWS.secondary_stream_source.all_messages) == 0)
+        self.assertTrue(len(AWS.primary_retry_source.all_messages) > 1)
+        self.assertTrue(len(AWS.secondary_retry_source.all_messages) == 0)
+        self.assertTrue(len(AWS.primary_cache) == 0)
+        self.assertTrue(len(AWS.secondary_cache) > 1)
+
+    def test_secondary_cache_empty(self, *args):
+        self._execute(AWS, "tracer", {}, empty_secondary_cache=True)
+
+        # check answer
+        self.assertEqual(101, AWS.all_sources.trace(('count',))[-1][-1][-1])
+
+        # check streams processed data
+        self.assertTrue(len(AWS.primary_stream_source.all_messages) > 1)
+        self.assertTrue(len(AWS.secondary_stream_source.all_messages) == 0)
+        self.assertTrue(len(AWS.primary_retry_source.all_messages) > 1)
+        self.assertTrue(len(AWS.secondary_retry_source.all_messages) == 0)
+        self.assertTrue(len(AWS.primary_cache) > 1)
+        self.assertTrue(len(AWS.secondary_cache) == 0)
+
+    def test_cache_empty(self, *args):
+        self._execute(AWS, "tracer", {}, empty_primary_cache=True, empty_secondary_cache=True)
+
+        # check answer
+        self.assertEqual(101, AWS.all_sources.trace(('count',))[-1][-1][-1])
+
+        # check streams processed data
+        self.assertTrue(len(AWS.primary_stream_source.all_messages) > 1)
+        self.assertTrue(len(AWS.secondary_stream_source.all_messages) == 0)
+        self.assertTrue(len(AWS.primary_retry_source.all_messages) > 1)
+        self.assertTrue(len(AWS.secondary_retry_source.all_messages) == 0)
+        self.assertTrue(len(AWS.primary_cache) == 0)
+        self.assertTrue(len(AWS.secondary_cache) == 0)
+
     def test_primary_cache_down(self, *args):
         self._execute(AWS, "tracer", {}, primary_cache_chaos=1.0)
 

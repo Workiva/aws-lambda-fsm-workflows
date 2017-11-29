@@ -37,8 +37,8 @@ AWS_CHAOS = {
     SECONDARY_STREAM_SOURCE: {ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.25},
     PRIMARY_RETRY_SOURCE: {ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.25},
     SECONDARY_RETRY_SOURCE: {ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.25},
-    PRIMARY_CACHE_SOURCE: {0: 0.25},
-    SECONDARY_CACHE_SOURCE: {0: 0.25},
+    PRIMARY_CACHE_SOURCE: {0: 0.25, None: 0.25},
+    SECONDARY_CACHE_SOURCE: {0: 0.25, None: 0.25},
 }
 
 ENDPOINTS = {

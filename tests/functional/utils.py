@@ -74,6 +74,8 @@ class AWSStub(object):
         self.primary_cache = {}
         self.secondary_cache = {}
         self.all_caches = {}
+        self.empty_primary_cache = False
+        self.empty_secondary_cache = False
 
         self.primary_stream_chaos = 0.0
         self.secondary_stream_chaos = 0.0
@@ -94,6 +96,10 @@ class AWSStub(object):
         }[primary]
 
     def _get_cache_source(self, primary):
+        if self.empty_primary_cache:
+            self.primary_cache.clear()
+        if self.empty_secondary_cache:
+            self.secondary_cache.clear()
         return {
             True: self.primary_cache,
             False: self.secondary_cache
@@ -195,6 +201,8 @@ class AWSStub(object):
         self.secondary_retry_chaos = 0.0
         self.primary_cache_chaos = 0.0
         self.secondary_cache_chaos = 0.0
+        self.empty_primary_cache = False
+        self.empty_secondary_cache = False
 
 
 def to_kinesis_message(data):
@@ -215,7 +223,9 @@ class BaseFunctionalTest(unittest.TestCase):
                  primary_retry_chaos=0.0,
                  secondary_retry_chaos=0.0,
                  primary_cache_chaos=0.0,
-                 secondary_cache_chaos=0.0):
+                 secondary_cache_chaos=0.0,
+                 empty_primary_cache=False,
+                 empty_secondary_cache=False):
         start_state_machine(machine_name, context, correlation_id='correlation_id')
         if primary_stream_chaos:
             aws.primary_stream_chaos = primary_stream_chaos
@@ -229,6 +239,10 @@ class BaseFunctionalTest(unittest.TestCase):
             aws.primary_cache_chaos = primary_cache_chaos
         if secondary_cache_chaos:
             aws.secondary_cache_chaos = secondary_cache_chaos
+        if empty_primary_cache:
+            aws.empty_primary_cache = empty_primary_cache
+        if empty_secondary_cache:
+            aws.empty_secondary_cache = empty_secondary_cache
         message = aws.get_message()
         while message:
             handler.lambda_kinesis_handler(to_kinesis_message(message))
