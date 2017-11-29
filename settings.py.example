@@ -19,7 +19,7 @@ SECONDARY_METRICS_SOURCE = None  # NOT SUPPORTED YET
 
 # used to dictate the primary location for caching
 # valid services = elasticache (memcache), dynamodb
-PRIMARY_CACHE_SOURCE = 'arn:partition:elasticache:testing:account:aws-lambda-fsm'
+PRIMARY_CACHE_SOURCE = 'arn:partition:elasticache:testing:account:cluster:aws-lambda-fsm'
 SECONDARY_CACHE_SOURCE = None  # NOT SUPPORTED YET
 
 # used to dictate the primary location for event dispatch
@@ -41,6 +41,14 @@ SECONDARY_RETRY_SOURCE = 'arn:partition:kinesis:testing:account:stream/aws-lambd
 # valid services = dynamodb
 PRIMARY_ENVIRONMENT_SOURCE = 'arn:partition:dynamodb:testing:account:table/aws-lambda-fsm'
 SECONDARY_ENVIRONMENT_SOURCE = None  # NOT SUPPORTED YET
+
+# stores SQS arn->QueueUrl mappings as an optimization to avoid
+# going on the wire for data that never changes
+SQS_URLS = {}
+
+# stores Elasticache arn->endpoint mappings as an optimization to avoid
+# going on the wire for data that never changes
+ELASTICACHE_ENDPOINTS = {}
 
 AWS_CHAOS = {}
 ENDPOINTS = {}
