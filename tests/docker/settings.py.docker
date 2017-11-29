@@ -1,0 +1,51 @@
+# Copyright 2016 Workiva Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from botocore.exceptions import ClientError
+
+PRIMARY_METRICS_SOURCE = None
+SECONDARY_METRICS_SOURCE = None
+
+PRIMARY_CACHE_SOURCE = 'arn:partition:elasticache:testing:account:aws-lambda-fsm1'
+SECONDARY_CACHE_SOURCE = 'arn:partition:elasticache:testing:account:aws-lambda-fsm2'
+
+PRIMARY_STREAM_SOURCE = 'arn:partition:kinesis:testing:account:stream/aws-lambda-fsm1'
+SECONDARY_STREAM_SOURCE = 'arn:partition:kinesis:testing:account:stream/aws-lambda-fsm2'
+
+PRIMARY_CHECKPOINT_SOURCE = None
+SECONDARY_CHECKPOINT_SOURCE = None
+
+PRIMARY_RETRY_SOURCE = 'arn:partition:kinesis:testing:account:stream/aws-lambda-fsm3'
+SECONDARY_RETRY_SOURCE = 'arn:partition:kinesis:testing:account:stream/aws-lambda-fsm4'
+
+PRIMARY_ENVIRONMENT_SOURCE = None
+SECONDARY_ENVIRONMENT_SOURCE = None
+
+AWS_CHAOS = {
+    PRIMARY_STREAM_SOURCE: {ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.25},
+    SECONDARY_STREAM_SOURCE: {ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.25},
+    PRIMARY_RETRY_SOURCE: {ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.25},
+    SECONDARY_RETRY_SOURCE: {ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.25},
+    PRIMARY_CACHE_SOURCE: {0: 0.25},
+    SECONDARY_CACHE_SOURCE: {0: 0.25},
+}
+
+ENDPOINTS = {
+    PRIMARY_CACHE_SOURCE: 'localhost:11211',
+    SECONDARY_CACHE_SOURCE: 'localhost:22122',
+    PRIMARY_STREAM_SOURCE: 'http://localhost:1111',
+    SECONDARY_STREAM_SOURCE: 'http://localhost:2222',
+    PRIMARY_RETRY_SOURCE: 'http://localhost:3333',
+    SECONDARY_RETRY_SOURCE: 'http://localhost:4444',
+}
