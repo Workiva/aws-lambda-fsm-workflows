@@ -40,6 +40,7 @@ from aws_lambda_fsm.constants import STREAM_DATA
 from aws_lambda_fsm.constants import AWS_DYNAMODB
 from aws_lambda_fsm.constants import AWS_KINESIS
 from aws_lambda_fsm.constants import AWS_CLOUDWATCH
+from aws_lambda_fsm.constants import AWS_ELASTICACHE
 from aws_lambda_fsm.constants import AWS_SQS
 from aws_lambda_fsm.constants import AWS
 from aws_lambda_fsm.constants import ENVIRONMENT
@@ -135,6 +136,100 @@ def get_arn_from_arn_string(arn):
         return Arn(None, None, None, None, None, None)
 
 
+def _get_elasticache_engine_and_endpoint(cache_arn):
+    """
+    Returns the cache engine and host:port used by the specified resource ARN.
+
+    :param cache_arn: an Elasticache resource ARN
+    :return: a tuple of either "redis" or "memcache", and "host:port"
+    """
+    arn = get_arn_from_arn_string(cache_arn)
+
+    # first lookup via settings.ENDPOINTS by service (backwards compatability)
+    #
+    # ENDPOINTS = {
+    #   'elasticache': {
+    #     'testing': 'host:9999'
+    #   }
+    # }
+    #
+    if AWS.ELASTICACHE in getattr(settings, 'ENDPOINTS', {}):
+        logger.warning('settings.ENDPOINTS is deprecated for Elasticache.')
+        return AWS_ELASTICACHE.ENGINE.MEMCACHED, settings.ENDPOINTS[AWS.ELASTICACHE].get(arn.region_name)
+
+    # next lookup via settings.ENDPOINTS by arn (backwards compatability)
+    #
+    # ENDPOINTS = {
+    #   'cache_arn': 'host:9999'
+    # }
+    #
+    if cache_arn in getattr(settings, 'ENDPOINTS', {}):
+        logger.warning('settings.ENDPOINTS is deprecated for Elasticache.')
+        return AWS_ELASTICACHE.ENGINE.MEMCACHED, settings.ENDPOINTS[cache_arn]
+
+    # next lookup via settings.ELASTICACHE_ENDPOINTS data
+    #
+    # ELASTICACHE_ENDPOINTS = {
+    #   'cache_arn': {
+    #     'Engine': 'redis',
+    #     'ConfigurationEndpoint': {
+    #       'Address': 'host',
+    #       'Port': 9999
+    #     }
+    #   }
+    # }
+    #
+    if cache_arn in getattr(settings, 'ELASTICACHE_ENDPOINTS', {}):
+        entry = settings.ELASTICACHE_ENDPOINTS.get(cache_arn, {})
+        engine = entry.get(AWS_ELASTICACHE.Engine)
+        cfg = entry.get(AWS_ELASTICACHE.ConfigurationEndpoint)
+        endpoint = \
+            cfg[AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Address] + \
+            ":" + \
+            str(cfg[AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Port])
+        return engine, endpoint
+
+    logger.warning('Consider using settings.ELASTICACHE_ENDPOINTS for endpoints.')
+
+    # since this makes an external call, which may be expensive, we don't bother
+    # locking like in other locations where _local is mutated. the url never changes
+    # so looking it up in a couple threads simultaneously does not harm. also
+    # aws lambda dispatch model doesn't appear to use multiple threads anyway.
+
+    attr = 'cache_details_for_' + cache_arn
+    if not getattr(_local, attr, None):
+        elasticache_connection = boto3.client('elasticache', region_name=arn.region_name)
+        return_value = _trace(
+            elasticache_connection.describe_cache_clusters,
+            CacheClusterId=arn.colon_resource()
+        )
+
+        # check that we were able to lookup the cache
+        if AWS_ELASTICACHE.CacheClusters not in return_value or \
+           len(return_value[AWS_ELASTICACHE.CacheClusters]) != 1:
+            logger.fatal("Cache ARN %s does not exist.", cache_arn)
+            return
+
+        cluster = return_value[AWS_ELASTICACHE.CacheClusters][0]
+
+        # check that the cluster is valid (ie. has discovery enabled)
+        if AWS_ELASTICACHE.Engine not in cluster or \
+           AWS_ELASTICACHE.ConfigurationEndpoint not in cluster:
+            logger.fatal("Cache ARN %s is not valid.", cache_arn)
+            return
+
+        engine = cluster[AWS_ELASTICACHE.Engine]
+        cfg = cluster[AWS_ELASTICACHE.ConfigurationEndpoint]
+        endpoint = \
+            cfg[AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Address] + \
+            ":" + \
+            str(cfg[AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Port])
+
+        setattr(_local, attr, (engine, endpoint))
+
+    return getattr(_local, attr)
+
+
 def _get_connection_info(service, region_name, resource_arn):
     """
     Returns the service, region_name and endpoint_url to use when creating
@@ -189,9 +284,22 @@ def _get_service_connection(resource_arn,
             # is specified, since the memcache library doesn't have all the default
             # logic used in the boto3 library
             if service == AWS.ELASTICACHE:
-                endpoint_url = endpoint_url.split(',')
-                import memcache
-                connection = memcache.Client(endpoint_url)
+
+                # if endpoint_url comes in here with a value, then it has come from
+                # settings.ENDPOINTS, and we need to support it for backwards compatability
+                engine = AWS_ELASTICACHE.ENGINE.MEMCACHED
+                if not endpoint_url:
+                    engine, endpoint_url = _get_elasticache_engine_and_endpoint(resource_arn)
+
+                if engine == AWS_ELASTICACHE.ENGINE.REDIS:
+                    import redis
+                    host, port = endpoint_url.split(':')
+                    connection = redis.StrictRedis(host=host, port=int(port), db=0)
+
+                elif engine == AWS_ELASTICACHE.ENGINE.MEMCACHED:
+                    import memcache
+                    # supports only a single cluster endpoint
+                    connection = memcache.Client([endpoint_url])
 
             # actual AWS services with boto3 APIs
             else:
@@ -354,6 +462,26 @@ def _set_message_dispatched_memcache(cache_arn, correlation_id, steps, retries):
     return return_value
 
 
+def _set_message_dispatched_redis(cache_arn, correlation_id, steps, retries):
+    """Sets a flag in redis"""
+    import redis
+
+    redis_conn = get_connection(cache_arn)
+    if not redis_conn:
+        return  # pragma: no cover
+
+    try:
+        cache_key = '%s-%s' % (correlation_id, steps)
+        cache_value = '%s-%s-%s' % (correlation_id, steps, retries)
+        return_value = redis_conn.set(cache_key, cache_value)
+        return return_value
+
+    except redis.exceptions.ConnectionError:
+        # memcache returns 0 on connectivity issues
+        logger.exception('')
+        return 0
+
+
 def _set_message_dispatched_dynamodb(table_arn, correlation_id, steps, retries):
     """Sets a flag in dynamodb"""
 
@@ -405,7 +533,13 @@ def set_message_dispatched(correlation_id, steps, retries, primary=True):
         logger.warning("No cache source for primary=%s" % primary)
 
     elif service == AWS.ELASTICACHE:
-        return _set_message_dispatched_memcache(source_arn, correlation_id, steps, retries)
+        engine, _ = _get_elasticache_engine_and_endpoint(source_arn)
+
+        if engine == AWS_ELASTICACHE.ENGINE.MEMCACHED:
+            return _set_message_dispatched_memcache(source_arn, correlation_id, steps, retries)
+
+        elif engine == AWS_ELASTICACHE.ENGINE.REDIS:
+            return _set_message_dispatched_redis(source_arn, correlation_id, steps, retries)
 
     elif service == AWS.DYNAMODB:
         return _set_message_dispatched_dynamodb(source_arn, correlation_id, steps, retries)
@@ -421,6 +555,25 @@ def _get_message_dispatched_memcache(cache_arn, correlation_id, steps):
     cache_key = '%s-%s' % (correlation_id, steps)
     return_value = memcache_conn.get(cache_key)
     return return_value
+
+
+def _get_message_dispatched_redis(cache_arn, correlation_id, steps):
+    """Gets a flag from memcache"""
+    import redis
+
+    redis_conn = get_connection(cache_arn)
+    if not redis_conn:
+        return False  # pragma: no cover
+
+    try:
+        cache_key = '%s-%s' % (correlation_id, steps)
+        return_value = redis_conn.get(cache_key)
+        return return_value
+
+    except redis.exceptions.ConnectionError:
+        # memcache returns None on connectivity issues
+        logger.exception('')
+        return None
 
 
 def _get_message_dispatched_dynamodb(table_arn, correlation_id, steps):
@@ -473,7 +626,13 @@ def get_message_dispatched(correlation_id, steps, primary=True):
         logger.warning("No cache source for primary=%s" % primary)
 
     elif service == AWS.ELASTICACHE:
-        return _get_message_dispatched_memcache(source_arn, correlation_id, steps)
+        engine, _ = _get_elasticache_engine_and_endpoint(source_arn)
+
+        if engine == AWS_ELASTICACHE.ENGINE.MEMCACHED:
+            return _get_message_dispatched_memcache(source_arn, correlation_id, steps)
+
+        elif engine == AWS_ELASTICACHE.ENGINE.REDIS:
+            return _get_message_dispatched_redis(source_arn, correlation_id, steps)
 
     elif service == AWS.DYNAMODB:
         return _get_message_dispatched_dynamodb(source_arn, correlation_id, steps)
@@ -508,19 +667,85 @@ def _acquire_lease_memcache(cache_arn, correlation_id, steps, retries):
         if (current_steps, current_retries) == (steps, retries):
             # this process has already acquired the lease, but we doubly
             # make sure nothing else has acquired it in the meantime
-            return memcache_conn.cas(memcache_key, new_lease_value)
+            return memcache_conn.cas(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_TIMEOUT)
 
         # the existing lease has expired, forcibly take it
         if timestamp > current_expires:
-            return memcache_conn.cas(memcache_key, new_lease_value)
+            return memcache_conn.cas(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_TIMEOUT)
 
-        # default fall-through is the to re-try to acquire the lease
+        # default fall-through is to re-try to acquire the lease
         return False
 
     else:
 
         # if there is no current lease, then get the lease
-        return memcache_conn.cas(memcache_key, new_lease_value)
+        return memcache_conn.cas(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_TIMEOUT)
+
+
+def _acquire_lease_redis(cache_arn, correlation_id, steps, retries):
+    """
+    Acquires a lease from redis.
+
+    # https://github.com/andymccurdy/redis-py
+    """
+    import redis
+
+    redis_conn = get_connection(cache_arn)
+    if not redis_conn:
+        return  # pragma: no cover
+
+    timestamp = int(time.time())
+    new_expires = timestamp + LEASE_DATA.LEASE_TIMEOUT
+    new_lease_value = '%d-%d-%d' % (steps, retries, new_expires)
+
+    with redis_conn.pipeline() as pipe:
+
+        try:
+            # get the current value of the lease (within a WATCH)
+            redis_key = LEASE_DATA.LEASE_KEY_PREFIX + correlation_id
+            pipe.watch(redis_key)
+            current_lease_value = pipe.get(redis_key)
+            pipe.multi()
+
+            if current_lease_value:
+
+                # split the current lease apart
+                current_steps, current_retries, current_expires = map(int, current_lease_value.split('-'))
+
+                # check if this process has already acquired the lease
+                if (current_steps, current_retries) == (steps, retries):
+                    # this process has already acquired the lease, but we doubly
+                    # make sure nothing else has acquired it in the meantime
+                    pipe.expire(redis_key, LEASE_DATA.LEASE_TIMEOUT)
+                    pipe.set(redis_key, new_lease_value)
+
+                # the existing lease has expired, forcibly take it
+                elif timestamp > current_expires:
+                    pipe.expire(redis_key, LEASE_DATA.LEASE_TIMEOUT)
+                    pipe.set(redis_key, new_lease_value)
+
+                # default fall-through is to re-try to acquire the lease
+                else:
+                    return False
+
+            else:
+
+                # if there is no current lease, then get the lease
+                pipe.expire(redis_key, LEASE_DATA.LEASE_TIMEOUT)
+                pipe.set(redis_key, new_lease_value)
+
+            # execute the transaction
+            pipe.execute()
+
+            # if we make it this far, we now own the lease
+            return True
+
+        except redis.WatchError:
+            return False
+
+        except redis.exceptions.ConnectionError:
+            logger.exception('')
+            return 0
 
 
 def _acquire_lease_dynamodb(table_arn, correlation_id, steps, retries):
@@ -616,7 +841,8 @@ def acquire_lease(correlation_id, steps, retries, primary=True):
     :param correlation_id: a str guid for the fsm
     :param steps: an integer corresponding to the step in the fsm execution
     :param retries: an integer corresponding to the number of retries in the fsm execution
-    :return: True if the lease was release and False otherwise
+    :return: True if the lease was acquired, False if the lease was not acquired and 0 if
+        there was some sort of systems/communication error.
     """
     if primary:
         source_arn = get_primary_cache_source()
@@ -629,7 +855,13 @@ def acquire_lease(correlation_id, steps, retries, primary=True):
         logger.warning("No cache source for primary=%s" % primary)
 
     elif service == AWS.ELASTICACHE:
-        return _acquire_lease_memcache(source_arn, correlation_id, steps, retries)
+        engine, _ = _get_elasticache_engine_and_endpoint(source_arn)
+
+        if engine == AWS_ELASTICACHE.ENGINE.MEMCACHED:
+            return _acquire_lease_memcache(source_arn, correlation_id, steps, retries)
+
+        elif engine == AWS_ELASTICACHE.ENGINE.REDIS:
+            return _acquire_lease_redis(source_arn, correlation_id, steps, retries)
 
     elif service == AWS.DYNAMODB:
         return _acquire_lease_dynamodb(source_arn, correlation_id, steps, retries)
@@ -657,7 +889,7 @@ def _release_lease_memcache(cache_arn, correlation_id, steps, retries):
         # to release it by setting the lease value to None sing cas, rather
         # than just client.delete, which can race.
         if (current_steps, current_retries) == (steps, retries):
-            return memcache_conn.cas(memcache_key, None)
+            return memcache_conn.cas(memcache_key, None, time=1)  # expire almost immediately
 
         # otherwise, something else owns the lease, so we can't release it
         else:
@@ -667,6 +899,61 @@ def _release_lease_memcache(cache_arn, correlation_id, steps, retries):
 
         # the lease is no longer owned by anyone
         return False
+
+
+def _release_lease_redis(cache_arn, correlation_id, steps, retries):
+    """
+    Releases a lease from redis.
+    """
+    import redis
+
+    redis_conn = get_connection(cache_arn)
+    if not redis_conn:
+        return  # pragma: no cover
+
+    with redis_conn.pipeline() as pipe:
+
+        try:
+
+            # get the current value of the lease (within a watch)
+            redis_key = LEASE_DATA.LEASE_KEY_PREFIX + correlation_id
+            pipe.watch(redis_key)
+            current_lease_value = pipe.get(redis_key)
+            pipe.multi()
+
+            # if there is already a lease holder, then we have a few options
+            if current_lease_value:
+
+                # split the current lease apart
+                current_steps, current_retries, current_time = map(int, current_lease_value.split('-'))
+
+                # check if this process still owns the lease, and then attempt
+                # to release it by deleting the key. unlike memcache, delete does
+                # not race
+                if (current_steps, current_retries) == (steps, retries):
+                    pipe.delete(redis_key)
+
+                # otherwise, something else owns the lease, so we can't release it
+                else:
+                    return False
+
+            else:
+
+                # the lease is no longer owned by anyone
+                return False
+
+            # execute the transaction
+            pipe.execute()
+
+            # if we make it this far, we have released the lease
+            return True
+
+        except redis.WatchError:
+            return False
+
+        except redis.exceptions.ConnectionError:
+            logger.exception('')
+            return 0
 
 
 def _release_lease_dynamodb(table_arn, correlation_id, steps, retries, fence_token):
@@ -752,7 +1039,8 @@ def release_lease(correlation_id, steps, retries, fence_token, primary=True):
     :param correlation_id: a str guid for the fsm
     :param steps: an integer corresponding to the step in the fsm execution
     :param retries: an integer corresponding to the number of retries in the fsm execution
-    :return: True if the lease was acquired and False otherwise
+    :return: True if the lease was released, False if the lease was not released and 0 if
+        there was some sort of systems/communication error.
     """
     if primary:
         source_arn = get_primary_cache_source()
@@ -765,7 +1053,13 @@ def release_lease(correlation_id, steps, retries, fence_token, primary=True):
         logger.warning("No cache source for primary=%s" % primary)
 
     elif service == AWS.ELASTICACHE:
-        return _release_lease_memcache(source_arn, correlation_id, steps, retries)
+        engine, _ = _get_elasticache_engine_and_endpoint(source_arn)
+
+        if engine == AWS_ELASTICACHE.ENGINE.MEMCACHED:
+            return _release_lease_memcache(source_arn, correlation_id, steps, retries)
+
+        elif engine == AWS_ELASTICACHE.ENGINE.REDIS:
+            return _release_lease_redis(source_arn, correlation_id, steps, retries)
 
     elif service == AWS.DYNAMODB:
         return _release_lease_dynamodb(source_arn, correlation_id, steps, retries, fence_token)
@@ -858,11 +1152,17 @@ def _get_sqs_queue_url(queue_arn):
     :param queue_arn: an SQS queue ARN like 'arn:partition:sqs:testing:account:aws-lambda-fsm'
     :return: a url like 'https://sqs.testing.amazonaws.com/account/aws-lambda-fsm'
     """
+    arn = get_arn_from_arn_string(queue_arn)
+
+    # first lookup via settings.SQS_URLS data
+    if queue_arn in getattr(settings, 'SQS_URLS', {}):
+        return settings.SQS_URLS.get(queue_arn, {}).get(AWS_SQS.QueueUrl)
+
+    logger.warning('Consider using settings.SQS_URLS for urls.')
+
     sqs_conn = get_connection(queue_arn)
     if not sqs_conn:
         return  # pragma: no cover
-
-    arn = get_arn_from_arn_string(queue_arn)
 
     # since this makes an external call, which may be expensive, we don't bother
     # locking like in other locations where _local is mutated. the url never changes
@@ -876,6 +1176,12 @@ def _get_sqs_queue_url(queue_arn):
             QueueName=arn.resource,
             QueueOwnerAWSAccountId=arn.account_id
         )
+
+        # check that we were able to lookup the queue
+        if AWS_SQS.QueueUrl not in return_value:
+            logger.fatal("Queue ARN %s does not exist.", queue_arn)
+            return
+
         setattr(_local, attr, return_value[AWS_SQS.QueueUrl])
 
     return getattr(_local, attr)
@@ -1612,6 +1918,72 @@ def _validate_config(key, data):
         logger.warning("PRIMARY_%s_SOURCE = SECONDARY_%s_SOURCE (failover not configured optimally).", key, key)
 
 
+def _validate_sqs_urls():
+    """
+    Validates settings.SQS_URLS is correctly formed
+
+    SQS_URLS = {
+      "queue_arn1": {
+        "QueueUrl": "https://address/queue1"
+      },
+      "queue_arn2": {
+        "QueueUrl": "https://address/queue2"
+      }
+    }
+
+    """
+    if hasattr(settings, 'SQS_URLS'):
+        for queue_arn, entry in settings.SQS_URLS.iteritems():
+            arn = get_arn_from_arn_string(queue_arn)
+            if arn.service != AWS.SQS:
+                logger.warning("SQS_URLS has invalid key '%s' (service)", queue_arn)
+            if AWS_SQS.QueueUrl not in entry:
+                logger.warning("SQS_URLS has invalid entry for key '%s' (url)", queue_arn)
+
+
+def _validate_elasticache_endpoints():
+    """
+    Validates settings.ELASTICACHE_ENDPOINTS is correctly formed
+
+    ELASTICACHE_ENDPOINTS = {
+      "cluster_arn1": {
+        "Engine": "memcache",
+        "ConfigurationEndpoint": {
+          "Address": "hostname",
+          "Port": 11211
+        }
+      },
+      "cluster_arn2": {
+        "Engine": "redis",
+        "ConfigurationEndpoint": {
+          "Address": "hostname",
+          "Port": 6379
+        }
+      }
+    }
+    """
+    if hasattr(settings, 'ELASTICACHE_ENDPOINTS'):
+        for cache_arn, entry in settings.ELASTICACHE_ENDPOINTS.iteritems():
+            arn = get_arn_from_arn_string(cache_arn)
+            if arn.service != AWS.ELASTICACHE:
+                logger.warning("ELASTICACHE_ENDPOINTS has invalid key '%s'", cache_arn)
+
+            if AWS_ELASTICACHE.Engine not in entry:
+                logger.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (engine)", cache_arn)
+            else:
+                if entry[AWS_ELASTICACHE.Engine] not in AWS_ELASTICACHE.ENGINE.ALL:
+                    logger.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (unknown engine)", cache_arn)
+
+            if AWS_ELASTICACHE.ConfigurationEndpoint not in entry:
+                logger.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (endpoint)", cache_arn)
+            else:
+                endpoint = entry.get(AWS_ELASTICACHE.ConfigurationEndpoint, {})
+                if AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Address not in endpoint:
+                    logger.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (address)", cache_arn)
+                if AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Port not in endpoint:
+                    logger.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (port)", cache_arn)
+
+
 def validate_config():
     """
     Validates the settings/config. Logs errors when problems are found.
@@ -1620,4 +1992,6 @@ def validate_config():
         if not getattr(_local, 'validated_config', None):
             for key, data in sorted(ALLOWED_MAPPING.items()):
                 _validate_config(key, data)
+            _validate_sqs_urls()
+            _validate_elasticache_endpoints()
         _local.validated_config = True

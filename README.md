@@ -31,6 +31,7 @@ A Python 2.7 framework for running Finite State Machine (FSM) Workflows on
 1. (Optionally) [AWS DynamoDB](https://aws.amazon.com/dynamodb/) for retries with backoff
 1. (Optionally) [AWS SQS](https://aws.amazon.com/sqs/) for retries with backoff
 1. (Optionally) [Memcache](https://aws.amazon.com/elasticache/) for idempotency
+1. (Optionally) [Redis](https://aws.amazon.com/elasticache/) for idempotency
 1. (Optionally) [AWS DynamoDB](https://aws.amazon.com/dynamodb/) for idempotency
 1. (Optionally) [AWS CloudWatch](https://aws.amazon.com/cloudwatch/) for error and failure monitoring
 

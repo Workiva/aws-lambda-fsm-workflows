@@ -143,7 +143,7 @@ class CACHE_DATA(object):
 
 
 class LEASE_DATA(object):
-    LEASE_TIMEOUT = 60
+    LEASE_TIMEOUT = 5 * 60
     KEY = 'ckey'
     STATE = 'state'
     FENCE = 'fence'
@@ -173,6 +173,24 @@ class AWS(object):
     GATEWAY = 'gateway'
     SQS = 'sqs'
     STEP_FUNCTION = 'step_function'
+
+
+class AWS_ELASTICACHE(object):
+
+    CacheClusters = 'CacheClusters'
+    Engine = 'Engine'
+    ConfigurationEndpoint = 'ConfigurationEndpoint'
+
+    class CONFIGURATION_ENDPOINT(object):
+
+        Address = 'Address'
+        Port = 'Port'
+
+    class ENGINE(object):
+
+        REDIS = 'redis'
+        MEMCACHED = 'memcached'
+        ALL = [REDIS, MEMCACHED]
 
 
 class AWS_ECS(object):
