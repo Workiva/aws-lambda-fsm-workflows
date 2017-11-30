@@ -221,6 +221,7 @@ class AWS_KINESIS(object):
     class RECORD(object):
         Data = 'Data'
         PartitionKey = 'PartitionKey'
+        SequenceNumber = 'SequenceNumber'
 
     AT_SEQUENCE_NUMBER = 'AT_SEQUENCE_NUMBER'
     ShardIterator = 'ShardIterator'

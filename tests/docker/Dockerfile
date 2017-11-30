@@ -16,14 +16,15 @@ FROM ubuntu:trusty
 
 # apt stuff
 RUN apt-get update
-RUN apt-get -y install python-pip nodejs npm software-properties-common python-software-properties supervisor memcached
+RUN apt-get -y install python-pip nodejs npm software-properties-common python-software-properties supervisor memcached redis-server
 RUN apt-add-repository ppa:brightbox/ruby-ng
 RUN apt-get update
 RUN apt-get -y install ruby2.4
 
 # aws fakes
 RUN gem install fake_sqs -v 0.4.3
-RUN npm install -g kinesalite@1.11.6
+# kinesalite@1.11.5 and above have a duplicate message bug. do not use.
+RUN npm install -g kinesalite@1.11.4
 RUN ln -s `which nodejs` /usr/bin/node
 
 COPY requirements.txt requirements.txt

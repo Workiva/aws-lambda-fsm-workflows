@@ -66,6 +66,15 @@ class Connection(object):
         self.called = True
         return 1
 
+    def pipeline(self):
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
 
 def _get_test_arn(service, resource='resourcetype/resourcename'):
     return ':'.join(
@@ -161,6 +170,13 @@ class TestAws(unittest.TestCase):
         connection = ChaosConnection('kinesis', connection, chaos={'kinesis': {'zap': 1.0}})
         connection.find_things()
         self.assertFalse(connection.called)
+
+    def test_chaos_redis_pipeline_context_manager(self):
+        connection = Connection()
+        connection = ChaosConnection('redis', connection, chaos={'redis': {'zap': 1.0}})
+        with connection.pipeline() as pipe:
+            ret = pipe.find_things()
+            self.assertEqual('zap', ret)
 
     ##################################################
     # Connection Functions

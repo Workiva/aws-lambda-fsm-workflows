@@ -88,6 +88,7 @@ class ChaosConnection(object):
 
     def __init__(self, resource_arn, connection, chaos=None):
         chaos = chaos or getattr(settings, 'AWS_CHAOS', {})
+        self.original_chaos = chaos
         self.resource_arn = resource_arn
         self.wrapped_connection = connection
         self.chaos = chaos.get(resource_arn, {})
@@ -97,11 +98,26 @@ class ChaosConnection(object):
     def __getattr__(self, attr):
         original_attr = getattr(self.wrapped_connection, attr)
         if self.chaos:
+            if attr == 'pipeline':
+                return ChaosConnection(self.resource_arn, original_attr, self.original_chaos)
             if callable(original_attr):
                 for exception_or_return, percentage in self.chaos.iteritems():
                     if random.uniform(0.0, 1.0) < percentage:
                         return ChaosFunction(exception_or_return, original_attr)
         return original_attr
+
+    def __call__(self, *args, **kwargs):
+        return_value = self.wrapped_connection(*args, **kwargs)
+        if return_value is not None:
+            return_value = ChaosConnection(self.resource_arn, return_value, self.original_chaos)
+        return return_value
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.wrapped_connection.__exit__(exc_type, exc_val, exc_tb)
+
+    def __enter__(self):
+        self.wrapped_connection.__enter__()
+        return self
 
 
 class Arn(namedtuple('Arn', ['arn', 'partition', 'service', 'region_name', 'account_id', 'resource'])):
@@ -189,8 +205,6 @@ def _get_elasticache_engine_and_endpoint(cache_arn):
             str(cfg[AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Port])
         return engine, endpoint
 
-    logger.warning('Consider using settings.ELASTICACHE_ENDPOINTS for endpoints.')
-
     # since this makes an external call, which may be expensive, we don't bother
     # locking like in other locations where _local is mutated. the url never changes
     # so looking it up in a couple threads simultaneously does not harm. also
@@ -198,6 +212,9 @@ def _get_elasticache_engine_and_endpoint(cache_arn):
 
     attr = 'cache_details_for_' + cache_arn
     if not getattr(_local, attr, None):
+
+        logger.warning('Consider using settings.ELASTICACHE_ENDPOINTS for endpoints.')
+
         elasticache_connection = boto3.client('elasticache', region_name=arn.region_name)
         return_value = _trace(
             elasticache_connection.describe_cache_clusters,
@@ -1158,8 +1175,6 @@ def _get_sqs_queue_url(queue_arn):
     if queue_arn in getattr(settings, 'SQS_URLS', {}):
         return settings.SQS_URLS.get(queue_arn, {}).get(AWS_SQS.QueueUrl)
 
-    logger.warning('Consider using settings.SQS_URLS for urls.')
-
     sqs_conn = get_connection(queue_arn)
     if not sqs_conn:
         return  # pragma: no cover
@@ -1171,6 +1186,9 @@ def _get_sqs_queue_url(queue_arn):
 
     attr = 'url_for_' + queue_arn
     if not getattr(_local, attr, None):
+
+        logger.warning('Consider using settings.SQS_URLS for urls.')
+
         return_value = _trace(
             sqs_conn.get_queue_url,
             QueueName=arn.resource,
