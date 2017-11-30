@@ -147,6 +147,7 @@ if args.run_kinesis_lambda:
         shard_its.append(shard_it)
 
 dynamodb_old_images = {}
+seen_seq_num = set()
 
 # now loop on the stream, pulling records and calling
 # the lambda handler with something approximating a lambda
@@ -178,6 +179,14 @@ while True:
 
                 # populate the lambda event
                 for record in out[AWS_KINESIS.Records]:
+
+                    seq_num = record[AWS_KINESIS.RECORD.SequenceNumber]
+                    if seq_num in seen_seq_num:
+                        # kinesalite has a bug in newer versions....
+                        logging.error("Skipping duplicate kinesis SequenceNumber (%s)...", seq_num)
+                        continue
+                    seen_seq_num.add(seq_num)
+
                     data = record[AWS_KINESIS.RECORD.Data]
                     tmp = {AWS_LAMBDA.KINESIS_RECORD.KINESIS: {AWS_LAMBDA.KINESIS_RECORD.DATA: base64.b64encode(data)}}
                     lambda_event[AWS_LAMBDA.Records].append(tmp)

@@ -143,7 +143,6 @@ while True:
                     TopicArn=dest_arn_string,
                     Message=json.dumps({"default": sqs_message[AWS_SQS.MESSAGE.Body]}),
                 )
-                logging.info(response)
 
         # echo to Kinesis
         elif dest_arn.service == AWS.KINESIS:
@@ -163,10 +162,9 @@ while True:
                 StreamName=dest_arn.slash_resource(),
                 Records=records
             )
-            logging.info(response)
 
         # after processing, the SQS messages need to be deleted
-        sqs_conn.delete_message_batch(
+        response = sqs_conn.delete_message_batch(
             QueueUrl=sqs_queue_url,
             Entries=[
                 {
@@ -177,6 +175,8 @@ while True:
             ]
         )
         backoff = 0
+
+        time.sleep(args.sleep_time)
 
     except Exception:
 
