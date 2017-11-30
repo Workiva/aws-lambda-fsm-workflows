@@ -195,7 +195,7 @@ class FSM(object):
                        max_retries=max_retries)
 
 
-def _run_once(f):
+def _run_once_sucessfully(f):
     """
     Decorator that uses a cache to flag an action as already executed, and check to
     ensure that it hasn't been executed before running (in the event of retries,
@@ -207,9 +207,9 @@ def _run_once(f):
 
         # abort if these message has already been processed and another event message
         # has already been emitted to drive the state machine forward
-        dispatched = \
-            get_message_dispatched(self.correlation_id, self.steps, primary=True) or \
-            get_message_dispatched(self.correlation_id, self.steps, primary=False)
+        primary = get_message_dispatched(self.correlation_id, self.steps, primary=True)
+        secondary = get_message_dispatched(self.correlation_id, self.steps, primary=False)
+        dispatched = primary or secondary
 
         if dispatched:
             self._queue_error(ERRORS.DUPLICATE, 'Message has been processed already (%s).' % dispatched)
@@ -219,9 +219,9 @@ def _run_once(f):
 
         # once the message is emitted, we want to make sure the current event is never sent again.
         # the approach here is to simply use a cache to set a key like "correlation_id-steps"
-        dispatched = \
-            set_message_dispatched(self.correlation_id, self.steps, self.retries, primary=True) and \
-            set_message_dispatched(self.correlation_id, self.steps, self.retries, primary=False)
+        primary = set_message_dispatched(self.correlation_id, self.steps, self.retries, primary=True)
+        secondary = set_message_dispatched(self.correlation_id, self.steps, self.retries, primary=False)
+        dispatched = primary and secondary  # 'and' is correct here. it just triggers an alarm.
 
         if not dispatched:
             self._queue_error(ERRORS.CACHE, 'Unable set message dispatched for idempotency.')
@@ -357,7 +357,7 @@ class Context(dict):
 
     # Protected helper methods
 
-    def _start_retries(self, retry_data, obj):
+    def _start_retries(self, retry_data, obj, recovering=False):
         """
         Saves the current payload, with modified retry information, to DynamoDB
         so that a query can pick up the items, and re-execute the payload at a
@@ -380,11 +380,15 @@ class Context(dict):
                     self,
                     time.time() + sleep,
                     serialized,
-                    primary=primary
+                    primary=primary,
+                    recovering=recovering
                 )
             except ClientError:
                 # log an error to at least expose the error
-                self._queue_error(ERRORS.ERROR, 'Unable to save last payload for retry.', exc_info=True)
+                self._queue_error(
+                    ERRORS.ERROR,
+                    'Unable to save last payload for retry (primary=%s).' % primary,
+                    exc_info=True)
 
     def _stop_retries(self, obj):
         """
@@ -408,7 +412,10 @@ class Context(dict):
                     # if deleting the entity fails, the entity will be picked up again
                     # and retried. however, the idempotency code will detect the message
                     # has been already executed, and nothing terrible will happen.
-                    self._queue_error(ERRORS.ERROR, 'Unable to terminate retries.', exc_info=True)
+                    self._queue_error(
+                        ERRORS.ERROR,
+                        'Unable to terminate retries (primary=%s).' % primary,
+                        exc_info=True)
 
     def _store_checkpoint(self, obj):
         """
@@ -436,14 +443,18 @@ class Context(dict):
                     # will be missing the more recent executed state. recovering may be
                     # complicated, especially since the last transition has been marked as
                     # successfully dispatched
-                    self._queue_error(ERRORS.ERROR, 'Unable to save last sent data.', exc_info=True)
+                    self._queue_error(
+                        ERRORS.ERROR,
+                        'Unable to save last sent data (primary=%s).' % primary,
+                        exc_info=True)
 
-    def _send_next_event_for_dispatch(self, serialized, obj):
+    def _send_next_event_for_dispatch(self, serialized, obj, recovering=False):
         """
         Send the next event for dispatch to the primary/secondary stream systems.
 
         :param serialized: a str serialized message.
         :param obj: a dict.
+        :param recovering: indicate this dispatch is in an error path
         """
         for primary in [True, False]:
             try:
@@ -452,11 +463,15 @@ class Context(dict):
                     serialized,
                     self.correlation_id,
                     delay=obj.get(OBJ.DELAY, 0),
-                    primary=primary
+                    primary=primary,
+                    recovering=recovering
                 )
             except ClientError:
-                self._queue_error(ERRORS.ERROR, 'Unable to send next event.', exc_info=True)
-                if not primary:
+                self._queue_error(
+                    ERRORS.ERROR,
+                    'Unable to send next event (primary=%s).' % primary,
+                    exc_info=True)
+                if not primary and recovering:
                     raise
 
     def _queue_error(self, error_name, message, exc_info=None):
@@ -491,7 +506,7 @@ class Context(dict):
     # START: dispatch logic
     ################################################################################
 
-    @_run_once
+    @_run_once_sucessfully
     def _dispatch_to_current_state(self, event, obj):
         """
         Dispatches the event to the current state, then send the next event
@@ -518,6 +533,16 @@ class Context(dict):
                 serialized,
                 obj
             )
+
+            # things are falling off the rails
+            if not sent:
+                self._queue_error(ERRORS.DISPATCH, 'System error during dispatch. Failover to retry stream.')
+                sent = self._send_next_event_for_dispatch(
+                    serialized,
+                    obj,
+                    recovering=True
+                )
+
             obj[OBJ.SENT] = sent
 
     def _dispatch(self, event, obj):
@@ -553,14 +578,21 @@ class Context(dict):
         # determine how many times this has been retried, and if it has been retried
         # too many times, then stop it permanently
         if retry_system_context[SYSTEM_CONTEXT.RETRIES] <= self.max_retries:
-            self._queue_error(ERRORS.RETRY, 'More retries allowed. Retrying.')
-            self._start_retries(retry_data, obj)
+            self._queue_error(ERRORS.RETRY, 'More retries allowed (retry=%d, max=%d). Retrying.' %
+                              (retry_system_context[SYSTEM_CONTEXT.RETRIES], self.max_retries))
+            retried = self._start_retries(retry_data, obj)
+
+            # things are falling off the rails
+            if not retried:
+                self._queue_error(ERRORS.RETRY, 'System error during retry. Failover to event stream.')
+                self._start_retries(retry_data, obj, recovering=True)
 
         # if there are no more retries available, simply log an error, then delete
         # the retry entity from dynamodb. it will take human intervention to recover things
         # at this point.
         else:
-            self._queue_error(ERRORS.FATAL, 'No more retries allowed. Terminating.')
+            self._queue_error(ERRORS.FATAL, 'No more retries allowed (retry=%d, max=%d). Terminating.' %
+                              (retry_system_context[SYSTEM_CONTEXT.RETRIES], self.max_retries))
             self._stop_retries(obj)
 
     def _dispatch_and_retry(self, event, obj):

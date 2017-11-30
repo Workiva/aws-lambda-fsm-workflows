@@ -66,10 +66,14 @@ class ChaosFunction(object):
     Used by ChaosConnection when a error is to be returned.
     """
 
-    def __init__(self, exception_or_return):
+    def __init__(self, exception_or_return, wrapped_function):
         self.exception_or_return = exception_or_return
+        self.wrapped_function = wrapped_function
 
     def __call__(self, *args, **kwargs):
+        # 50% of the time, actually call the function
+        if random.uniform(0.0, 1.0) < 0.5:
+            self.wrapped_function(*args, **kwargs)
         if isinstance(self.exception_or_return, Exception):
             raise self.exception_or_return
         else:
@@ -84,6 +88,7 @@ class ChaosConnection(object):
 
     def __init__(self, resource_arn, connection, chaos=None):
         chaos = chaos or getattr(settings, 'AWS_CHAOS', {})
+        self.original_chaos = chaos
         self.resource_arn = resource_arn
         self.wrapped_connection = connection
         self.chaos = chaos.get(resource_arn, {})
@@ -93,11 +98,26 @@ class ChaosConnection(object):
     def __getattr__(self, attr):
         original_attr = getattr(self.wrapped_connection, attr)
         if self.chaos:
+            if attr == 'pipeline':
+                return ChaosConnection(self.resource_arn, original_attr, self.original_chaos)
             if callable(original_attr):
                 for exception_or_return, percentage in self.chaos.iteritems():
                     if random.uniform(0.0, 1.0) < percentage:
-                        return ChaosFunction(exception_or_return)
+                        return ChaosFunction(exception_or_return, original_attr)
         return original_attr
+
+    def __call__(self, *args, **kwargs):
+        return_value = self.wrapped_connection(*args, **kwargs)
+        if return_value is not None:
+            return_value = ChaosConnection(self.resource_arn, return_value, self.original_chaos)
+        return return_value
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.wrapped_connection.__exit__(exc_type, exc_val, exc_tb)
+
+    def __enter__(self):
+        self.wrapped_connection.__enter__()
+        return self
 
 
 class Arn(namedtuple('Arn', ['arn', 'partition', 'service', 'region_name', 'account_id', 'resource'])):
@@ -185,8 +205,6 @@ def _get_elasticache_engine_and_endpoint(cache_arn):
             str(cfg[AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Port])
         return engine, endpoint
 
-    logger.warning('Consider using settings.ELASTICACHE_ENDPOINTS for endpoints.')
-
     # since this makes an external call, which may be expensive, we don't bother
     # locking like in other locations where _local is mutated. the url never changes
     # so looking it up in a couple threads simultaneously does not harm. also
@@ -194,6 +212,9 @@ def _get_elasticache_engine_and_endpoint(cache_arn):
 
     attr = 'cache_details_for_' + cache_arn
     if not getattr(_local, attr, None):
+
+        logger.warning('Consider using settings.ELASTICACHE_ENDPOINTS for endpoints.')
+
         elasticache_connection = boto3.client('elasticache', region_name=arn.region_name)
         return_value = _trace(
             elasticache_connection.describe_cache_clusters,
@@ -1154,8 +1175,6 @@ def _get_sqs_queue_url(queue_arn):
     if queue_arn in getattr(settings, 'SQS_URLS', {}):
         return settings.SQS_URLS.get(queue_arn, {}).get(AWS_SQS.QueueUrl)
 
-    logger.warning('Consider using settings.SQS_URLS for urls.')
-
     sqs_conn = get_connection(queue_arn)
     if not sqs_conn:
         return  # pragma: no cover
@@ -1167,6 +1186,9 @@ def _get_sqs_queue_url(queue_arn):
 
     attr = 'url_for_' + queue_arn
     if not getattr(_local, attr, None):
+
+        logger.warning('Consider using settings.SQS_URLS for urls.')
+
         return_value = _trace(
             sqs_conn.get_queue_url,
             QueueName=arn.resource,
@@ -1208,7 +1230,7 @@ def _send_next_event_for_dispatch_sqs(queue_arn, data, correlation_id, delay):
     return return_value
 
 
-def send_next_event_for_dispatch(context, data, correlation_id, delay=0, primary=True):
+def send_next_event_for_dispatch(context, data, correlation_id, delay=0, primary=True, recovering=False):
     """
     Sends an FSM event message onto Kinesis or DynamoDB or SNS.
 
@@ -1217,12 +1239,20 @@ def send_next_event_for_dispatch(context, data, correlation_id, delay=0, primary
     :param correlation_id: the guid for the fsm
     :param primary: if True, use the primary stream source, and if False
       use the secondary stream source
+    :param recovering: if True, use the primary retry source, and if False
+      use the secondary retry source
     :return: see above.
     """
     if primary:
-        source_arn = get_primary_stream_source()
+        if recovering:
+            source_arn = get_primary_retry_source()
+        else:
+            source_arn = get_primary_stream_source()
     else:
-        source_arn = get_secondary_stream_source()
+        if recovering:
+            source_arn = get_secondary_retry_source()
+        else:
+            source_arn = get_secondary_stream_source()
 
     service = get_arn_from_arn_string(source_arn).service
 
@@ -1657,7 +1687,7 @@ def _start_retries_sqs(queue_arn, correlation_id, run_at, payload):
     return return_value
 
 
-def start_retries(context, run_at, payload, primary=True):
+def start_retries(context, run_at, payload, primary=True, recovering=False):
     """
     Triggers retries for a state machine by sending a message to a "run_at"
     parameter designating when to run the retry.
@@ -1667,12 +1697,20 @@ def start_retries(context, run_at, payload, primary=True):
     :param payload: the retry payload (serialized fsm context)
     :param primary: if True, use the primary retries source, and if False
       use the retries environment source
+    :param recovering: if True, use the primary stream source, and if False
+      use the secondary stream source
     :return: see above.
     """
     if primary:
-        source_arn = get_primary_retry_source()
+        if recovering:
+            source_arn = get_primary_stream_source()
+        else:
+            source_arn = get_primary_retry_source()
     else:
-        source_arn = get_secondary_retry_source()
+        if recovering:
+            source_arn = get_secondary_stream_source()
+        else:
+            source_arn = get_secondary_retry_source()
 
     service = get_arn_from_arn_string(source_arn).service
 

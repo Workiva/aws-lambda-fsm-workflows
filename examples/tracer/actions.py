@@ -47,19 +47,20 @@ class IncrementAction(Action):
 
         # when done, emit a dynamodb record
         if context['count'] > 100:
-            table_arn = context['results_arn']
-            table_name = get_arn_from_arn_string(table_arn).slash_resource()
-            conn = get_connection(table_arn)
-            conn.put_item(
-                TableName=table_name,
-                Item={
-                    'correlation_id': {AWS_DYNAMODB.STRING: context.correlation_id},
-                    'count': {AWS_DYNAMODB.NUMBER: str(context['count'])},
-                    'started_at': {AWS_DYNAMODB.NUMBER: str(context['started_at'])},
-                    'finished_at': {AWS_DYNAMODB.NUMBER: str(int(time.time()))},
-                    'flag': {AWS_DYNAMODB.STRING: context.get('flag', 'Unknown')}
-                }
-            )
+            if 'results_arn' in context:
+                table_arn = context['results_arn']
+                table_name = get_arn_from_arn_string(table_arn).slash_resource()
+                conn = get_connection(table_arn)
+                conn.put_item(
+                    TableName=table_name,
+                    Item={
+                        'correlation_id': {AWS_DYNAMODB.STRING: context.correlation_id},
+                        'count': {AWS_DYNAMODB.NUMBER: str(context['count'])},
+                        'started_at': {AWS_DYNAMODB.NUMBER: str(context['started_at'])},
+                        'finished_at': {AWS_DYNAMODB.NUMBER: str(int(time.time()))},
+                        'flag': {AWS_DYNAMODB.STRING: context.get('flag', 'Unknown')}
+                    }
+                )
             return 'done'
 
         return 'event1'

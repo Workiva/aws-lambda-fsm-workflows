@@ -28,6 +28,7 @@ import random
 import BaseHTTPServer
 import json
 import sys
+import subprocess
 
 # library imports
 
@@ -62,6 +63,8 @@ parser.add_argument('--run_dynamodb_lambda', type=int, default=0)
 parser.add_argument('--run_timer_lambda', type=int, default=0)
 parser.add_argument('--run_sns_lambda', type=int, default=0)
 parser.add_argument('--random_seed', type=int, default=0)
+parser.add_argument('--lambda_command', help='command to run lambda code (eg. docker run -v ' +
+                                             '"$PWD":/var/task lambci/lambda:python2.7 main.lambda_handler)')
 args = parser.parse_args()
 
 random.seed(args.random_seed)
@@ -144,6 +147,7 @@ if args.run_kinesis_lambda:
         shard_its.append(shard_it)
 
 dynamodb_old_images = {}
+seen_seq_num = set()
 
 # now loop on the stream, pulling records and calling
 # the lambda handler with something approximating a lambda
@@ -175,12 +179,23 @@ while True:
 
                 # populate the lambda event
                 for record in out[AWS_KINESIS.Records]:
+
+                    seq_num = record[AWS_KINESIS.RECORD.SequenceNumber]
+                    if seq_num in seen_seq_num:
+                        # kinesalite has a bug in newer versions....
+                        logging.error("Skipping duplicate kinesis SequenceNumber (%s)...", seq_num)
+                        continue
+                    seen_seq_num.add(seq_num)
+
                     data = record[AWS_KINESIS.RECORD.Data]
                     tmp = {AWS_LAMBDA.KINESIS_RECORD.KINESIS: {AWS_LAMBDA.KINESIS_RECORD.DATA: base64.b64encode(data)}}
                     lambda_event[AWS_LAMBDA.Records].append(tmp)
 
                 # and call the handler with the records
-                lambda_kinesis_handler(lambda_event)
+                if args.lambda_command:
+                    subprocess.call(['/bin/bash', '-c', args.lambda_command + " '" + json.dumps(lambda_event) + "'"])
+                else:
+                    lambda_kinesis_handler(lambda_event)
 
     if args.run_sns_lambda and sns_server:
 
@@ -196,7 +211,11 @@ while True:
                     }
                 ]
             }
-            lambda_sns_handler(lambda_event)
+
+            if args.lambda_command:
+                subprocess.call(['/bin/bash', '-c', args.lambda_command + " '" + json.dumps(lambda_event) + "'"])
+            else:
+                lambda_sns_handler(lambda_event)
 
     if args.run_dynamodb_lambda and dynamodb_conn:
 
@@ -242,6 +261,10 @@ while True:
 
             # and call the handler with the records
             if lambda_event[AWS_LAMBDA.Records]:
-                lambda_dynamodb_handler(lambda_event)
+
+                if args.lambda_command:
+                    subprocess.call(['/bin/bash', '-c', args.lambda_command + " '" + json.dumps(lambda_event) + "'"])
+                else:
+                    lambda_dynamodb_handler(lambda_event)
 
     time.sleep(args.sleep_time)

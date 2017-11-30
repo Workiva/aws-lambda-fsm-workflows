@@ -19,8 +19,8 @@ SECONDARY_METRICS_SOURCE = None  # NOT SUPPORTED YET
 
 # used to dictate the primary location for caching
 # valid services = elasticache (memcache), dynamodb
-PRIMARY_CACHE_SOURCE = 'arn:partition:elasticache:testing:account:cluster:aws-lambda-fsm'
-SECONDARY_CACHE_SOURCE = None  # NOT SUPPORTED YET
+PRIMARY_CACHE_SOURCE = 'arn:partition:elasticache:testing:account:cluster:aws-lambda-fsm1'
+SECONDARY_CACHE_SOURCE = 'arn:partition:elasticache:testing:account:cluster:aws-lambda-fsm2'
 
 # used to dictate the primary location for event dispatch
 # valid services = kinesis, dynamodb, sns, sqs

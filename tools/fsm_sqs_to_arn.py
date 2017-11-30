@@ -54,6 +54,7 @@ parser.add_argument('--sqs_queue_arn', default='PRIMARY_STREAM_SOURCE')
 parser.add_argument('--dest_arn', default='SECONDARY_STREAM_SOURCE')
 parser.add_argument('--log_level', default='INFO')
 parser.add_argument('--boto_log_level', default='INFO')
+parser.add_argument('--sleep_time', type=float, default=0.2)
 args = parser.parse_args()
 
 logging.basicConfig(
@@ -99,8 +100,8 @@ logging.info('Dest ARN: %s', dest_arn_string)
 logging.info('Dest endpoint: %s', settings.ENDPOINTS.get(dest_arn.service))
 logging.info('Dest resource: %s', dest_arn.resource)
 
-wait = 5
 backoff = 0
+current = last = time.time()
 
 # this service will run forever, echoing messages from SQS
 # onto another Amazon service.
@@ -121,11 +122,15 @@ while True:
         # if no SQS messages were received, then we simply wait a little bit
         # and try again. we wait to avoid hitting the SQS endpoint too often.
         if not sqs_messages:
-            logging.info('No messages. Sleeping for %d seconds', wait)
-            time.sleep(wait)
+            current = time.time()
+            if current - last > 30.:
+                logging.info('No messages in last 30 seconds...')
+                last = current
+            time.sleep(args.sleep_time)
             continue
 
         # now echo them one at a time to SNS
+        last = current = time.time()
         logging.info('Echoing %d messages from %s to %s...',
                      len(sqs_messages),
                      sqs_arn_string,
@@ -138,7 +143,6 @@ while True:
                     TopicArn=dest_arn_string,
                     Message=json.dumps({"default": sqs_message[AWS_SQS.MESSAGE.Body]}),
                 )
-                logging.info(response)
 
         # echo to Kinesis
         elif dest_arn.service == AWS.KINESIS:
@@ -158,10 +162,9 @@ while True:
                 StreamName=dest_arn.slash_resource(),
                 Records=records
             )
-            logging.info(response)
 
         # after processing, the SQS messages need to be deleted
-        sqs_conn.delete_message_batch(
+        response = sqs_conn.delete_message_batch(
             QueueUrl=sqs_queue_url,
             Entries=[
                 {
@@ -172,6 +175,8 @@ while True:
             ]
         )
         backoff = 0
+
+        time.sleep(args.sleep_time)
 
     except Exception:
 

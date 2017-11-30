@@ -49,9 +49,10 @@ def _process_payload(payload_str, obj):
     :param obj: a dict to pass to fsm Context.dispatch(...)
     """
     payload = json.loads(payload_str)
-    logger.info('payload=%s', payload)
     obj[OBJ.PAYLOAD] = payload_str
     fsm = Context.from_payload_dict(payload)
+    logger.info('system_context=%s', fsm.system_context())
+    logger.info('user_context.keys()=%s', fsm.user_context().keys())
     current_event = fsm.system_context().get(SYSTEM_CONTEXT.CURRENT_EVENT, STATE.PSEUDO_INIT)
     fsm.dispatch(current_event, obj)
 
@@ -67,9 +68,10 @@ def _process_payload_step(payload_str, obj):
     :param obj: a dict to pass to fsm Context.dispatch(...)
     """
     payload = json.loads(payload_str)
-    logger.info('payload=%s', payload)
     obj[OBJ.PAYLOAD] = payload_str
     fsm = Context.from_payload_dict(payload)
+    logger.info('system_context=%s', fsm.system_context())
+    logger.info('user_context.keys()=%s', fsm.user_context().keys())
     current_event = fsm.system_context().get(SYSTEM_CONTEXT.CURRENT_EVENT, STATE.PSEUDO_INIT)
 
     # all retries etc. are handled by AWS Step Function infrastructure
