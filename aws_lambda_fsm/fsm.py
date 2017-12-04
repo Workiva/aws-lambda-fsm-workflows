@@ -680,8 +680,63 @@ class Context(dict):
                 self._retry(obj)
             else:
                 # lease acquired, execute the state transition
+
+                # NOTE: idempotency
+                #
+                # In the happy path, each state transition is associated with a
+                # correlation_id and a monotonically increasing step value. So,
+                # a typical machine executes with the following values for
+                # step, retry count, and fence token
+                #
+                # | correlation_id | steps | retries | fence |
+                # +----------------+-------+---------+-------+
+                # | abc123         | 0     | 0       | 1     |
+                # | abc123         | 1     | 0       | 2     |
+                # | abc123         | 2     | 0       | 3     |
+                # | abc123         | 3     | 0       | 4     |
+                #
+                # In the event of system or user-code error, the framework may
+                # retry a given step multiple times
+                #
+                # | correlation_id | steps | retries | fence |
+                # +----------------+-------+---------+-------+
+                # | abc123         | 0     | 0       | 1     |
+                # | abc123         | 1     | 0       | 2     |
+                # | abc123         | 1     | 1       | 3     | # retry
+                # | abc123         | 1     | 2       | 4     | # retry
+                # | abc123         | 2     | 0       | 5     |
+                # | abc123         | 3     | 0       | 6     |
+                #
+                # so user-code should ensure it is idempotent (details below).
+                #
+                # The most interesting case arises when the AWS Lambda function
+                # is re-executed with a duplicate message, poentially out-of-order.
+                # This can happen for any number of reasons, since AWS Lambda ensure
+                # at-least-once delivery of messages. In this case, one may see messages
+                # like the following
+                #
+                # | correlation_id | steps | retries | fence |
+                # +----------------+-------+---------+-------+
+                # | abc123         | 0     | 0       | 1     |
+                # | abc123         | 1     | 0       | 2     |
+                # | abc123         | 1     | 2       | 3     | # out-of-order retry
+                # | abc123         | 1     | 1       | 4     | # out-of-order retry
+                # | abc123         | 1     | 2       | 5     | # duplicate message
+                # | abc123         | 2     | 0       | 6     |
+                # | abc123         | 3     | 0       | 7     |
+                #
+                # User code can use (correlation_id, steps) as an idempotency token
+                # for any resource unique to a specific state machine, and
+                # (correlation_id, steps, fence) as an idempotency token for any
+                # global resource.
+                #
+                # In the latter case, the global storage/resource system needs to
+                # understand fence tokens.
+
+                # make the fence token available
                 if isinstance(fence_token, (int, long)):
                     obj[OBJ.FENCE_TOKEN] = fence_token
+
                 self._dispatch_and_retry(event, obj)
 
         finally:
