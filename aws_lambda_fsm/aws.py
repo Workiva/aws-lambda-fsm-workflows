@@ -1076,11 +1076,6 @@ def _release_lease_dynamodb(table_arn, correlation_id, steps, retries, fence_tok
             ':f': {AWS_DYNAMODB.NUMBER: str(fence_token)}
         }
 
-        print dynamodb_conn.get_item(
-            TableName=table_name,
-            Key=key
-        )
-
         _trace(
             dynamodb_conn.update_item,
             TableName=table_name,
@@ -2066,7 +2061,6 @@ def _validate_cache():
             'PRIMARY': get_primary_cache_source(),
             'SECONDARY': get_secondary_cache_source()
         }[key]
-        print key, source_arn
         if source_arn:
             arn = get_arn_from_arn_string(source_arn)
             if arn.service == AWS.ELASTICACHE:
