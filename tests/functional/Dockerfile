@@ -24,7 +24,7 @@ RUN apt-get -y install ruby2.4
 # aws fakes
 RUN gem install fake_sqs -v 0.4.3
 # kinesalite@1.11.5 and above have a duplicate message bug. do not use.
-RUN npm install -g kinesalite@1.11.4
+RUN npm install -g kinesalite@1.11.4 dynalite@1.2.0
 RUN ln -s `which nodejs` /usr/bin/node
 
 COPY requirements.txt requirements.txt
@@ -38,8 +38,8 @@ COPY examples examples
 COPY setup.py setup.py
 COPY fsm.yaml fsm.yaml
 
-COPY tests/docker/settings.py.docker settings.py
-COPY tests/docker/supervisor.conf /etc/supervisor/conf.d/supervisor.conf
+COPY tests/functional/settings.py.docker settings.py
+COPY tests/functional/supervisor.conf /etc/supervisor/conf.d/supervisor.conf
 
 ENV AWS_ACCESS_KEY_ID=abc123
 ENV AWS_SECRET_ACCESS_KEY=abc123

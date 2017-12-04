@@ -316,6 +316,11 @@ class Context(dict):
     def retries(self, retries):
         self.__system_context[SYSTEM_CONTEXT.RETRIES] = retries
 
+    # lease_primary indicates which cache system (primary or secondary) is used
+    # to store the lease for this machine's correlation_id. in failover, we want
+    # to continue to use the same system for the remainder of the machine's
+    # execution.
+
     @property
     def lease_primary(self):
         if SYSTEM_CONTEXT.LEASE_PRIMARY not in self.__system_context:
@@ -625,6 +630,33 @@ class Context(dict):
         Acquires an exclusive lease for the machine's correlation_id, and executes
         all the machinery of the framework and all the user code.
 
+        In Marting Kleppmann's blog entry "How to do distributed locking"
+        (http://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html) he points out
+        that the following code is broken (in a distributed system):
+
+            // THIS CODE IS BROKEN
+            function writeData(filename, data) {
+                var lock = lockService.acquireLock(filename);
+                if (!lock) {
+                    throw 'Failed to acquire lock';
+                }
+
+                try {
+                    var file = storage.readFile(filename);
+                    var updated = updateContents(file, data);
+                    storage.writeFile(filename, updated);
+                } finally {
+                    lock.release();
+                }
+            }
+
+        In order to fix it, a monotonically increasing "fence token" must be supplied by
+        the locking/leasing system and the storage system must be able to use the fence token
+        to detect late writes.
+
+        The framework makes the current fence token available in obj[OBJ.FENCE_TOKEN] so
+        that developers writing Action code can implement the above advice.
+
         :param event: a str event.
         :param obj: a dict.
         """
@@ -634,6 +666,8 @@ class Context(dict):
             # attempt to acquire the lease and execute the state transition
             fence_token = acquire_lease(self.correlation_id, self.steps, self.retries,
                                         primary=self.lease_primary)
+
+            # 0 indicates system error, False indicates lease acquisition failure
             if fence_token == 0:
                 self._queue_error(ERRORS.CACHE, 'System error acquiring primary=%s lease.' % self.lease_primary)
                 self.lease_primary = not self.lease_primary
@@ -646,6 +680,8 @@ class Context(dict):
                 self._retry(obj)
             else:
                 # lease acquired, execute the state transition
+                if isinstance(fence_token, (int, long)):
+                    obj[OBJ.FENCE_TOKEN] = fence_token
                 self._dispatch_and_retry(event, obj)
 
         finally:

@@ -32,6 +32,8 @@ class IncrementAction(Action):
     """
 
     def execute(self, context, obj):
+        logging.info('context: %s', context)
+
         # randomly raise an exception
         if random.uniform(0, 1.0) < 0.5:
             raise Exception()

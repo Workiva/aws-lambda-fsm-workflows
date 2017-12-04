@@ -20,7 +20,7 @@ machines:
 
   - name: start
     initial: true
-    do_action: tests.functional.actions.ReturnOK
+    do_action: tests.integration.actions.ReturnOK
     transitions:
     - target: end
       event: ok
@@ -34,7 +34,7 @@ machines:
 
   - name: start
     initial: true
-    do_action: tests.functional.actions.IncrementCounter
+    do_action: tests.integration.actions.IncrementCounter
     transitions:
     - target: start
       event: ok
