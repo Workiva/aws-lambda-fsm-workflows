@@ -641,6 +641,8 @@ class Context(dict):
                     throw 'Failed to acquire lock';
                 }
 
+                // GARBAGE COLLECTION
+
                 try {
                     var file = storage.readFile(filename);
                     var updated = updateContents(file, data);
@@ -649,6 +651,16 @@ class Context(dict):
                     lock.release();
                 }
             }
+
+        It is broken under the following circumstances:
+
+            time 0 - lease acquired by process 1
+            time 1 - huge garbage collection pause in process 1 at "// GARBAGE COLLECTION"
+            time 2 - lease expires
+            time 3 - lease acquired by process 2
+            time 4 - writeData executed in process 2
+            time 5 - garbage collection done in process 1
+            time 6 - writeData loses race in process 1
 
         In order to fix it, a monotonically increasing "fence token" must be supplied by
         the locking/leasing system and the storage system must be able to use the fence token
