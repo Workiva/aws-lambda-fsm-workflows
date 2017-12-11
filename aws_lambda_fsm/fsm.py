@@ -316,6 +316,11 @@ class Context(dict):
     def retries(self, retries):
         self.__system_context[SYSTEM_CONTEXT.RETRIES] = retries
 
+    # lease_primary indicates which cache system (primary or secondary) is used
+    # to store the lease for this machine's correlation_id. in failover, we want
+    # to continue to use the same system for the remainder of the machine's
+    # execution.
+
     @property
     def lease_primary(self):
         if SYSTEM_CONTEXT.LEASE_PRIMARY not in self.__system_context:
@@ -625,6 +630,45 @@ class Context(dict):
         Acquires an exclusive lease for the machine's correlation_id, and executes
         all the machinery of the framework and all the user code.
 
+        In Marting Kleppmann's blog entry "How to do distributed locking"
+        (http://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html) he points out
+        that the following code is broken (in a distributed system):
+
+            // THIS CODE IS BROKEN
+            function writeData(filename, data) {
+                var lock = lockService.acquireLock(filename);
+                if (!lock) {
+                    throw 'Failed to acquire lock';
+                }
+
+                // GARBAGE COLLECTION
+
+                try {
+                    var file = storage.readFile(filename);
+                    var updated = updateContents(file, data);
+                    storage.writeFile(filename, updated);
+                } finally {
+                    lock.release();
+                }
+            }
+
+        It is broken under the following circumstances:
+
+            time 0 - lease acquired by process 1
+            time 1 - huge garbage collection pause in process 1 at "// GARBAGE COLLECTION"
+            time 2 - lease expires
+            time 3 - lease acquired by process 2
+            time 4 - writeData executed in process 2
+            time 5 - garbage collection done in process 1
+            time 6 - writeData loses race in process 1
+
+        In order to fix it, a monotonically increasing "fence token" must be supplied by
+        the locking/leasing system and the storage system must be able to use the fence token
+        to detect late writes.
+
+        The framework makes the current fence token available in obj[OBJ.FENCE_TOKEN] so
+        that developers writing Action code can implement the above advice.
+
         :param event: a str event.
         :param obj: a dict.
         """
@@ -634,6 +678,8 @@ class Context(dict):
             # attempt to acquire the lease and execute the state transition
             fence_token = acquire_lease(self.correlation_id, self.steps, self.retries,
                                         primary=self.lease_primary)
+
+            # 0 indicates system error, False indicates lease acquisition failure
             if fence_token == 0:
                 self._queue_error(ERRORS.CACHE, 'System error acquiring primary=%s lease.' % self.lease_primary)
                 self.lease_primary = not self.lease_primary
@@ -646,6 +692,63 @@ class Context(dict):
                 self._retry(obj)
             else:
                 # lease acquired, execute the state transition
+
+                # NOTE: idempotency
+                #
+                # In the happy path, each state transition is associated with a
+                # correlation_id and a monotonically increasing step value. So,
+                # a typical machine executes with the following values for
+                # step, retry count, and fence token
+                #
+                # | correlation_id | steps | retries | fence |
+                # +----------------+-------+---------+-------+
+                # | abc123         | 0     | 0       | 1     |
+                # | abc123         | 1     | 0       | 2     |
+                # | abc123         | 2     | 0       | 3     |
+                # | abc123         | 3     | 0       | 4     |
+                #
+                # In the event of system or user-code error, the framework may
+                # retry a given step multiple times
+                #
+                # | correlation_id | steps | retries | fence |
+                # +----------------+-------+---------+-------+
+                # | abc123         | 0     | 0       | 1     |
+                # | abc123         | 1     | 0       | 2     |
+                # | abc123         | 1     | 1       | 3     | # retry
+                # | abc123         | 1     | 2       | 4     | # retry
+                # | abc123         | 2     | 0       | 5     |
+                # | abc123         | 3     | 0       | 6     |
+                #
+                # so user-code should ensure it is idempotent (details below).
+                #
+                # The most interesting case arises when the AWS Lambda function
+                # is re-executed with a duplicate message, poentially out-of-order.
+                # This can happen for any number of reasons, since AWS Lambda ensure
+                # at-least-once delivery of messages. In this case, one may see messages
+                # like the following
+                #
+                # | correlation_id | steps | retries | fence |
+                # +----------------+-------+---------+-------+
+                # | abc123         | 0     | 0       | 1     |
+                # | abc123         | 1     | 0       | 2     |
+                # | abc123         | 1     | 2       | 3     | # out-of-order retry
+                # | abc123         | 1     | 1       | 4     | # out-of-order retry
+                # | abc123         | 1     | 2       | 5     | # duplicate message
+                # | abc123         | 2     | 0       | 6     |
+                # | abc123         | 3     | 0       | 7     |
+                #
+                # User code can use (correlation_id, steps) as an idempotency token
+                # for any resource unique to a specific state machine, and
+                # (correlation_id, steps, fence) as an idempotency token for any
+                # global resource.
+                #
+                # In the latter case, the global storage/resource system needs to
+                # understand fence tokens.
+
+                # make the fence token available
+                if isinstance(fence_token, (int, long)):
+                    obj[OBJ.FENCE_TOKEN] = fence_token
+
                 self._dispatch_and_retry(event, obj)
 
         finally:

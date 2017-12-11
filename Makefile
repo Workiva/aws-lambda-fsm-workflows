@@ -28,11 +28,15 @@ build: clean
 
 coverage: clean check-config
 	echo ${COVER_PACKAGE}
-	nosetests --logging-level=ERROR --with-xunit --xunit-file=unit.xml --with-coverage ${COVER_PACKAGE} --cover-min-percentage=100
+	nosetests -a '!functional' --logging-level=ERROR --with-xunit --xunit-file=unit.xml --with-coverage ${COVER_PACKAGE} --cover-min-percentage=100
 
 test: clean check-config
 	echo ${COVER_PACKAGE}
-	nosetests --logging-level=ERROR --with-xunit --xunit-file=unit.xml
+	nosetests -a '!functional' --logging-level=ERROR --with-xunit --xunit-file=unit.xml
+
+functional: clean check-config
+	echo ${COVER_PACKAGE}
+	nosetests -a 'functional' --logging-level=ERROR --with-xunit --xunit-file=unit.xml
 
 flake8:
 	flake8 --max-line-length=120 --ignore=E000 --exclude=settingslocal.py .

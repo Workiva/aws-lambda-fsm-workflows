@@ -466,7 +466,8 @@ def increment_error_counters(data, dimensions):
     return return_value
 
 
-def _set_message_dispatched_memcache(cache_arn, correlation_id, steps, retries):
+def _set_message_dispatched_memcache(cache_arn, correlation_id, steps, retries,
+                                     timeout=CACHE_DATA.CACHE_CLEANUP_TIMEOUT):
     """Sets a flag in memcache"""
 
     memcache_conn = get_connection(cache_arn)
@@ -475,11 +476,12 @@ def _set_message_dispatched_memcache(cache_arn, correlation_id, steps, retries):
 
     cache_key = '%s-%s' % (correlation_id, steps)
     cache_value = '%s-%s-%s' % (correlation_id, steps, retries)
-    return_value = memcache_conn.set(cache_key, cache_value)
+    return_value = memcache_conn.set(cache_key, cache_value, time=timeout)
     return return_value
 
 
-def _set_message_dispatched_redis(cache_arn, correlation_id, steps, retries):
+def _set_message_dispatched_redis(cache_arn, correlation_id, steps, retries,
+                                  timeout=CACHE_DATA.CACHE_CLEANUP_TIMEOUT):
     """Sets a flag in redis"""
     import redis
 
@@ -490,7 +492,7 @@ def _set_message_dispatched_redis(cache_arn, correlation_id, steps, retries):
     try:
         cache_key = '%s-%s' % (correlation_id, steps)
         cache_value = '%s-%s-%s' % (correlation_id, steps, retries)
-        return_value = redis_conn.set(cache_key, cache_value)
+        return_value = redis_conn.setex(cache_key, timeout, cache_value)
         return return_value
 
     except redis.exceptions.ConnectionError:
@@ -499,7 +501,8 @@ def _set_message_dispatched_redis(cache_arn, correlation_id, steps, retries):
         return 0
 
 
-def _set_message_dispatched_dynamodb(table_arn, correlation_id, steps, retries):
+def _set_message_dispatched_dynamodb(table_arn, correlation_id, steps, retries,
+                                     timeout=CACHE_DATA.CACHE_CLEANUP_TIMEOUT):
     """Sets a flag in dynamodb"""
 
     dynamodb_conn = get_connection(table_arn)
@@ -511,7 +514,8 @@ def _set_message_dispatched_dynamodb(table_arn, correlation_id, steps, retries):
     cache_value = '%s-%s-%s' % (correlation_id, steps, retries)
     item = {
         CACHE_DATA.KEY: {AWS_DYNAMODB.STRING: cache_key},
-        CACHE_DATA.VALUE: {AWS_DYNAMODB.STRING: cache_value}
+        CACHE_DATA.VALUE: {AWS_DYNAMODB.STRING: cache_value},
+        CACHE_DATA.TIMEOUT: {AWS_DYNAMODB.NUMBER: str(int(time.time()) + timeout)}
     }
 
     # write the kinesis offset to dynamodb. this allows us to recover hung/incomplete fsms.
@@ -529,7 +533,7 @@ def _set_message_dispatched_dynamodb(table_arn, correlation_id, steps, retries):
         return 0
 
 
-def set_message_dispatched(correlation_id, steps, retries, primary=True):
+def set_message_dispatched(correlation_id, steps, retries, primary=True, timeout=CACHE_DATA.CACHE_CLEANUP_TIMEOUT):
     """
     Sets a flag in cache to indicate that a message has been dispatched.
     This is used by the framework to ensure that actions are not executed
@@ -537,6 +541,9 @@ def set_message_dispatched(correlation_id, steps, retries, primary=True):
 
     :param correlation_id: a str guid for the fsm
     :param steps: an integer corresponding to the step in the fsm execution
+    :param timeout: an integer representing the number of seconds-since-epoch a corresponding call
+        to get_message_dispatched should return True. We allow these entries to timeout to avoid
+        filling the cache with entries that will never be used again.
     :return: True if cached and False otherwise
     """
     if primary:
@@ -553,13 +560,13 @@ def set_message_dispatched(correlation_id, steps, retries, primary=True):
         engine, _ = _get_elasticache_engine_and_endpoint(source_arn)
 
         if engine == AWS_ELASTICACHE.ENGINE.MEMCACHED:
-            return _set_message_dispatched_memcache(source_arn, correlation_id, steps, retries)
+            return _set_message_dispatched_memcache(source_arn, correlation_id, steps, retries, timeout=timeout)
 
         elif engine == AWS_ELASTICACHE.ENGINE.REDIS:
-            return _set_message_dispatched_redis(source_arn, correlation_id, steps, retries)
+            return _set_message_dispatched_redis(source_arn, correlation_id, steps, retries, timeout=timeout)
 
     elif service == AWS.DYNAMODB:
-        return _set_message_dispatched_dynamodb(source_arn, correlation_id, steps, retries)
+        return _set_message_dispatched_dynamodb(source_arn, correlation_id, steps, retries, timeout=timeout)
 
 
 def _get_message_dispatched_memcache(cache_arn, correlation_id, steps):
@@ -614,9 +621,19 @@ def _get_message_dispatched_dynamodb(table_arn, correlation_id, steps):
             TableName=table_name,
             Key=key
         )
-        return return_value.get(AWS_DYNAMODB.Item, {}) \
-                           .get(CACHE_DATA.VALUE, {}) \
-                           .get(AWS_DYNAMODB.STRING, None)
+
+        # check if the dynamodb entry is expired
+        timeout = return_value.get(AWS_DYNAMODB.Item, {}) \
+                              .get(CACHE_DATA.TIMEOUT, {}) \
+                              .get(AWS_DYNAMODB.NUMBER, "0")
+        if int(timeout) < int(time.time()):
+            # expired
+            return None
+        else:
+            # not expired
+            return return_value.get(AWS_DYNAMODB.Item, {}) \
+                               .get(CACHE_DATA.VALUE, {}) \
+                               .get(AWS_DYNAMODB.STRING, None)
 
     except ClientError:
         # memcache returns None on connectivity issues
@@ -655,20 +672,34 @@ def get_message_dispatched(correlation_id, steps, primary=True):
         return _get_message_dispatched_dynamodb(source_arn, correlation_id, steps)
 
 
-def _acquire_lease_memcache(cache_arn, correlation_id, steps, retries):
+def _serialize_lease_value(steps, retries, expires, fence_token):
+    return '%d:%d:%d:%d' % (steps, retries, expires, fence_token)
+
+
+def _deserialize_lease_value(value):
+    return map(int, value.split(':'))
+
+
+def _acquire_lease_memcache(cache_arn, correlation_id, steps, retries, timeout=LEASE_DATA.LEASE_TIMEOUT):
     """
     Acquires a lease from memcache.
 
     # https://www.quora.com/What-is-the-best-way-to-implement-a-mutex-on-top-of-memcached
+    # http://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html
+
+    NOTE: This is memcached, which routinely ejects cache items, so this is clearly only
+        an _advisory_ lease.
     """
 
     memcache_conn = get_connection(cache_arn)
     if not memcache_conn:
         return  # pragma: no cover
 
+    # the timeout is stored in the value of the cached lease, rather than relying on
+    # memcache to eject expired leases. this allows us to use memcached to store an
+    # advisory fence token in the current value.
     timestamp = int(time.time())
-    new_expires = timestamp + LEASE_DATA.LEASE_TIMEOUT
-    new_lease_value = '%d-%d-%d' % (steps, retries, new_expires)
+    new_expires = timestamp + timeout
 
     # get the current value of the lease
     memcache_key = LEASE_DATA.LEASE_KEY_PREFIX + correlation_id
@@ -678,32 +709,40 @@ def _acquire_lease_memcache(cache_arn, correlation_id, steps, retries):
     if current_lease_value:
 
         # split the current lease apart
-        current_steps, current_retries, current_expires = map(int, current_lease_value.split('-'))
-
-        # check if this process has already acquired the lease
-        if (current_steps, current_retries) == (steps, retries):
-            # this process has already acquired the lease, but we doubly
-            # make sure nothing else has acquired it in the meantime
-            return memcache_conn.cas(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_TIMEOUT)
+        current_steps, current_retries, current_expires, current_fence_token = \
+            _deserialize_lease_value(current_lease_value)
 
         # the existing lease has expired, forcibly take it
         if timestamp > current_expires:
-            return memcache_conn.cas(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_TIMEOUT)
+            new_fence_token = current_fence_token + 1
+            new_lease_value = _serialize_lease_value(steps, retries, new_expires, new_fence_token)
+            success = memcache_conn.cas(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_CLEANUP_TIMEOUT)
+            return new_fence_token if success else success
 
         # default fall-through is to re-try to acquire the lease
         return False
 
     else:
 
-        # if there is no current lease, then get the lease
-        return memcache_conn.cas(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_TIMEOUT)
+        # if there is no current lease, then get the lease and initialize the fence token
+        new_fence_token = 1
+        new_lease_value = _serialize_lease_value(steps, retries, new_expires, new_fence_token)
+        success = memcache_conn.cas(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_CLEANUP_TIMEOUT)
+        return new_fence_token if success else success
 
 
-def _acquire_lease_redis(cache_arn, correlation_id, steps, retries):
+def _acquire_lease_redis(cache_arn, correlation_id, steps, retries, timeout=LEASE_DATA.LEASE_TIMEOUT):
     """
     Acquires a lease from redis.
 
     # https://github.com/andymccurdy/redis-py
+    # http://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html
+
+    "If you need locks only on a best-effort basis (as an efficiency optimization, not for correctness), I
+    would recommend sticking with the straightforward single-node locking algorithm for Redis
+    (conditional set-if-not-exists to obtain a lock, atomic delete-if-value-matches to release a lock),
+    and documenting very clearly in your code that the locks are only approximate and may occasionally
+    fail. Don't bother with setting up a cluster of five Redis nodes." - Martin Kleppmann
     """
     import redis
 
@@ -711,9 +750,11 @@ def _acquire_lease_redis(cache_arn, correlation_id, steps, retries):
     if not redis_conn:
         return  # pragma: no cover
 
+    # the timeout is stored in the value of the cached lease, rather than relying on
+    # redis to eject expired leases. this allows us to use redis to store an
+    # advisory fence token in the current value.
     timestamp = int(time.time())
-    new_expires = timestamp + LEASE_DATA.LEASE_TIMEOUT
-    new_lease_value = '%d-%d-%d' % (steps, retries, new_expires)
+    new_expires = timestamp + timeout
 
     with redis_conn.pipeline() as pipe:
 
@@ -727,19 +768,14 @@ def _acquire_lease_redis(cache_arn, correlation_id, steps, retries):
             if current_lease_value:
 
                 # split the current lease apart
-                current_steps, current_retries, current_expires = map(int, current_lease_value.split('-'))
-
-                # check if this process has already acquired the lease
-                if (current_steps, current_retries) == (steps, retries):
-                    # this process has already acquired the lease, but we doubly
-                    # make sure nothing else has acquired it in the meantime
-                    pipe.expire(redis_key, LEASE_DATA.LEASE_TIMEOUT)
-                    pipe.set(redis_key, new_lease_value)
+                current_steps, current_retries, current_expires, current_fence_token = \
+                    _deserialize_lease_value(current_lease_value)
 
                 # the existing lease has expired, forcibly take it
-                elif timestamp > current_expires:
-                    pipe.expire(redis_key, LEASE_DATA.LEASE_TIMEOUT)
-                    pipe.set(redis_key, new_lease_value)
+                if timestamp > current_expires:
+                    new_fence_token = current_fence_token + 1
+                    new_lease_value = _serialize_lease_value(steps, retries, new_expires, new_fence_token)
+                    pipe.setex(redis_key, LEASE_DATA.LEASE_CLEANUP_TIMEOUT, new_lease_value)
 
                 # default fall-through is to re-try to acquire the lease
                 else:
@@ -748,14 +784,15 @@ def _acquire_lease_redis(cache_arn, correlation_id, steps, retries):
             else:
 
                 # if there is no current lease, then get the lease
-                pipe.expire(redis_key, LEASE_DATA.LEASE_TIMEOUT)
-                pipe.set(redis_key, new_lease_value)
+                new_fence_token = 1
+                new_lease_value = _serialize_lease_value(steps, retries, new_expires, new_fence_token)
+                pipe.setex(redis_key, LEASE_DATA.LEASE_CLEANUP_TIMEOUT, new_lease_value)
 
             # execute the transaction
             pipe.execute()
 
             # if we make it this far, we now own the lease
-            return True
+            return new_fence_token
 
         except redis.WatchError:
             return False
@@ -765,7 +802,7 @@ def _acquire_lease_redis(cache_arn, correlation_id, steps, retries):
             return 0
 
 
-def _acquire_lease_dynamodb(table_arn, correlation_id, steps, retries):
+def _acquire_lease_dynamodb(table_arn, correlation_id, steps, retries, timeout=LEASE_DATA.LEASE_TIMEOUT):
     """
     Acquires a lease from DynamoDB.
 
@@ -776,7 +813,7 @@ def _acquire_lease_dynamodb(table_arn, correlation_id, steps, retries):
         return  # pragma: no cover
 
     timestamp = int(time.time())
-    expires = timestamp + LEASE_DATA.LEASE_TIMEOUT
+    expires = timestamp + timeout
 
     table_name = get_arn_from_arn_string(table_arn).slash_resource()
     key = {
@@ -789,11 +826,9 @@ def _acquire_lease_dynamodb(table_arn, correlation_id, steps, retries):
         # 1. entity doesn't exist yet, or
         # 2. the lease is currently 'open', or
         # 3. the lease has expired, or
-        # 4. this exact id,steps,retries task own the lease
         cexp = 'attribute_not_exists(lease_state) OR ' \
                'lease_state = :o OR ' \
-               'expires < :t OR ' \
-               '(lease_state = :l AND steps = :s AND retries = :r)'
+               'expires < :t'
 
         # the updates are:
         #
@@ -806,7 +841,7 @@ def _acquire_lease_dynamodb(table_arn, correlation_id, steps, retries):
                'expires = :e, ' \
                'lease_state = :l, ' \
                'steps = :s, ' \
-               'retries = :r'
+               'retries = :r' \
 
         expression_attribute_values = {
             # leased and open states
@@ -825,7 +860,7 @@ def _acquire_lease_dynamodb(table_arn, correlation_id, steps, retries):
 
             # set the owner parameters
             ':s': {AWS_DYNAMODB.NUMBER: str(steps)},
-            ':r': {AWS_DYNAMODB.NUMBER: str(retries)},
+            ':r': {AWS_DYNAMODB.NUMBER: str(retries)}
         }
 
         return_value = _trace(
@@ -839,25 +874,29 @@ def _acquire_lease_dynamodb(table_arn, correlation_id, steps, retries):
         )
 
         # the conditional update and atomic increment worked
-        return return_value[AWS_DYNAMODB.Attributes][LEASE_DATA.FENCE][AWS_DYNAMODB.NUMBER]
+        fence_token_str = return_value[AWS_DYNAMODB.Attributes][LEASE_DATA.FENCE][AWS_DYNAMODB.NUMBER]
+        return int(fence_token_str)
 
     except ClientError, e:
 
         # operating as expected for entity already existing
-        if e.response['Error']['Code'] != 'ConditionalCheckFailedException':
-            return False  # pragma: no cover
+        if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            return False
 
         logger.exception('')
         return 0
 
 
-def acquire_lease(correlation_id, steps, retries, primary=True):
+def acquire_lease(correlation_id, steps, retries, primary=True, timeout=LEASE_DATA.LEASE_TIMEOUT):
     """
     Acquires a lease from cache.
 
     :param correlation_id: a str guid for the fsm
     :param steps: an integer corresponding to the step in the fsm execution
     :param retries: an integer corresponding to the number of retries in the fsm execution
+    :param timeout: an integer representing the number of seconds-since-epoch the lease
+        should remain active. in the event of system error, we want to ensure an unreleased
+        lease should eventually be acquired by another process.
     :return: True if the lease was acquired, False if the lease was not acquired and 0 if
         there was some sort of systems/communication error.
     """
@@ -875,16 +914,16 @@ def acquire_lease(correlation_id, steps, retries, primary=True):
         engine, _ = _get_elasticache_engine_and_endpoint(source_arn)
 
         if engine == AWS_ELASTICACHE.ENGINE.MEMCACHED:
-            return _acquire_lease_memcache(source_arn, correlation_id, steps, retries)
+            return _acquire_lease_memcache(source_arn, correlation_id, steps, retries, timeout=timeout)
 
         elif engine == AWS_ELASTICACHE.ENGINE.REDIS:
-            return _acquire_lease_redis(source_arn, correlation_id, steps, retries)
+            return _acquire_lease_redis(source_arn, correlation_id, steps, retries, timeout=timeout)
 
     elif service == AWS.DYNAMODB:
-        return _acquire_lease_dynamodb(source_arn, correlation_id, steps, retries)
+        return _acquire_lease_dynamodb(source_arn, correlation_id, steps, retries, timeout=timeout)
 
 
-def _release_lease_memcache(cache_arn, correlation_id, steps, retries):
+def _release_lease_memcache(cache_arn, correlation_id, steps, retries, fence_token):
     """
     Releases a lease from memcache.
     """
@@ -900,13 +939,17 @@ def _release_lease_memcache(cache_arn, correlation_id, steps, retries):
     if current_lease_value:
 
         # split the current lease apart
-        current_steps, current_retries, current_time = map(int, current_lease_value.split('-'))
+        current_steps, current_retries, current_time, current_fence_token = \
+            _deserialize_lease_value(current_lease_value)
 
-        # check if this process still owns the lease, and then attempt
-        # to release it by setting the lease value to None sing cas, rather
-        # than just client.delete, which can race.
-        if (current_steps, current_retries) == (steps, retries):
-            return memcache_conn.cas(memcache_key, None, time=1)  # expire almost immediately
+        # release it by:
+        # 1. setting the lease value to "unowned" (steps/retries = -1)
+        # 2. setting it as expired (expires = 0) with cas, rather than just client.delete, which can race.
+        # 3. setting the fence token to the current value so it can be incremented later
+        if (current_steps, current_retries, current_fence_token) == (steps, retries, fence_token):
+            new_fence_token = fence_token
+            new_lease_value = _serialize_lease_value(-1, -1, 0, new_fence_token)
+            return memcache_conn.cas(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_CLEANUP_TIMEOUT)
 
         # otherwise, something else owns the lease, so we can't release it
         else:
@@ -918,7 +961,7 @@ def _release_lease_memcache(cache_arn, correlation_id, steps, retries):
         return False
 
 
-def _release_lease_redis(cache_arn, correlation_id, steps, retries):
+def _release_lease_redis(cache_arn, correlation_id, steps, retries, fence_token):
     """
     Releases a lease from redis.
     """
@@ -942,13 +985,17 @@ def _release_lease_redis(cache_arn, correlation_id, steps, retries):
             if current_lease_value:
 
                 # split the current lease apart
-                current_steps, current_retries, current_time = map(int, current_lease_value.split('-'))
+                current_steps, current_retries, current_time, current_fence_token = \
+                    _deserialize_lease_value(current_lease_value)
 
-                # check if this process still owns the lease, and then attempt
-                # to release it by deleting the key. unlike memcache, delete does
-                # not race
-                if (current_steps, current_retries) == (steps, retries):
-                    pipe.delete(redis_key)
+                # release it by:
+                # 1. setting the lease value to "unowned" (steps/retries = -1)
+                # 2. setting it as expired (expires = 0) with set
+                # 3. setting the fence token to the current value so it can be incremented later
+                if (current_steps, current_retries, current_fence_token) == (steps, retries, fence_token):
+                    new_fence_token = fence_token
+                    new_lease_value = _serialize_lease_value(-1, -1, 0, new_fence_token)
+                    pipe.setex(redis_key, LEASE_DATA.LEASE_CLEANUP_TIMEOUT, new_lease_value)
 
                 # otherwise, something else owns the lease, so we can't release it
                 else:
@@ -993,21 +1040,25 @@ def _release_lease_dynamodb(table_arn, correlation_id, steps, retries, fence_tok
         #
         # 1. the lease is currently 'leased', and
         # 2. steps matches, and
-        # 3. retries matches
+        # 3. retries matches, and
+        # 4. fence token matches
         cexp = 'lease_state = :l AND ' \
                'steps = :s AND ' \
-               'retries = :r'
+               'retries = :r AND ' \
+               'fence = :f'
 
         # the updates are:
         #
         # 1. lease state to 'open', and
         # 2. null steps, and
         # 3. null retries, and
-        # 4. null expires
+        # 4. null expires, and
+        # 5. fence token current
         uexp = 'SET lease_state = :o, ' \
                'steps = :null, ' \
                'retries = :null, ' \
-               'expires = :null'
+               'expires = :null, ' \
+               'fence = :f'
 
         expression_attribute_values = {
             # leased and open states
@@ -1020,11 +1071,10 @@ def _release_lease_dynamodb(table_arn, correlation_id, steps, retries, fence_tok
             # used for conditional expression
             ':s': {AWS_DYNAMODB.NUMBER: str(steps)},
             ':r': {AWS_DYNAMODB.NUMBER: str(retries)},
-        }
 
-        if fence_token:
-            cexp += ' AND fence = :f'
-            expression_attribute_values[':f'] = {AWS_DYNAMODB.NUMBER: fence_token}
+            # fence token
+            ':f': {AWS_DYNAMODB.NUMBER: str(fence_token)}
+        }
 
         _trace(
             dynamodb_conn.update_item,
@@ -1042,8 +1092,8 @@ def _release_lease_dynamodb(table_arn, correlation_id, steps, retries, fence_tok
     except ClientError, e:
 
         # operating as expected for entity already existing
-        if e.response['Error']['Code'] != 'ConditionalCheckFailedException':
-            return False  # pragma: no cover
+        if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            return False
 
         logger.exception('')
         return 0
@@ -1073,10 +1123,10 @@ def release_lease(correlation_id, steps, retries, fence_token, primary=True):
         engine, _ = _get_elasticache_engine_and_endpoint(source_arn)
 
         if engine == AWS_ELASTICACHE.ENGINE.MEMCACHED:
-            return _release_lease_memcache(source_arn, correlation_id, steps, retries)
+            return _release_lease_memcache(source_arn, correlation_id, steps, retries, fence_token)
 
         elif engine == AWS_ELASTICACHE.ENGINE.REDIS:
-            return _release_lease_redis(source_arn, correlation_id, steps, retries)
+            return _release_lease_redis(source_arn, correlation_id, steps, retries, fence_token)
 
     elif service == AWS.DYNAMODB:
         return _release_lease_dynamodb(source_arn, correlation_id, steps, retries, fence_token)
@@ -1873,15 +1923,15 @@ ALLOWED_MAPPING = {
         PRIMARY: get_primary_retry_source(),
         SECONDARY: get_secondary_retry_source(),
     },
-
-    # required and do not support failover
     'CACHE': {
         ALLOWED: ALLOWED_CACHE_SERVICES,
         REQUIRED: True,
-        FAILOVER: False,
+        FAILOVER: True,
         PRIMARY: get_primary_cache_source(),
         SECONDARY: get_secondary_cache_source(),
     },
+
+    # required and do not support failover
     'CHECKPOINT': {
         ALLOWED: ALLOWED_CHECKPOINT_SERVICES,
         REQUIRED: True,
@@ -2002,6 +2052,24 @@ def _validate_elasticache_endpoints():
                     logger.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (port)", cache_arn)
 
 
+def _validate_cache():
+    """
+    Validates the cache settings
+    """
+    def inner(key):
+        source_arn = {
+            'PRIMARY': get_primary_cache_source(),
+            'SECONDARY': get_secondary_cache_source()
+        }[key]
+        if source_arn:
+            arn = get_arn_from_arn_string(source_arn)
+            if arn.service == AWS.ELASTICACHE:
+                logger.warning("%s_CACHE_SOURCE supports only _advisory_ locks", key)
+
+    inner('PRIMARY')
+    inner('SECONDARY')
+
+
 def validate_config():
     """
     Validates the settings/config. Logs errors when problems are found.
@@ -2012,4 +2080,5 @@ def validate_config():
                 _validate_config(key, data)
             _validate_sqs_urls()
             _validate_elasticache_endpoints()
+            _validate_cache()
         _local.validated_config = True

@@ -20,8 +20,8 @@ import mock
 # application imports
 from aws_lambda_fsm.fsm import FSM
 from aws_lambda_fsm.config import get_current_configuration
-from tests.functional.utils import AWSStub
-from tests.functional.utils import BaseFunctionalTest
+from tests.integration.utils import AWSStub
+from tests.integration.utils import BaseFunctionalTest
 
 AWS = AWSStub()
 
@@ -39,7 +39,7 @@ class Test(BaseFunctionalTest):
 
     def setUp(self):
         AWS.reset()
-        FSM(get_current_configuration('tests/functional/fsm.yaml'))
+        FSM(get_current_configuration('tests/integration/fsm.yaml'))
 
     ################################################################################
     # START: machine_name="simple"

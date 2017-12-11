@@ -56,6 +56,7 @@ class OBJ(object):
     CONTEXT = 'context'
     SOURCE = 'source'
     DELAY = 'delay'
+    FENCE_TOKEN = 'fence_token'
 
 
 class ERRORS(object):
@@ -140,10 +141,13 @@ class ENVIRONMENT_DATA(object):
 class CACHE_DATA(object):
     KEY = 'ckey'
     VALUE = 'value'
+    TIMEOUT = 'timeout'
+    CACHE_CLEANUP_TIMEOUT = 24 * 60 * 60  # daily
 
 
 class LEASE_DATA(object):
     LEASE_TIMEOUT = 5 * 60
+    LEASE_CLEANUP_TIMEOUT = 24 * 60 * 60  # daily
     KEY = 'ckey'
     STATE = 'state'
     FENCE = 'fence'
