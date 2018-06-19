@@ -2003,7 +2003,8 @@ def _validate_config(key, data):
         log_once(logger.warning, "SECONDARY_%s_SOURCE is unset (failover not configured).", key)
 
     if failover and secondary and primary == secondary:
-        log_once(logger.warning, "PRIMARY_%s_SOURCE = SECONDARY_%s_SOURCE (failover not configured optimally).", key, key)
+        log_once(logger.warning,
+                 "PRIMARY_%s_SOURCE = SECONDARY_%s_SOURCE (failover not configured optimally).", key, key)
 
 
 def _validate_sqs_urls():
@@ -2060,14 +2061,16 @@ def _validate_elasticache_endpoints():
                 log_once(logger.warning, "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (engine)", cache_arn)
             else:
                 if entry[AWS_ELASTICACHE.Engine] not in AWS_ELASTICACHE.ENGINE.ALL:
-                    log_once(logger.warning, "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (unknown engine)", cache_arn)
+                    log_once(logger.warning,
+                             "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (unknown engine)", cache_arn)
 
             if AWS_ELASTICACHE.ConfigurationEndpoint not in entry:
                 log_once(logger.warning, "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (endpoint)", cache_arn)
             else:
                 endpoint = entry.get(AWS_ELASTICACHE.ConfigurationEndpoint, {})
                 if AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Address not in endpoint:
-                    log_once(logger.warning, "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (address)", cache_arn)
+                    log_once(logger.warning,
+                             "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (address)", cache_arn)
                 if AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Port not in endpoint:
                     log_once(logger.warning, "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (port)", cache_arn)
 
