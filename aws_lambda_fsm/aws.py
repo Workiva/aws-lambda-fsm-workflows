@@ -71,7 +71,7 @@ def log_once(method, *args, **kwargs):
     :param args: a list of args for the logger method
     :param kwargs: a dict of kwargs for the logger method
     """
-    key = "%s-%s-%s" % (method.__name__, args, kwargs)
+    key = "%s-%s-%s" % (getattr(method, '__name__', method), args, kwargs)
     with _loglock:
         if key not in ALREADY_LOGGED:
             method(*args, **kwargs)
