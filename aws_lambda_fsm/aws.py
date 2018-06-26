@@ -340,7 +340,7 @@ def _get_elasticache_engine_and_connection(cache_arn):
 
         # not found in any of the usual places
         if not engine or not connection:
-            logger.fatal("Cache ARN %s is not valid.", cache_arn)
+            log_once(logger.fatal, "Cache ARN %s is not valid.", cache_arn)
 
         setattr(_local, attr, (engine, connection))
 
@@ -448,7 +448,7 @@ def _get_redis_connection(cache_arn, entry):
                 connection = redis.StrictRedis(host=host, port=port, db=0, ssl=ssl, password=password)
 
             if not connection:
-                logger.fatal("Redis Cache ARN %s is not valid.", cache_arn)
+                log_once(logger.fatal, "Redis Cache ARN %s is not valid.", cache_arn)
 
             setattr(_local, attr, connection)
 
@@ -496,7 +496,7 @@ def _get_memcached_connection(cache_arn, entry):
                 connection = memcache.Client([endpoint_url])  # memcache library does not discover nodes
 
             if not connection:
-                logger.fatal("Memcached Cache ARN %s is not valid.", cache_arn)
+                log_once(logger.fatal, "Memcached Cache ARN %s is not valid.", cache_arn)
 
             setattr(_local, attr, connection)
 
