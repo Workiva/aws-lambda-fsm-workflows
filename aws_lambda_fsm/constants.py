@@ -182,10 +182,25 @@ class AWS(object):
 class AWS_ELASTICACHE(object):
 
     CacheClusters = 'CacheClusters'
+    ReplicationGroups = 'ReplicationGroups'
     Engine = 'Engine'
     ConfigurationEndpoint = 'ConfigurationEndpoint'
+    Endpoint = 'Endpoint'
+    PrimaryEndpoint = 'PrimaryEndpoint'
+    CacheClusterId = 'CacheClusterId'
+    ReplicationGroupId = 'ReplicationGroupId'
+    TransitEncryptionEnabled = 'TransitEncryptionEnabled'
+    AuthTokenEnabled = 'AuthTokenEnabled'
+    CacheNodes = 'CacheNodes'
+    NodeGroups = 'NodeGroups'
 
-    class CONFIGURATION_ENDPOINT(object):
+    class RESOURCE_TYPE:
+
+        CLUSTER = 'cluster'
+        SNAPSHOT = 'snapshot'
+        REPLICATION_GROUP = 'repgroup'
+
+    class ENDPOINT(object):
 
         Address = 'Address'
         Port = 'Port'

@@ -47,13 +47,13 @@ from aws_lambda_fsm.aws import _local
 from aws_lambda_fsm.aws import _get_service_connection
 from aws_lambda_fsm.aws import _get_connection_info
 from aws_lambda_fsm.aws import _get_sqs_queue_url
-from aws_lambda_fsm.aws import _get_elasticache_engine_and_endpoint
 from aws_lambda_fsm.aws import ChaosConnection
 from aws_lambda_fsm.aws import get_arn_from_arn_string
 from aws_lambda_fsm.aws import _validate_config
 from aws_lambda_fsm.aws import _validate_cache
 from aws_lambda_fsm.aws import _validate_sqs_urls
 from aws_lambda_fsm.aws import _validate_elasticache_endpoints
+from aws_lambda_fsm.aws import _get_elasticache_engine_and_connection
 from aws_lambda_fsm.aws import validate_config
 from aws_lambda_fsm.aws import acquire_lease
 from aws_lambda_fsm.aws import release_lease
@@ -85,20 +85,26 @@ def _get_test_arn(service, resource='resourcetype/resourcename'):
 
 ELASTICACHE_ENDPOINTS_REDIS = {
     _get_test_arn(AWS.ELASTICACHE): {
+        AWS_ELASTICACHE.CacheClusterId: "redis-cluster",
         AWS_ELASTICACHE.Engine: AWS_ELASTICACHE.ENGINE.REDIS,
-        AWS_ELASTICACHE.ConfigurationEndpoint: {
-            AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Address: "localhost",
-            AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Port: "12345",
-        }
+        AWS_ELASTICACHE.CacheNodes: [
+            {
+                AWS_ELASTICACHE.Endpoint: {
+                    AWS_ELASTICACHE.ENDPOINT.Address: "localhost",
+                    AWS_ELASTICACHE.ENDPOINT.Port: "12345",
+                }
+            }
+        ]
     }
 }
 
 ELASTICACHE_ENDPOINTS_MEMCACHE = {
     _get_test_arn(AWS.ELASTICACHE): {
+        AWS_ELASTICACHE.CacheClusterId: "memcached-cluster",
         AWS_ELASTICACHE.Engine: AWS_ELASTICACHE.ENGINE.MEMCACHED,
         AWS_ELASTICACHE.ConfigurationEndpoint: {
-            AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Address: "localhost",
-            AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Port: "54321",
+            AWS_ELASTICACHE.ENDPOINT.Address: "localhost",
+            AWS_ELASTICACHE.ENDPOINT.Port: "54321",
         }
     }
 }
@@ -212,54 +218,57 @@ class TestAws(unittest.TestCase):
         self.assertIsNone(arn.account_id)
         self.assertIsNone(arn.resource)
 
-    # _get_elasticache_engine_and_endpoint
+    # _get_elasticache_engine_and_connection
 
     @mock.patch('aws_lambda_fsm.aws.settings')
-    def test_get_elasticache_engine_and_endpoint_legacy_memcache1(self,
-                                                                  mock_settings):
+    def test_get_elasticache_engine_and_connection_legacy_memcache1(self,
+                                                                    mock_settings):
         mock_settings.ENDPOINTS = {
             'elasticache': {'testing': 'host:1111'}}
-        actual = _get_elasticache_engine_and_endpoint(_get_test_arn(AWS.ELASTICACHE))
+        actual = _get_elasticache_engine_and_connection(_get_test_arn(AWS.ELASTICACHE))
         expected = ('memcached', 'host:1111')
         self.assertEqual(expected, actual)
 
     @mock.patch('aws_lambda_fsm.aws.settings')
-    def test_get_elasticache_engine_and_endpoint_legacy_memcache2(self,
-                                                                  mock_settings):
+    def test_get_elasticache_engine_and_connection_legacy_memcache2(self,
+                                                                    mock_settings):
         mock_settings.ENDPOINTS = {
             _get_test_arn(AWS.ELASTICACHE): 'host:2222'}
-        actual = _get_elasticache_engine_and_endpoint(_get_test_arn(AWS.ELASTICACHE))
+        actual = _get_elasticache_engine_and_connection(_get_test_arn(AWS.ELASTICACHE))
         expected = ('memcached', 'host:2222')
         self.assertEqual(expected, actual)
 
     @mock.patch('aws_lambda_fsm.aws.settings')
-    def test_get_elasticache_engine_and_endpoint(self,
-                                                 mock_settings):
+    def test_get_elasticache_engine_and_connection(self,
+                                                   mock_settings):
         mock_settings.ENDPOINTS = {}
         mock_settings.ELASTICACHE_ENDPOINTS = ELASTICACHE_ENDPOINTS_REDIS
-        actual = _get_elasticache_engine_and_endpoint(_get_test_arn(AWS.ELASTICACHE))
+        actual = _get_elasticache_engine_and_connection(_get_test_arn(AWS.ELASTICACHE))
         expected = ('redis', 'localhost:12345')
         self.assertEqual(expected, actual)
 
     @mock.patch('aws_lambda_fsm.aws.settings')
     @mock.patch('aws_lambda_fsm.aws.boto3')
-    def test_get_elasticache_engine_and_endpoint_not_found(self,
-                                                           mock_boto3,
-                                                           mock_settings):
+    def test_get_elasticache_engine_and_connection_not_found(self,
+                                                             mock_boto3,
+                                                             mock_settings):
         setattr(_local, 'cache_details_for_' + _get_test_arn(AWS.ELASTICACHE), None)
         mock_boto3.client.return_value.describe_cache_clusters.return_value = {
             'CacheClusters': []
         }
+        mock_boto3.client.return_value.describe_replication_groups.return_value = {
+            'ReplicationGroups': []
+        }
         mock_settings.ENDPOINTS = {}
         mock_settings.ELASTICACHE_ENDPOINTS = {}
-        actual = _get_elasticache_engine_and_endpoint(_get_test_arn(AWS.ELASTICACHE))
-        self.assertIsNone(actual)
+        actual = _get_elasticache_engine_and_connection(_get_test_arn(AWS.ELASTICACHE))
+        self.assertEquals((None, None), actual)
 
     @mock.patch('aws_lambda_fsm.aws.settings')
     @mock.patch('aws_lambda_fsm.aws.boto3')
-    def test_get_elasticache_engine_and_endpoint_invalid(self,
-                                                         mock_boto3,
-                                                         mock_settings):
+    def test_get_elasticache_engine_and_connection_invalid(self,
+                                                           mock_boto3,
+                                                           mock_settings):
         setattr(_local, 'cache_details_for_' + _get_test_arn(AWS.ELASTICACHE), None)
         mock_boto3.client.return_value.describe_cache_clusters.return_value = {
             'CacheClusters': [{
@@ -270,16 +279,23 @@ class TestAws(unittest.TestCase):
                 }
             }]
         }
+        mock_boto3.client.return_value.describe_replication_groups.return_value = {
+            'ReplicationGroups': [{
+                'foobar': {
+                    'abc': '123'
+                }
+            }]
+        }
         mock_settings.ENDPOINTS = {}
         mock_settings.ELASTICACHE_ENDPOINTS = {}
-        actual = _get_elasticache_engine_and_endpoint(_get_test_arn(AWS.ELASTICACHE))
-        self.assertIsNone(actual)
+        actual = _get_elasticache_engine_and_connection(_get_test_arn(AWS.ELASTICACHE))
+        self.assertEquals(('memcached', None), actual)
 
     @mock.patch('aws_lambda_fsm.aws.settings')
     @mock.patch('aws_lambda_fsm.aws.boto3')
-    def test_get_elasticache_engine_and_endpoint_on_wire(self,
-                                                         mock_boto3,
-                                                         mock_settings):
+    def test_get_elasticache_engine_and_connection_on_wire(self,
+                                                           mock_boto3,
+                                                           mock_settings):
         setattr(_local, 'cache_details_for_' + _get_test_arn(AWS.ELASTICACHE), None)
         mock_boto3.client.return_value.describe_cache_clusters.return_value = {
             'CacheClusters': [{
@@ -292,7 +308,7 @@ class TestAws(unittest.TestCase):
         }
         mock_settings.ENDPOINTS = {}
         mock_settings.ELASTICACHE_ENDPOINTS = {}
-        actual = _get_elasticache_engine_and_endpoint(_get_test_arn(AWS.ELASTICACHE))
+        actual = _get_elasticache_engine_and_connection(_get_test_arn(AWS.ELASTICACHE))
         expected = ('memcached', 'foobar.cfg.cache.amazonaws.com:11211')
         self.assertEqual(expected, actual)
 
@@ -2134,8 +2150,8 @@ class ValidateConfigTest(unittest.TestCase):
             _get_test_arn(AWS.DYNAMODB): {
                 AWS_ELASTICACHE.Engine: AWS_ELASTICACHE.ENGINE.MEMCACHED,
                 AWS_ELASTICACHE.ConfigurationEndpoint: {
-                    AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Address: "host",
-                    AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Port: 1111,
+                    AWS_ELASTICACHE.ENDPOINT.Address: "host",
+                    AWS_ELASTICACHE.ENDPOINT.Port: 1111,
                 }
             }
         }
@@ -2155,8 +2171,8 @@ class ValidateConfigTest(unittest.TestCase):
             _get_test_arn(AWS.ELASTICACHE): {
                 'foo': AWS_ELASTICACHE.ENGINE.MEMCACHED,
                 AWS_ELASTICACHE.ConfigurationEndpoint: {
-                    AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Address: "host",
-                    AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Port: 1111,
+                    AWS_ELASTICACHE.ENDPOINT.Address: "host",
+                    AWS_ELASTICACHE.ENDPOINT.Port: 1111,
                 }
             }
         }
@@ -2176,8 +2192,8 @@ class ValidateConfigTest(unittest.TestCase):
             _get_test_arn(AWS.ELASTICACHE): {
                 AWS_ELASTICACHE.Engine: 'unknown',
                 AWS_ELASTICACHE.ConfigurationEndpoint: {
-                    AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Address: "host",
-                    AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Port: 1111,
+                    AWS_ELASTICACHE.ENDPOINT.Address: "host",
+                    AWS_ELASTICACHE.ENDPOINT.Port: 1111,
                 }
             }
         }
@@ -2197,8 +2213,8 @@ class ValidateConfigTest(unittest.TestCase):
             _get_test_arn(AWS.ELASTICACHE): {
                 AWS_ELASTICACHE.Engine: AWS_ELASTICACHE.ENGINE.MEMCACHED,
                 'foo': {
-                    AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Address: "host",
-                    AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Port: 1111,
+                    AWS_ELASTICACHE.ENDPOINT.Address: "host",
+                    AWS_ELASTICACHE.ENDPOINT.Port: 1111,
                 }
             }
         }
@@ -2241,8 +2257,8 @@ class ValidateConfigTest(unittest.TestCase):
             _get_test_arn(AWS.ELASTICACHE): {
                 AWS_ELASTICACHE.Engine: AWS_ELASTICACHE.ENGINE.MEMCACHED,
                 AWS_ELASTICACHE.ConfigurationEndpoint: {
-                    AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Address: "host",
-                    AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Port: 1111,
+                    AWS_ELASTICACHE.ENDPOINT.Address: "host",
+                    AWS_ELASTICACHE.ENDPOINT.Port: 1111,
                 }
             }
         }
