@@ -17,6 +17,7 @@ import unittest
 import copy
 import json
 
+
 # library imports
 import mock
 from botocore.exceptions import ClientError
