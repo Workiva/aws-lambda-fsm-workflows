@@ -55,12 +55,9 @@ class Object(object):
 
 
 _local = Object()
-<<<<<<< HEAD
-_lock = RLock()
 _loglock = RLock()
-=======
 _rlock = RLock()
->>>>>>> master
+
 
 TRACE = 5
 ALREADY_LOGGED = set()
