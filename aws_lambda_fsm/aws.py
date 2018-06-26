@@ -55,8 +55,12 @@ class Object(object):
 
 
 _local = Object()
+<<<<<<< HEAD
 _lock = RLock()
 _loglock = RLock()
+=======
+_rlock = RLock()
+>>>>>>> master
 
 TRACE = 5
 ALREADY_LOGGED = set()
@@ -149,10 +153,20 @@ class Arn(namedtuple('Arn', ['arn', 'partition', 'service', 'region_name', 'acco
             return None
         return self.resource.split('/')[-1]
 
+    def slash_resource_type(self):
+        if not self.resource:
+            return None
+        return self.resource.split('/')[0]
+
     def colon_resource(self):
         if not self.resource:
             return None
         return self.resource.split(':')[-1]
+
+    def colon_resource_type(self):
+        if not self.resource:
+            return None
+        return self.resource.split(':')[0]
 
 
 def get_arn_from_arn_string(arn):
@@ -172,12 +186,12 @@ def get_arn_from_arn_string(arn):
         return Arn(None, None, None, None, None, None)
 
 
-def _get_elasticache_engine_and_endpoint(cache_arn):
+def _get_elasticache_engine_and_connection(cache_arn):
     """
-    Returns the cache engine and host:port used by the specified resource ARN.
+    Returns a cache client suitable to for the specified resource ARN.
 
     :param cache_arn: an Elasticache resource ARN
-    :return: a tuple of either "redis" or "memcache", and "host:port"
+    :return: either a redis.StrictRedis or memcache.Client object
     """
     arn = get_arn_from_arn_string(cache_arn)
 
@@ -191,7 +205,15 @@ def _get_elasticache_engine_and_endpoint(cache_arn):
     #
     if AWS.ELASTICACHE in getattr(settings, 'ENDPOINTS', {}):
         log_once(logger.warning, 'settings.ENDPOINTS is deprecated for Elasticache.')
-        return AWS_ELASTICACHE.ENGINE.MEMCACHED, settings.ENDPOINTS[AWS.ELASTICACHE].get(arn.region_name)
+        hostport = settings.ENDPOINTS[AWS.ELASTICACHE].get(arn.region_name)
+        cfg = {
+            AWS_ELASTICACHE.CacheClusterId: 'unused',
+            AWS_ELASTICACHE.ConfigurationEndpoint: {
+                AWS_ELASTICACHE.ENDPOINT.Address: hostport.split(':')[0],
+                AWS_ELASTICACHE.ENDPOINT.Port: int(hostport.split(':')[1])
+            }
+        }
+        return AWS_ELASTICACHE.ENGINE.MEMCACHED, _get_memcached_connection(cache_arn, cfg)
 
     # next lookup via settings.ENDPOINTS by arn (backwards compatability)
     #
@@ -201,29 +223,74 @@ def _get_elasticache_engine_and_endpoint(cache_arn):
     #
     if cache_arn in getattr(settings, 'ENDPOINTS', {}):
         log_once(logger.warning, 'settings.ENDPOINTS is deprecated for Elasticache.')
-        return AWS_ELASTICACHE.ENGINE.MEMCACHED, settings.ENDPOINTS[cache_arn]
+        hostport = settings.ENDPOINTS[cache_arn]
+        cfg = {
+            AWS_ELASTICACHE.CacheClusterId: 'unused',
+            AWS_ELASTICACHE.ConfigurationEndpoint: {
+                AWS_ELASTICACHE.ENDPOINT.Address: hostport.split(':')[0],
+                AWS_ELASTICACHE.ENDPOINT.Port: int(hostport.split(':')[1])
+            }
+        }
+        return AWS_ELASTICACHE.ENGINE.MEMCACHED, _get_memcached_connection(cache_arn, cfg)
 
     # next lookup via settings.ELASTICACHE_ENDPOINTS data
     #
     # ELASTICACHE_ENDPOINTS = {
-    #   'cache_arn': {
-    #     'Engine': 'redis',
+    #
+    #   'memcached_cache_cluster_arn': {
+    #     'CacheClusterId': 'abc123',
+    #     'TransitEncryptionEnabled': False,
+    #     'AuthTokenEnabled': False,
+    #     'Engine': 'memcached',
     #     'ConfigurationEndpoint': {
     #       'Address': 'host',
     #       'Port': 9999
-    #     }
+    #     },  ...
+    #   },
+    #
+    #   'redis_cache_cluster_arn': {
+    #     'CacheClusterId': 'def456',
+    #     'TransitEncryptionEnabled': True,
+    #     'AuthTokenEnabled': True,
+    #     'Engine': 'redis',
+    #     'CacheNodes': [
+    #       {
+    #         'Endpoint': {
+    #           'Address': 'host',
+    #           'Port': 9999
+    #          }, ...
+    #       }, ...
+    #     }, ...
+    #   },
+    #
+    #   'redis_replication_group_arn': {
+    #     'ReplicationGroupId': 'ghi789',
+    #     'TransitEncryptionEnabled': True,
+    #     'AuthTokenEnabled': True,
+    #     'NodeGroups': [
+    #       {
+    #         'PrimaryEndpoint': {
+    #           'Address': 'host',
+    #           'Port': 9999
+    #         }, ...
+    #       }
+    #     ]
     #   }
-    # }
     #
     if cache_arn in getattr(settings, 'ELASTICACHE_ENDPOINTS', {}):
         entry = settings.ELASTICACHE_ENDPOINTS.get(cache_arn, {})
-        engine = entry.get(AWS_ELASTICACHE.Engine)
-        cfg = entry.get(AWS_ELASTICACHE.ConfigurationEndpoint)
-        endpoint = \
-            cfg[AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Address] + \
-            ":" + \
-            str(cfg[AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Port])
-        return engine, endpoint
+
+        # cache clusters
+        if AWS_ELASTICACHE.CacheClusterId in entry:
+            engine = entry.get(AWS_ELASTICACHE.Engine)
+            if engine == AWS_ELASTICACHE.ENGINE.MEMCACHED:
+                return AWS_ELASTICACHE.ENGINE.MEMCACHED, _get_memcached_connection(cache_arn, entry)
+            elif engine == AWS_ELASTICACHE.ENGINE.REDIS:
+                return AWS_ELASTICACHE.ENGINE.REDIS, _get_redis_connection(cache_arn, entry)
+
+        # replication groups
+        elif AWS_ELASTICACHE.ReplicationGroupId in entry:
+            return AWS_ELASTICACHE.ENGINE.REDIS, _get_redis_connection(cache_arn, entry)
 
     # since this makes an external call, which may be expensive, we don't bother
     # locking like in other locations where _local is mutated. the url never changes
@@ -236,33 +303,49 @@ def _get_elasticache_engine_and_endpoint(cache_arn):
         log_once(logger.warning, 'Consider using settings.ELASTICACHE_ENDPOINTS for endpoints.')
 
         elasticache_connection = boto3.client('elasticache', region_name=arn.region_name)
-        return_value = _trace(
-            elasticache_connection.describe_cache_clusters,
-            CacheClusterId=arn.colon_resource()
-        )
 
-        # check that we were able to lookup the cache
-        if AWS_ELASTICACHE.CacheClusters not in return_value or \
-           len(return_value[AWS_ELASTICACHE.CacheClusters]) != 1:
-            log_once(logger.fatal, "Cache ARN %s does not exist.", cache_arn)
-            return
+        engine = connection = None
 
-        cluster = return_value[AWS_ELASTICACHE.CacheClusters][0]
+        try:
+            # first look in cache clusters
+            return_value = _trace(
+                elasticache_connection.describe_cache_clusters,
+                CacheClusterId=arn.colon_resource(),
+                ShowCacheNodeInfo=True
+            )
 
-        # check that the cluster is valid (ie. has discovery enabled)
-        if AWS_ELASTICACHE.Engine not in cluster or \
-           AWS_ELASTICACHE.ConfigurationEndpoint not in cluster:
-            log_once(logger.fatal, "Cache ARN %s is not valid.", cache_arn)
-            return
+            cluster = return_value[AWS_ELASTICACHE.CacheClusters][0]
+            engine = cluster[AWS_ELASTICACHE.Engine]
+            if engine == AWS_ELASTICACHE.ENGINE.MEMCACHED:
+                connection = _get_memcached_connection(cache_arn, cluster)
+            elif engine == AWS_ELASTICACHE.ENGINE.REDIS:
+                connection = _get_redis_connection(cache_arn, cluster)
 
-        engine = cluster[AWS_ELASTICACHE.Engine]
-        cfg = cluster[AWS_ELASTICACHE.ConfigurationEndpoint]
-        endpoint = \
-            cfg[AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Address] + \
-            ":" + \
-            str(cfg[AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Port])
+        except ClientError:
+            engine = connection = None
 
-        setattr(_local, attr, (engine, endpoint))
+        if not engine or not connection:
+
+            try:
+
+                # otherwise look in the replication groups
+                return_value = _trace(
+                    elasticache_connection.describe_replication_groups,
+                    ReplicationGroupId=arn.colon_resource()
+                )
+
+                engine = AWS_ELASTICACHE.ENGINE.REDIS
+                group = return_value[AWS_ELASTICACHE.ReplicationGroups][0]
+                connection = _get_redis_connection(cache_arn, group)
+
+            except ClientError:
+                engine = connection = None
+
+        # not found in any of the usual places
+        if not engine or not connection:
+            logger.fatal("Cache ARN %s is not valid.", cache_arn)
+
+        setattr(_local, attr, (engine, connection))
 
     return getattr(_local, attr)
 
@@ -288,6 +371,162 @@ def _get_connection_info(service, region_name, resource_arn):
     return service, region_name, endpoint_url
 
 
+def _get_elasticache_password(cache_arn):
+    """
+    Returns a password to use for an Elasticache cluster or replication groupo
+    with AuthTokenEnabled=True.
+
+    :param cache_arn: an Elasticache resource ARN
+    :return: a password, or None
+    """
+    return getattr(settings, 'ELASTICACHE_PASSWORDS', {}).get(cache_arn)
+
+
+def _get_redis_connection(cache_arn, entry):
+    """
+    Returns a redis.StrictRedis connection to an Elasticache cluster
+    or replication group.
+
+    :param cache_arn: an Elasticache resource ARN
+    :param entry: a dict returned by describe_cache_cluster, describe_replication_group
+    :return: a redis.StrictRedis connection
+    """
+    #   {
+    #     'CacheClusterId': 'def456',
+    #     'TransitEncryptionEnabled': True,
+    #     'AuthTokenEnabled': True,
+    #     'Engine': 'redis',
+    #     'CacheNodes': [
+    #       {
+    #         'Endpoint': {
+    #           'Address': 'host',
+    #           'Port': 9999
+    #          }, ...
+    #       }, ...
+    #     }, ...
+    #   }
+    #
+    #   {
+    #     'ReplicationGroupId': 'ghi789',
+    #     'TransitEncryptionEnabled': True,
+    #     'AuthTokenEnabled': True,
+    #     'NodeGroups': [
+    #       {
+    #         'PrimaryEndpoint': {
+    #           'Address': 'host',
+    #           'Port': 9999
+    #         }, ...
+    #       }
+    #     ]
+    #   }
+    with _rlock:
+
+        attr = 'redis_connection_for_' + cache_arn
+        if not getattr(_local, attr, None):
+
+            connection = None
+
+            ssl = entry.get(AWS_ELASTICACHE.TransitEncryptionEnabled, False)
+            password = entry.get(AWS_ELASTICACHE.AuthTokenEnabled, False) and _get_elasticache_password(cache_arn)
+            host = port = None
+
+            if AWS_ELASTICACHE.CacheClusterId in entry:
+                cache_nodes = entry.get(AWS_ELASTICACHE.CacheNodes, [])
+                if len(cache_nodes) == 1:
+                    cache_node = cache_nodes[0]
+                    endpoint = cache_node.get(AWS_ELASTICACHE.Endpoint, {})
+                    host = endpoint.get(AWS_ELASTICACHE.ENDPOINT.Address)
+                    port = endpoint.get(AWS_ELASTICACHE.ENDPOINT.Port)
+
+            elif AWS_ELASTICACHE.ReplicationGroupId in entry:
+                node_groups = entry.get(AWS_ELASTICACHE.NodeGroups, [])
+                if len(node_groups) == 1:
+                    node_group = node_groups[0]
+                    endpoint = node_group.get(AWS_ELASTICACHE.PrimaryEndpoint, {})
+                    host = endpoint.get(AWS_ELASTICACHE.ENDPOINT.Address)
+                    port = endpoint.get(AWS_ELASTICACHE.ENDPOINT.Port)
+
+            if host and port:
+                import redis
+                connection = redis.StrictRedis(host=host, port=port, db=0, ssl=ssl, password=password)
+
+            if not connection:
+                logger.fatal("Redis Cache ARN %s is not valid.", cache_arn)
+
+            setattr(_local, attr, connection)
+
+        connection = getattr(_local, attr)
+        return connection
+
+
+def _get_memcached_connection(cache_arn, entry):
+    """
+    Returns a memcache.Client connection to an Elasticache cluster.
+
+    :param cache_arn: an Elasticache resource ARN
+    :param entry: a dict returned by describe_cache_cluster
+    :return: a memcache.Client connection
+    """
+
+    #   {
+    #     'CacheClusterId': 'abc123',
+    #     'TransitEncryptionEnabled': False,
+    #     'AuthTokenEnabled': False,
+    #     'Engine': 'memcached',
+    #     'ConfigurationEndpoint': {
+    #       'Address': 'host',
+    #       'Port': 9999
+    #     },
+    #     ...
+    #   }
+
+    with _rlock:
+
+        attr = 'memcached_connection_for_' + cache_arn
+        if not getattr(_local, attr, None):
+
+            connection = None
+            host = port = None
+
+            if AWS_ELASTICACHE.CacheClusterId in entry:
+                endpoint = entry.get(AWS_ELASTICACHE.ConfigurationEndpoint, {})
+                host = endpoint.get(AWS_ELASTICACHE.ENDPOINT.Address)
+                port = endpoint.get(AWS_ELASTICACHE.ENDPOINT.Port)
+
+            if host and port:
+                import memcache
+                endpoint_url = host + ":" + str(port)
+                connection = memcache.Client([endpoint_url])  # memcache library does not discover nodes
+
+            if not connection:
+                logger.fatal("Memcached Cache ARN %s is not valid.", cache_arn)
+
+            setattr(_local, attr, connection)
+
+        connection = getattr(_local, attr)
+        return connection
+
+
+def _get_elasticache_connection(cache_arn, endpoint_url):
+
+    # if endpoint_url comes in here with a value, then it has come from
+    # settings.ENDPOINTS, and we need to support it for backwards compatability
+    if endpoint_url:
+        entry = {
+            AWS_ELASTICACHE.CacheClusterId: 'unused',
+            AWS_ELASTICACHE.ConfigurationEndpoint: {
+                AWS_ELASTICACHE.ENDPOINT.Address: endpoint_url.split(':')[0],
+                AWS_ELASTICACHE.ENDPOINT.Port: int(endpoint_url.split(':')[1])
+            }
+        }
+        connection = _get_memcached_connection(cache_arn, entry)
+
+    else:
+        _, connection = _get_elasticache_engine_and_connection(cache_arn)
+
+    return connection
+
+
 def _get_service_connection(resource_arn,
                             connect_timeout=DEFAULT_TIMEOUT,
                             read_timeout=DEFAULT_TIMEOUT,
@@ -304,7 +543,7 @@ def _get_service_connection(resource_arn,
     :return: a boto3 connection
     """
     arn = get_arn_from_arn_string(resource_arn)
-    with _lock:
+    with _rlock:
 
         # the local var is the resource arn to accommodate multiple sources in the same region
         attr = 'connection_to_' + resource_arn
@@ -321,22 +560,7 @@ def _get_service_connection(resource_arn,
             # is specified, since the memcache library doesn't have all the default
             # logic used in the boto3 library
             if service == AWS.ELASTICACHE:
-
-                # if endpoint_url comes in here with a value, then it has come from
-                # settings.ENDPOINTS, and we need to support it for backwards compatability
-                engine = AWS_ELASTICACHE.ENGINE.MEMCACHED
-                if not endpoint_url:
-                    engine, endpoint_url = _get_elasticache_engine_and_endpoint(resource_arn)
-
-                if engine == AWS_ELASTICACHE.ENGINE.REDIS:
-                    import redis
-                    host, port = endpoint_url.split(':')
-                    connection = redis.StrictRedis(host=host, port=int(port), db=0)
-
-                elif engine == AWS_ELASTICACHE.ENGINE.MEMCACHED:
-                    import memcache
-                    # supports only a single cluster endpoint
-                    connection = memcache.Client([endpoint_url])
+                connection = _get_elasticache_connection(resource_arn, endpoint_url)
 
             # actual AWS services with boto3 APIs
             else:
@@ -577,7 +801,7 @@ def set_message_dispatched(correlation_id, steps, retries, primary=True, timeout
         log_once(logger.warning, "No cache source for primary=%s" % primary)
 
     elif service == AWS.ELASTICACHE:
-        engine, _ = _get_elasticache_engine_and_endpoint(source_arn)
+        engine, _ = _get_elasticache_engine_and_connection(source_arn)
 
         if engine == AWS_ELASTICACHE.ENGINE.MEMCACHED:
             return _set_message_dispatched_memcache(source_arn, correlation_id, steps, retries, timeout=timeout)
@@ -680,7 +904,7 @@ def get_message_dispatched(correlation_id, steps, primary=True):
         log_once(logger.warning, "No cache source for primary=%s" % primary)
 
     elif service == AWS.ELASTICACHE:
-        engine, _ = _get_elasticache_engine_and_endpoint(source_arn)
+        engine, _ = _get_elasticache_engine_and_connection(source_arn)
 
         if engine == AWS_ELASTICACHE.ENGINE.MEMCACHED:
             return _get_message_dispatched_memcache(source_arn, correlation_id, steps)
@@ -931,7 +1155,7 @@ def acquire_lease(correlation_id, steps, retries, primary=True, timeout=LEASE_DA
         log_once(logger.warning, "No cache source for primary=%s" % primary)
 
     elif service == AWS.ELASTICACHE:
-        engine, _ = _get_elasticache_engine_and_endpoint(source_arn)
+        engine, _ = _get_elasticache_engine_and_connection(source_arn)
 
         if engine == AWS_ELASTICACHE.ENGINE.MEMCACHED:
             return _acquire_lease_memcache(source_arn, correlation_id, steps, retries, timeout=timeout)
@@ -1140,7 +1364,7 @@ def release_lease(correlation_id, steps, retries, fence_token, primary=True):
         log_once(logger.warning, "No cache source for primary=%s" % primary)
 
     elif service == AWS.ELASTICACHE:
-        engine, _ = _get_elasticache_engine_and_endpoint(source_arn)
+        engine, _ = _get_elasticache_engine_and_connection(source_arn)
 
         if engine == AWS_ELASTICACHE.ENGINE.MEMCACHED:
             return _release_lease_memcache(source_arn, correlation_id, steps, retries, fence_token)
@@ -1268,9 +1492,10 @@ def _get_sqs_queue_url(queue_arn):
         # check that we were able to lookup the queue
         if AWS_SQS.QueueUrl not in return_value:
             log_once(logger.fatal, "Queue ARN %s does not exist.", queue_arn)
-            return
 
-        setattr(_local, attr, return_value[AWS_SQS.QueueUrl])
+        url = return_value.get(AWS_SQS.QueueUrl)
+
+        setattr(_local, attr, url)
 
     return getattr(_local, attr)
 
@@ -2068,11 +2293,12 @@ def _validate_elasticache_endpoints():
                 log_once(logger.warning, "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (endpoint)", cache_arn)
             else:
                 endpoint = entry.get(AWS_ELASTICACHE.ConfigurationEndpoint, {})
-                if AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Address not in endpoint:
+                if AWS_ELASTICACHE.ENDPOINT.Address not in endpoint:
                     log_once(logger.warning,
                              "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (address)", cache_arn)
-                if AWS_ELASTICACHE.CONFIGURATION_ENDPOINT.Port not in endpoint:
-                    log_once(logger.warning, "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (port)", cache_arn)
+                if AWS_ELASTICACHE.ENDPOINT.Port not in endpoint:
+                    log_once(logger.warning,
+                             "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (port)", cache_arn)
 
 
 def _validate_cache():
@@ -2097,7 +2323,7 @@ def validate_config():
     """
     Validates the settings/config. Logs errors when problems are found.
     """
-    with _lock:
+    with _rlock:
         if not getattr(_local, 'validated_config', None):
             for key, data in sorted(ALLOWED_MAPPING.items()):
                 _validate_config(key, data)

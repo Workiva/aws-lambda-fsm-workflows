@@ -37,6 +37,7 @@ ENDPOINTS = {
 }
 ELASTICACHE_ENDPOINTS = {
     MEMCACHED_CACHE_SOURCE: {
+        'CacheClusterId': 'memcached-cluster',
         'Engine': 'memcached',
         'ConfigurationEndpoint': {
             'Address': 'localhost',
@@ -44,11 +45,16 @@ ELASTICACHE_ENDPOINTS = {
         }
     },
     REDIS_CACHE_SOURCE: {
+        'CacheClusterId': 'redis-cluster',
         'Engine': 'redis',
-        'ConfigurationEndpoint': {
-            'Address': 'localhost',
-            'Port': 6379
-        }
+        'CacheNodes': [
+            {
+                'Endpoint': {
+                    'Address': 'localhost',
+                    'Port': 6379
+                }
+            }
+        ]
     }
 }
 
