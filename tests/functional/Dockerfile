@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM ubuntu:trusty
+FROM ubuntu:xenial
 
 # apt stuff
 RUN apt-get update
@@ -24,7 +24,7 @@ RUN apt-get -y install ruby2.4
 # aws fakes
 RUN gem install fake_sqs -v 0.4.3
 # kinesalite@1.11.5 and above have a duplicate message bug. do not use.
-RUN npm install -g kinesalite@1.11.4 dynalite@1.2.0
+RUN npm install -g kinesalite@1.14.0 dynalite@1.3.1
 RUN ln -s `which nodejs` /usr/bin/node
 
 COPY requirements.txt requirements.txt

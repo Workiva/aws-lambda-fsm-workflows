@@ -50,6 +50,9 @@ SQS_URLS = {}
 # going on the wire for data that never changes
 ELASTICACHE_ENDPOINTS = {}
 
+# stores Elasticache arn->password mappings
+ELASTICACHE_PASSWORDS = {}
+
 AWS_CHAOS = {}
 ENDPOINTS = {}
 
