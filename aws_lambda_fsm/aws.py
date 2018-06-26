@@ -1,4 +1,4 @@
-# Copyright 2016-2017 Workiva Inc.
+# Copyright 2016-2018 Workiva Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -55,9 +55,30 @@ class Object(object):
 
 
 _local = Object()
+_loglock = RLock()
 _rlock = RLock()
 
+
 TRACE = 5
+ALREADY_LOGGED = set()
+ALREADY_LOGGED_MAX_SIZE = 100
+
+
+def log_once(method, *args, **kwargs):
+    """
+    Convenience message to ensure a given log message is only emitted once.
+
+    :param method: a method like logger.debug, logger.warn
+    :param args: a list of args for the logger method
+    :param kwargs: a dict of kwargs for the logger method
+    """
+    key = "%s-%s-%s" % (getattr(method, '__name__', method), args, kwargs)
+    with _loglock:
+        if key not in ALREADY_LOGGED:
+            method(*args, **kwargs)
+            # do not add messages without bound
+            if len(ALREADY_LOGGED) < ALREADY_LOGGED_MAX_SIZE:
+                ALREADY_LOGGED.add(key)
 
 
 class ChaosFunction(object):
@@ -180,7 +201,7 @@ def _get_elasticache_engine_and_connection(cache_arn):
     # }
     #
     if AWS.ELASTICACHE in getattr(settings, 'ENDPOINTS', {}):
-        logger.warning('settings.ENDPOINTS is deprecated for Elasticache.')
+        log_once(logger.warning, 'settings.ENDPOINTS is deprecated for Elasticache.')
         hostport = settings.ENDPOINTS[AWS.ELASTICACHE].get(arn.region_name)
         cfg = {
             AWS_ELASTICACHE.CacheClusterId: 'unused',
@@ -198,7 +219,7 @@ def _get_elasticache_engine_and_connection(cache_arn):
     # }
     #
     if cache_arn in getattr(settings, 'ENDPOINTS', {}):
-        logger.warning('settings.ENDPOINTS is deprecated for Elasticache.')
+        log_once(logger.warning, 'settings.ENDPOINTS is deprecated for Elasticache.')
         hostport = settings.ENDPOINTS[cache_arn]
         cfg = {
             AWS_ELASTICACHE.CacheClusterId: 'unused',
@@ -276,7 +297,7 @@ def _get_elasticache_engine_and_connection(cache_arn):
     attr = 'cache_details_for_' + cache_arn
     if not getattr(_local, attr, None):
 
-        logger.warning('Consider using settings.ELASTICACHE_ENDPOINTS for endpoints.')
+        log_once(logger.warning, 'Consider using settings.ELASTICACHE_ENDPOINTS for endpoints.')
 
         elasticache_connection = boto3.client('elasticache', region_name=arn.region_name)
 
@@ -319,7 +340,7 @@ def _get_elasticache_engine_and_connection(cache_arn):
 
         # not found in any of the usual places
         if not engine or not connection:
-            logger.fatal("Cache ARN %s is not valid.", cache_arn)
+            log_once(logger.fatal, "Cache ARN %s is not valid.", cache_arn)
 
         setattr(_local, attr, (engine, connection))
 
@@ -427,7 +448,7 @@ def _get_redis_connection(cache_arn, entry):
                 connection = redis.StrictRedis(host=host, port=port, db=0, ssl=ssl, password=password)
 
             if not connection:
-                logger.fatal("Redis Cache ARN %s is not valid.", cache_arn)
+                log_once(logger.fatal, "Redis Cache ARN %s is not valid.", cache_arn)
 
             setattr(_local, attr, connection)
 
@@ -475,7 +496,7 @@ def _get_memcached_connection(cache_arn, entry):
                 connection = memcache.Client([endpoint_url])  # memcache library does not discover nodes
 
             if not connection:
-                logger.fatal("Memcached Cache ARN %s is not valid.", cache_arn)
+                log_once(logger.fatal, "Memcached Cache ARN %s is not valid.", cache_arn)
 
             setattr(_local, attr, connection)
 
@@ -529,8 +550,8 @@ def _get_service_connection(resource_arn,
             # running the services locally.
             service, region_name, endpoint_url = _get_connection_info(arn.service, arn.region_name, resource_arn)
 
-            logger.debug("Initializing connection for service: %s, region_name: %s, endpoint_url: %s",
-                         service, region_name, endpoint_url)
+            log_once(logger.debug, "Initializing connection for service: %s, region_name: %s, endpoint_url: %s",
+                     service, region_name, endpoint_url)
 
             # for elasticache/memcache, we need to ensure that an actual endpoint
             # is specified, since the memcache library doesn't have all the default
@@ -774,7 +795,7 @@ def set_message_dispatched(correlation_id, steps, retries, primary=True, timeout
     service = get_arn_from_arn_string(source_arn).service
 
     if not service:  # pragma: no cover
-        logger.warning("No cache source for primary=%s" % primary)
+        log_once(logger.warning, "No cache source for primary=%s" % primary)
 
     elif service == AWS.ELASTICACHE:
         engine, _ = _get_elasticache_engine_and_connection(source_arn)
@@ -877,7 +898,7 @@ def get_message_dispatched(correlation_id, steps, primary=True):
     service = get_arn_from_arn_string(source_arn).service
 
     if not service:  # pragma: no cover
-        logger.warning("No cache source for primary=%s" % primary)
+        log_once(logger.warning, "No cache source for primary=%s" % primary)
 
     elif service == AWS.ELASTICACHE:
         engine, _ = _get_elasticache_engine_and_connection(source_arn)
@@ -1128,7 +1149,7 @@ def acquire_lease(correlation_id, steps, retries, primary=True, timeout=LEASE_DA
     service = get_arn_from_arn_string(source_arn).service
 
     if not service:  # pragma: no cover
-        logger.warning("No cache source for primary=%s" % primary)
+        log_once(logger.warning, "No cache source for primary=%s" % primary)
 
     elif service == AWS.ELASTICACHE:
         engine, _ = _get_elasticache_engine_and_connection(source_arn)
@@ -1337,7 +1358,7 @@ def release_lease(correlation_id, steps, retries, fence_token, primary=True):
     service = get_arn_from_arn_string(source_arn).service
 
     if not service:  # pragma: no cover
-        logger.warning("No cache source for primary=%s" % primary)
+        log_once(logger.warning, "No cache source for primary=%s" % primary)
 
     elif service == AWS.ELASTICACHE:
         engine, _ = _get_elasticache_engine_and_connection(source_arn)
@@ -1457,7 +1478,7 @@ def _get_sqs_queue_url(queue_arn):
     attr = 'url_for_' + queue_arn
     if not getattr(_local, attr, None):
 
-        logger.warning('Consider using settings.SQS_URLS for urls.')
+        log_once(logger.warning, 'Consider using settings.SQS_URLS for urls.')
 
         return_value = _trace(
             sqs_conn.get_queue_url,
@@ -1467,7 +1488,7 @@ def _get_sqs_queue_url(queue_arn):
 
         # check that we were able to lookup the queue
         if AWS_SQS.QueueUrl not in return_value:
-            logger.fatal("Queue ARN %s does not exist.", queue_arn)
+            log_once(logger.fatal, "Queue ARN %s does not exist.", queue_arn)
 
         url = return_value.get(AWS_SQS.QueueUrl)
 
@@ -1528,7 +1549,7 @@ def send_next_event_for_dispatch(context, data, correlation_id, delay=0, primary
     service = get_arn_from_arn_string(source_arn).service
 
     if not service:  # pragma: no cover
-        logger.warning("No stream source for primary=%s" % primary)
+        log_once(logger.warning, "No stream source for primary=%s" % primary)
 
     elif service == AWS.KINESIS:
         return _send_next_event_for_dispatch_kinesis(source_arn, data, correlation_id)
@@ -1677,7 +1698,7 @@ def send_next_events_for_dispatch(context, all_data, correlation_ids, delay=0, p
     service = get_arn_from_arn_string(source_arn).service
 
     if not service:  # pragma: no cover
-        logger.warning("No stream source for primary=%s" % primary)
+        log_once(logger.warning, "No stream source for primary=%s" % primary)
 
     if service == AWS.KINESIS:
         return _send_next_events_for_dispatch_kinesis(source_arn, all_data, correlation_ids)
@@ -1797,7 +1818,7 @@ def store_environment(context, environment, primary=True):
     service = get_arn_from_arn_string(source_arn).service
 
     if not service:  # pragma: no cover
-        logger.warning("No environment source for primary=%s" % primary)
+        log_once(logger.warning, "No environment source for primary=%s" % primary)
 
     if service == AWS.DYNAMODB:
         guid, return_value = _store_environment_dynamodb(source_arn, environment)
@@ -1854,7 +1875,7 @@ def load_environment(context, key, primary=True):
     service = get_arn_from_arn_string(source).service
 
     if not service:  # pragma: no cover
-        logger.warning("No environment source for primary=%s" % primary)
+        log_once(logger.warning, "No environment source for primary=%s" % primary)
 
     if service == AWS.DYNAMODB:
         return _load_environment_dynamodb(source, guid)
@@ -1986,7 +2007,7 @@ def start_retries(context, run_at, payload, primary=True, recovering=False):
     service = get_arn_from_arn_string(source_arn).service
 
     if not service:  # pragma: no cover
-        logger.warning("No retry source for primary=%s" % primary)
+        log_once(logger.warning, "No retry source for primary=%s" % primary)
 
     elif service == AWS.KINESIS:
         return _start_retries_kinesis(source_arn, context.correlation_id, payload)
@@ -2051,7 +2072,7 @@ def stop_retries(context, primary=True):
     service = get_arn_from_arn_string(source_arn).service
 
     if not service:  # pragma: no cover
-        logger.warning("No retry source for primary=%s" % primary)
+        log_once(logger.warning, "No retry source for primary=%s" % primary)
 
     elif service == AWS.DYNAMODB:
         return _stop_retries_dynamodb(source_arn, context.correlation_id, context.steps)
@@ -2190,21 +2211,22 @@ def _validate_config(key, data):
     required = data[REQUIRED]
 
     if required and not primary:
-        logger.fatal("PRIMARY_%s_SOURCE is unset.", key)
+        log_once(logger.fatal, "PRIMARY_%s_SOURCE is unset.", key)
 
     primary_service = get_arn_from_arn_string(primary).service
     if primary_service and primary_service not in allowed:
-        logger.fatal("PRIMARY_%s_SOURCE '%s' is not allowed.", key, primary)
+        log_once(logger.fatal, "PRIMARY_%s_SOURCE '%s' is not allowed.", key, primary)
 
     secondary_service = get_arn_from_arn_string(secondary).service
     if secondary_service and secondary_service not in allowed:
-        logger.fatal("SECONDARY_%s_SOURCE '%s' is not allowed.", key, secondary)
+        log_once(logger.fatal, "SECONDARY_%s_SOURCE '%s' is not allowed.", key, secondary)
 
     if failover and not secondary:
-        logger.warning("SECONDARY_%s_SOURCE is unset (failover not configured).", key)
+        log_once(logger.warning, "SECONDARY_%s_SOURCE is unset (failover not configured).", key)
 
     if failover and secondary and primary == secondary:
-        logger.warning("PRIMARY_%s_SOURCE = SECONDARY_%s_SOURCE (failover not configured optimally).", key, key)
+        log_once(logger.warning,
+                 "PRIMARY_%s_SOURCE = SECONDARY_%s_SOURCE (failover not configured optimally).", key, key)
 
 
 def _validate_sqs_urls():
@@ -2225,9 +2247,9 @@ def _validate_sqs_urls():
         for queue_arn, entry in settings.SQS_URLS.iteritems():
             arn = get_arn_from_arn_string(queue_arn)
             if arn.service != AWS.SQS:
-                logger.warning("SQS_URLS has invalid key '%s' (service)", queue_arn)
+                log_once(logger.warning, "SQS_URLS has invalid key '%s' (service)", queue_arn)
             if AWS_SQS.QueueUrl not in entry:
-                logger.warning("SQS_URLS has invalid entry for key '%s' (url)", queue_arn)
+                log_once(logger.warning, "SQS_URLS has invalid entry for key '%s' (url)", queue_arn)
 
 
 def _validate_elasticache_endpoints():
@@ -2255,22 +2277,25 @@ def _validate_elasticache_endpoints():
         for cache_arn, entry in settings.ELASTICACHE_ENDPOINTS.iteritems():
             arn = get_arn_from_arn_string(cache_arn)
             if arn.service != AWS.ELASTICACHE:
-                logger.warning("ELASTICACHE_ENDPOINTS has invalid key '%s'", cache_arn)
+                log_once(logger.warning, "ELASTICACHE_ENDPOINTS has invalid key '%s'", cache_arn)
 
             if AWS_ELASTICACHE.Engine not in entry:
-                logger.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (engine)", cache_arn)
+                log_once(logger.warning, "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (engine)", cache_arn)
             else:
                 if entry[AWS_ELASTICACHE.Engine] not in AWS_ELASTICACHE.ENGINE.ALL:
-                    logger.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (unknown engine)", cache_arn)
+                    log_once(logger.warning,
+                             "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (unknown engine)", cache_arn)
 
             if AWS_ELASTICACHE.ConfigurationEndpoint not in entry:
-                logger.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (endpoint)", cache_arn)
+                log_once(logger.warning, "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (endpoint)", cache_arn)
             else:
                 endpoint = entry.get(AWS_ELASTICACHE.ConfigurationEndpoint, {})
                 if AWS_ELASTICACHE.ENDPOINT.Address not in endpoint:
-                    logger.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (address)", cache_arn)
+                    log_once(logger.warning,
+                             "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (address)", cache_arn)
                 if AWS_ELASTICACHE.ENDPOINT.Port not in endpoint:
-                    logger.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (port)", cache_arn)
+                    log_once(logger.warning,
+                             "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (port)", cache_arn)
 
 
 def _validate_cache():
@@ -2285,7 +2310,7 @@ def _validate_cache():
         if source_arn:
             arn = get_arn_from_arn_string(source_arn)
             if arn.service == AWS.ELASTICACHE:
-                logger.warning("%s_CACHE_SOURCE supports only _advisory_ locks", key)
+                log_once(logger.warning, "%s_CACHE_SOURCE supports only _advisory_ locks", key)
 
     inner('PRIMARY')
     inner('SECONDARY')
