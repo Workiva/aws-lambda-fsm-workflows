@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from setuptools import setup, find_packages
-from pip.req import parse_requirements
 
 
 def get_version():
@@ -24,17 +23,22 @@ def get_version():
     return pkg_meta.version
 
 
+# "from pip.req import parse_requirements" no longer works in pip 10
+# so this function is just a simple version that extracts the requirements
+# using a loop and naive filtering.
 def get_requirements(filename):
-    try:
-        from pip.download import PipSession
-
-        session = PipSession()
-    except ImportError:
-        session = None
-
-    reqs = parse_requirements(filename, session=session)
-
-    return [str(r.req) for r in reqs]
+    lines = list(val.strip() for val in open(filename))
+    filtered = []
+    for line in lines:
+        if line.startswith('-r '):
+            continue
+        if '#' in line:
+            line = line.split('#')[0]
+        line = line.strip()
+        if not line:
+            continue
+        filtered.append(line)
+    return filtered
 
 
 def get_packages():
@@ -67,7 +71,7 @@ setup_args = dict(
     description="AWS FSMs on Lambda/Kinesis",
     long_description="",
     install_requires=get_requirements('requirements.txt'),
-    tests_require=get_requirements('requirements_dev.txt'),
+    tests_require=get_requirements('requirements_dev.txt') + get_requirements('requirements.txt'),
 )
 
 
