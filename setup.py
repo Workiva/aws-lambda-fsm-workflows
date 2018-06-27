@@ -22,6 +22,7 @@ def get_version():
 
     return pkg_meta.version
 
+
 # "from pip.req import parse_requirements" no longer works in pip 10
 # so this function is just a simple version that extracts the requirements
 # using a loop and naive filtering.
@@ -38,6 +39,7 @@ def get_requirements(filename):
             continue
         filtered.append(line)
     return filtered
+
 
 def get_packages():
     return find_packages(exclude=["tests.*", "tests", "examples", "examples.*"])
