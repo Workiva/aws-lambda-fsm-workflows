@@ -449,6 +449,29 @@ class TestAws(unittest.TestCase):
         self.assertEqual('redis', actual[0])
         self.assertTrue(isinstance(actual[1], redis.StrictRedis))
 
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    def test_get_elasticache_engine_and_connection_settings_redis_replication_group(self,
+                                                                                    mock_settings):
+        setattr(_local, 'cache_details_for_' + _get_test_arn(AWS.ELASTICACHE), None)
+        mock_settings.ELASTICACHE_ENDPOINTS = {
+            _get_test_arn(AWS.ELASTICACHE): {
+                'ReplicationGroupId': 'unused',
+                'NodeGroups': [
+                    {
+                        'PrimaryEndpoint': {
+                            'Port': 6379,
+                            'Address': 'foobar.cfg.cache.amazonaws.com'
+                        }
+                    }
+                ]
+            }
+        }
+        mock_settings.ENDPOINTS = {}
+        actual = _get_elasticache_engine_and_connection(_get_test_arn(AWS.ELASTICACHE))
+        self.assertEqual('redis', actual[0])
+        self.assertTrue(isinstance(actual[1], redis.StrictRedis))
+        self.assertEqual(None, getattr(_local, 'cache_details_for_' + _get_test_arn(AWS.ELASTICACHE)))
+
     # _get_connection_info
 
     @mock.patch('aws_lambda_fsm.aws.settings')
@@ -2348,6 +2371,43 @@ class ValidateConfigTest(unittest.TestCase):
 
     # _validate_elasticache_endpoints
 
+    def _valid_memcache_cluster(self):
+        return {
+            AWS_ELASTICACHE.CacheClusterId: "cacheClusterId",
+            AWS_ELASTICACHE.Engine: AWS_ELASTICACHE.ENGINE.MEMCACHED,
+            AWS_ELASTICACHE.ConfigurationEndpoint: {
+                AWS_ELASTICACHE.ENDPOINT.Address: "host",
+                AWS_ELASTICACHE.ENDPOINT.Port: 1111,
+            }
+        }
+
+    def _valid_redis_cluster(self):
+        return {
+            AWS_ELASTICACHE.CacheClusterId: "cacheClusterId",
+            AWS_ELASTICACHE.Engine: AWS_ELASTICACHE.ENGINE.REDIS,
+            AWS_ELASTICACHE.CacheNodes: [
+                {
+                    AWS_ELASTICACHE.Endpoint: {
+                        AWS_ELASTICACHE.ENDPOINT.Address: "host",
+                        AWS_ELASTICACHE.ENDPOINT.Port: 1111,
+                    }
+                }
+            ]
+        }
+
+    def _valid_redis_replication_group(self):
+        return {
+            AWS_ELASTICACHE.ReplicationGroupId: "replicationGroupId",
+            AWS_ELASTICACHE.NodeGroups: [
+                {
+                    AWS_ELASTICACHE.PrimaryEndpoint: {
+                        AWS_ELASTICACHE.ENDPOINT.Address: "host",
+                        AWS_ELASTICACHE.ENDPOINT.Port: 1111,
+                    }
+                }
+            ]
+        }
+
     @mock.patch('aws_lambda_fsm.aws.logger')
     @mock.patch('aws_lambda_fsm.aws.settings')
     def test_validate_validate_elasticache_endpoints_empty_valid(self,
@@ -2366,13 +2426,7 @@ class ValidateConfigTest(unittest.TestCase):
                                                                    mock_settings,
                                                                    mock_logger):
         mock_settings.ELASTICACHE_ENDPOINTS = {
-            _get_test_arn(AWS.DYNAMODB): {
-                AWS_ELASTICACHE.Engine: AWS_ELASTICACHE.ENGINE.MEMCACHED,
-                AWS_ELASTICACHE.ConfigurationEndpoint: {
-                    AWS_ELASTICACHE.ENDPOINT.Address: "host",
-                    AWS_ELASTICACHE.ENDPOINT.Port: 1111,
-                }
-            }
+            _get_test_arn(AWS.DYNAMODB): self._valid_memcache_cluster()
         }
         _validate_elasticache_endpoints()
         self.assertEqual(
@@ -2383,17 +2437,28 @@ class ValidateConfigTest(unittest.TestCase):
 
     @mock.patch('aws_lambda_fsm.aws.logger')
     @mock.patch('aws_lambda_fsm.aws.settings')
+    def test_validate_validate_elasticache_endpoints_missing_cache_type(self,
+                                                                        mock_settings,
+                                                                        mock_logger):
+        mock_settings.ELASTICACHE_ENDPOINTS = {
+            _get_test_arn(AWS.ELASTICACHE): {}
+        }
+        _validate_elasticache_endpoints()
+        self.assertEqual(
+            [mock.call.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (cache type)",
+                               'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename')],
+            filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls)
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.logger')
+    @mock.patch('aws_lambda_fsm.aws.settings')
     def test_validate_validate_elasticache_endpoints_missing_engine(self,
                                                                     mock_settings,
                                                                     mock_logger):
+        cluster = self._valid_memcache_cluster()
+        del cluster[AWS_ELASTICACHE.Engine]
         mock_settings.ELASTICACHE_ENDPOINTS = {
-            _get_test_arn(AWS.ELASTICACHE): {
-                'foo': AWS_ELASTICACHE.ENGINE.MEMCACHED,
-                AWS_ELASTICACHE.ConfigurationEndpoint: {
-                    AWS_ELASTICACHE.ENDPOINT.Address: "host",
-                    AWS_ELASTICACHE.ENDPOINT.Port: 1111,
-                }
-            }
+            _get_test_arn(AWS.ELASTICACHE): cluster
         }
         _validate_elasticache_endpoints()
         self.assertEqual(
@@ -2407,14 +2472,10 @@ class ValidateConfigTest(unittest.TestCase):
     def test_validate_validate_elasticache_endpoints_unknown_engine(self,
                                                                     mock_settings,
                                                                     mock_logger):
+        cluster = self._valid_memcache_cluster()
+        cluster[AWS_ELASTICACHE.Engine] = 'unknown'
         mock_settings.ELASTICACHE_ENDPOINTS = {
-            _get_test_arn(AWS.ELASTICACHE): {
-                AWS_ELASTICACHE.Engine: 'unknown',
-                AWS_ELASTICACHE.ConfigurationEndpoint: {
-                    AWS_ELASTICACHE.ENDPOINT.Address: "host",
-                    AWS_ELASTICACHE.ENDPOINT.Port: 1111,
-                }
-            }
+            _get_test_arn(AWS.ELASTICACHE): cluster
         }
         _validate_elasticache_endpoints()
         self.assertEqual(
@@ -2423,19 +2484,17 @@ class ValidateConfigTest(unittest.TestCase):
             filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls)
         )
 
+    # _validate_elasticache_endpoints : memcached cluster
+
     @mock.patch('aws_lambda_fsm.aws.logger')
     @mock.patch('aws_lambda_fsm.aws.settings')
     def test_validate_validate_elasticache_endpoints_missing_endpoint(self,
                                                                       mock_settings,
                                                                       mock_logger):
+        cluster = self._valid_memcache_cluster()
+        del cluster[AWS_ELASTICACHE.ConfigurationEndpoint]
         mock_settings.ELASTICACHE_ENDPOINTS = {
-            _get_test_arn(AWS.ELASTICACHE): {
-                AWS_ELASTICACHE.Engine: AWS_ELASTICACHE.ENGINE.MEMCACHED,
-                'foo': {
-                    AWS_ELASTICACHE.ENDPOINT.Address: "host",
-                    AWS_ELASTICACHE.ENDPOINT.Port: 1111,
-                }
-            }
+            _get_test_arn(AWS.ELASTICACHE): cluster
         }
         _validate_elasticache_endpoints()
         self.assertEqual(
@@ -2449,14 +2508,10 @@ class ValidateConfigTest(unittest.TestCase):
     def test_validate_validate_elasticache_endpoints_missing_address_port(self,
                                                                           mock_settings,
                                                                           mock_logger):
+        cluster = self._valid_memcache_cluster()
+        cluster[AWS_ELASTICACHE.ConfigurationEndpoint] = {}
         mock_settings.ELASTICACHE_ENDPOINTS = {
-            _get_test_arn(AWS.ELASTICACHE): {
-                AWS_ELASTICACHE.Engine: AWS_ELASTICACHE.ENGINE.MEMCACHED,
-                AWS_ELASTICACHE.ConfigurationEndpoint: {
-                    'foo': "host",
-                    'bar': 1111,
-                }
-            }
+            _get_test_arn(AWS.ELASTICACHE): cluster
         }
         _validate_elasticache_endpoints()
         self.assertEqual(
@@ -2473,13 +2528,145 @@ class ValidateConfigTest(unittest.TestCase):
                                                      mock_settings,
                                                      mock_logger):
         mock_settings.ELASTICACHE_ENDPOINTS = {
-            _get_test_arn(AWS.ELASTICACHE): {
-                AWS_ELASTICACHE.Engine: AWS_ELASTICACHE.ENGINE.MEMCACHED,
-                AWS_ELASTICACHE.ConfigurationEndpoint: {
-                    AWS_ELASTICACHE.ENDPOINT.Address: "host",
-                    AWS_ELASTICACHE.ENDPOINT.Port: 1111,
-                }
-            }
+            _get_test_arn(AWS.ELASTICACHE): self._valid_memcache_cluster()
+        }
+        _validate_elasticache_endpoints()
+        self.assertEqual(
+            [],
+            filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls)
+        )
+
+    # _validate_elasticache_endpoints : redis cluster
+
+    @mock.patch('aws_lambda_fsm.aws.logger')
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    def test_validate_validate_elasticache_endpoints_missing_cache_nodes(self,
+                                                                         mock_settings,
+                                                                         mock_logger):
+        cluster = self._valid_redis_cluster()
+        del cluster[AWS_ELASTICACHE.CacheNodes]
+        mock_settings.ELASTICACHE_ENDPOINTS = {
+            _get_test_arn(AWS.ELASTICACHE): cluster
+        }
+        _validate_elasticache_endpoints()
+        self.assertEqual(
+            [mock.call.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (cache nodes)",
+                               'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename')],
+            filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls)
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.logger')
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    def test_validate_validate_elasticache_endpoints_missing_endpoint_redis(self,
+                                                                            mock_settings,
+                                                                            mock_logger):
+        cluster = self._valid_redis_cluster()
+        del cluster[AWS_ELASTICACHE.CacheNodes][0][AWS_ELASTICACHE.Endpoint]
+        mock_settings.ELASTICACHE_ENDPOINTS = {
+            _get_test_arn(AWS.ELASTICACHE): cluster
+        }
+        _validate_elasticache_endpoints()
+        self.assertEqual(
+            [mock.call.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (endpoint)",
+                               'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename')],
+            filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls)
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.logger')
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    def test_validate_validate_elasticache_endpoints_missing_address_port_redis(self,
+                                                                                mock_settings,
+                                                                                mock_logger):
+        cluster = self._valid_redis_cluster()
+        cluster[AWS_ELASTICACHE.CacheNodes][0][AWS_ELASTICACHE.Endpoint] = {}
+        mock_settings.ELASTICACHE_ENDPOINTS = {
+            _get_test_arn(AWS.ELASTICACHE): cluster
+        }
+        _validate_elasticache_endpoints()
+        self.assertEqual(
+            [mock.call.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (address)",
+                               'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename'),
+             mock.call.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (port)",
+                               'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename')],
+            filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls)
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.logger')
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    def test_validate_validate_elasticache_endpoints_redis(self,
+                                                           mock_settings,
+                                                           mock_logger):
+        mock_settings.ELASTICACHE_ENDPOINTS = {
+            _get_test_arn(AWS.ELASTICACHE): self._valid_redis_cluster()
+        }
+        _validate_elasticache_endpoints()
+        self.assertEqual(
+            [],
+            filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls)
+        )
+
+    # _validate_elasticache_endpoints : redis replication group
+
+    @mock.patch('aws_lambda_fsm.aws.logger')
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    def test_validate_validate_elasticache_endpoints_missing_node_groups(self,
+                                                                         mock_settings,
+                                                                         mock_logger):
+        cluster = self._valid_redis_replication_group()
+        del cluster[AWS_ELASTICACHE.NodeGroups]
+        mock_settings.ELASTICACHE_ENDPOINTS = {
+            _get_test_arn(AWS.ELASTICACHE): cluster
+        }
+        _validate_elasticache_endpoints()
+        self.assertEqual(
+            [mock.call.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (node groups)",
+                               'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename')],
+            filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls)
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.logger')
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    def test_validate_validate_elasticache_endpoints_missing_endpoint_redis_replication_group(self,
+                                                                                              mock_settings,
+                                                                                              mock_logger):
+        cluster = self._valid_redis_replication_group()
+        del cluster[AWS_ELASTICACHE.NodeGroups][0][AWS_ELASTICACHE.PrimaryEndpoint]
+        mock_settings.ELASTICACHE_ENDPOINTS = {
+            _get_test_arn(AWS.ELASTICACHE): cluster
+        }
+        _validate_elasticache_endpoints()
+        self.assertEqual(
+            [mock.call.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (endpoint)",
+                               'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename')],
+            filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls)
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.logger')
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    def test_validate_validate_elasticache_endpoints_missing_address_port_redis_replication_group(self,
+                                                                                                  mock_settings,
+                                                                                                  mock_logger):
+        cluster = self._valid_redis_replication_group()
+        cluster[AWS_ELASTICACHE.NodeGroups][0][AWS_ELASTICACHE.PrimaryEndpoint] = {}
+        mock_settings.ELASTICACHE_ENDPOINTS = {
+            _get_test_arn(AWS.ELASTICACHE): cluster
+        }
+        _validate_elasticache_endpoints()
+        self.assertEqual(
+            [mock.call.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (address)",
+                               'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename'),
+             mock.call.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (port)",
+                               'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename')],
+            filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls)
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.logger')
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    def test_validate_validate_elasticache_endpoints_redis_replication_group(self,
+                                                                             mock_settings,
+                                                                             mock_logger):
+        mock_settings.ELASTICACHE_ENDPOINTS = {
+            _get_test_arn(AWS.ELASTICACHE): self._valid_redis_replication_group()
         }
         _validate_elasticache_endpoints()
         self.assertEqual(

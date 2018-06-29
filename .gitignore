@@ -23,3 +23,4 @@ settings.py
 .DS_Store
 *.graffle
 dump.rdb
+build

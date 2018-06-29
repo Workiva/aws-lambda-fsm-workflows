@@ -2252,25 +2252,58 @@ def _validate_sqs_urls():
                 log_once(logger.warning, "SQS_URLS has invalid entry for key '%s' (url)", queue_arn)
 
 
+def _validate_endpoint(cache_arn, endpoint):
+
+    if AWS_ELASTICACHE.ENDPOINT.Address not in endpoint:
+        log_once(logger.warning, "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (address)", cache_arn)
+    if AWS_ELASTICACHE.ENDPOINT.Port not in endpoint:
+        log_once(logger.warning, "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (port)", cache_arn)
+
+
 def _validate_elasticache_endpoints():
     """
     Validates settings.ELASTICACHE_ENDPOINTS is correctly formed
 
     ELASTICACHE_ENDPOINTS = {
-      "cluster_arn1": {
-        "Engine": "memcache",
-        "ConfigurationEndpoint": {
-          "Address": "hostname",
-          "Port": 11211
-        }
-      },
-      "cluster_arn2": {
-        "Engine": "redis",
-        "ConfigurationEndpoint": {
-          "Address": "hostname",
-          "Port": 6379
-        }
-      }
+       'memcached_cache_cluster_arn': {
+         'CacheClusterId': 'abc123',
+         'TransitEncryptionEnabled': False,
+         'AuthTokenEnabled': False,
+         'Engine': 'memcached',
+         'ConfigurationEndpoint': {
+           'Address': 'host',
+           'Port': 9999
+         },  ...
+       },
+
+       'redis_cache_cluster_arn': {
+         'CacheClusterId': 'def456',
+         'TransitEncryptionEnabled': True,
+         'AuthTokenEnabled': True,
+         'Engine': 'redis',
+         'CacheNodes': [
+           {
+             'Endpoint': {
+               'Address': 'host',
+               'Port': 9999
+              }, ...
+           }, ...
+         }, ...
+       },
+
+       'redis_replication_group_arn': {
+         'ReplicationGroupId': 'ghi789',
+         'TransitEncryptionEnabled': True,
+         'AuthTokenEnabled': True,
+         'NodeGroups': [
+           {
+             'PrimaryEndpoint': {
+               'Address': 'host',
+               'Port': 9999
+             }, ...
+           }
+         ]
+       }
     }
     """
     if hasattr(settings, 'ELASTICACHE_ENDPOINTS'):
@@ -2279,23 +2312,66 @@ def _validate_elasticache_endpoints():
             if arn.service != AWS.ELASTICACHE:
                 log_once(logger.warning, "ELASTICACHE_ENDPOINTS has invalid key '%s'", cache_arn)
 
-            if AWS_ELASTICACHE.Engine not in entry:
-                log_once(logger.warning, "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (engine)", cache_arn)
-            else:
-                if entry[AWS_ELASTICACHE.Engine] not in AWS_ELASTICACHE.ENGINE.ALL:
-                    log_once(logger.warning,
-                             "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (unknown engine)", cache_arn)
+            # memcached and redis cache clusters
+            if AWS_ELASTICACHE.CacheClusterId in entry:
 
-            if AWS_ELASTICACHE.ConfigurationEndpoint not in entry:
-                log_once(logger.warning, "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (endpoint)", cache_arn)
+                # needs an engine
+                if AWS_ELASTICACHE.Engine not in entry:
+                    log_once(logger.warning, "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (engine)", cache_arn)
+
+                else:
+                    # memcached cluster
+                    if entry[AWS_ELASTICACHE.Engine] == AWS_ELASTICACHE.ENGINE.MEMCACHED:
+
+                        if AWS_ELASTICACHE.ConfigurationEndpoint not in entry:
+                            log_once(logger.warning,
+                                     "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (endpoint)", cache_arn)
+                        else:
+                            endpoint = entry.get(AWS_ELASTICACHE.ConfigurationEndpoint, {})
+                            _validate_endpoint(cache_arn, endpoint)
+
+                    # redis cluster
+                    elif entry[AWS_ELASTICACHE.Engine] == AWS_ELASTICACHE.ENGINE.REDIS:
+
+                        if AWS_ELASTICACHE.CacheNodes not in entry or not entry[AWS_ELASTICACHE.CacheNodes]:
+                            log_once(logger.warning,
+                                     "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (cache nodes)", cache_arn)
+
+                        else:
+                            node = entry[AWS_ELASTICACHE.CacheNodes][0]
+
+                            if AWS_ELASTICACHE.Endpoint not in node:
+                                log_once(logger.warning,
+                                         "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (endpoint)", cache_arn)
+                            else:
+                                endpoint = node.get(AWS_ELASTICACHE.Endpoint, {})
+                                _validate_endpoint(cache_arn, endpoint)
+
+                    else:
+                        log_once(logger.warning,
+                                 "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (unknown engine)", cache_arn)
+
+            # redis replication groups
+            elif AWS_ELASTICACHE.ReplicationGroupId in entry:
+
+                if AWS_ELASTICACHE.NodeGroups not in entry:
+                    log_once(logger.warning,
+                             "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (node groups)", cache_arn)
+
+                else:
+                    node = entry[AWS_ELASTICACHE.NodeGroups][0]
+
+                    if AWS_ELASTICACHE.PrimaryEndpoint not in node:
+                        log_once(logger.warning,
+                                 "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (endpoint)", cache_arn)
+                    else:
+                        endpoint = node.get(AWS_ELASTICACHE.PrimaryEndpoint, {})
+                        _validate_endpoint(cache_arn, endpoint)
+
+            # not a cluster or replication groups
             else:
-                endpoint = entry.get(AWS_ELASTICACHE.ConfigurationEndpoint, {})
-                if AWS_ELASTICACHE.ENDPOINT.Address not in endpoint:
-                    log_once(logger.warning,
-                             "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (address)", cache_arn)
-                if AWS_ELASTICACHE.ENDPOINT.Port not in endpoint:
-                    log_once(logger.warning,
-                             "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (port)", cache_arn)
+                log_once(logger.warning,
+                         "ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (cache type)", cache_arn)
 
 
 def _validate_cache():
