@@ -32,7 +32,7 @@ import subprocess
 
 logging.basicConfig(
     format='[%(levelname)s] %(asctime)-15s %(message)s',
-    level=logging.ERROR,
+    level=logging.INFO,
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
@@ -60,7 +60,7 @@ parser = argparse.ArgumentParser(description='Mock AWS Lambda service.')
 parser.add_argument('--kinesis_stream_arn', default='PRIMARY_STREAM_SOURCE')
 parser.add_argument('--dynamodb_table_arn', default='PRIMARY_STREAM_SOURCE')
 parser.add_argument('--sns_topic_arn', default='PRIMARY_STREAM_SOURCE')
-parser.add_argument('--sqs_stream_arn', default='PRIMARY_STREAM_SOURCE')
+parser.add_argument('--sqs_queue_arn', default='PRIMARY_STREAM_SOURCE')
 parser.add_argument('--log_level', default='INFO')
 parser.add_argument('--boto_log_level', default='INFO')
 parser.add_argument('--lambda_batch_size', type=int, default=100)
@@ -102,16 +102,16 @@ if args.run_kinesis_lambda:
     logging.info('Kinesis stream: %s', kinesis_stream)
 
 if args.run_sqs_lambda:
-    sqs_stream_arn = getattr(settings, args.sqs_stream_arn)
-    logging.info('SQS stream ARN: %s', sqs_stream_arn)
+    sqs_queue_arn = getattr(settings, args.sqs_queue_arn)
+    logging.info('SQS queue ARN: %s', sqs_queue_arn)
     logging.info('SQS endpoint: %s', settings.ENDPOINTS.get(AWS.SQS))
-    if get_arn_from_arn_string(sqs_stream_arn).service != AWS.SQS:
-        logging.fatal("%s is not a SQS ARN", sqs_stream_arn)
+    if get_arn_from_arn_string(sqs_queue_arn).service != AWS.SQS:
+        logging.fatal("%s is not a SQS ARN", sqs_queue_arn)
         sys.exit(1)
-    sqs_conn = get_connection(sqs_stream_arn, disable_chaos=True)
-    sqs_stream = get_arn_from_arn_string(sqs_stream_arn).colon_resource()
-    sqs_queue_url = _get_sqs_queue_url(sqs_stream_arn)
-    logging.info('SQS queue: %s', sqs_stream)
+    sqs_conn = get_connection(sqs_queue_arn, disable_chaos=True)
+    sqs_queue = get_arn_from_arn_string(sqs_queue_arn).colon_resource()
+    sqs_queue_url = _get_sqs_queue_url(sqs_queue_arn)
+    logging.info('SQS queue: %s', sqs_queue)
 
 if args.run_dynamodb_lambda:
     dynamodb_table_arn = getattr(settings, args.dynamodb_table_arn)
