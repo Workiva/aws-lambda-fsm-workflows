@@ -988,7 +988,7 @@ class TestAws(unittest.TestCase):
         mock_get_primary_stream_source.return_value = _get_test_arn(AWS.SNS)
         send_next_event_for_dispatch(mock_context, 'c', 'd')
         mock_get_connection.return_value.publish.assert_called_with(
-            Message='{"default": "c"}',
+            Message='c',
             TopicArn=_get_test_arn(AWS.SNS)
         )
 
@@ -1067,8 +1067,8 @@ class TestAws(unittest.TestCase):
         send_next_events_for_dispatch(mock_context, ['c', 'cc'], ['d', 'dd'])
         mock_get_connection.return_value.publish.assert_has_calls(
             [
-                mock.call(Message='{"default": "c"}', TopicArn=_get_test_arn(AWS.SNS)),
-                mock.call(Message='{"default": "cc"}', TopicArn=_get_test_arn(AWS.SNS))
+                mock.call(Message='c', TopicArn=_get_test_arn(AWS.SNS)),
+                mock.call(Message='cc', TopicArn=_get_test_arn(AWS.SNS))
             ], any_order=True
         )
 
@@ -1195,7 +1195,7 @@ class TestAws(unittest.TestCase):
         mock_settings.PRIMARY_RETRY_SOURCE = _get_test_arn(AWS.SNS)
         start_retries(mock_context, 'c', 'd', primary=True)
         mock_get_connection.return_value.publish.assert_called_with(
-            Message='{"default": "d"}',
+            Message='d',
             TopicArn=_get_test_arn(AWS.SNS)
         )
 

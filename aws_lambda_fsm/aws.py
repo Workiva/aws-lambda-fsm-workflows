@@ -1446,7 +1446,7 @@ def _send_next_event_for_dispatch_sns(topic_arn, data, correlation_id):
     return_value = _trace(
         sns_conn.publish,
         TopicArn=topic_arn,
-        Message=json.dumps({"default": data})
+        Message=data
     )
     return return_value
 
