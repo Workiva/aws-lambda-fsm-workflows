@@ -30,32 +30,9 @@ import json
 import sys
 import subprocess
 
-logging.basicConfig(
-    format='[%(levelname)s] %(asctime)-15s %(message)s',
-    level=logging.INFO,
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-
-# library imports
-
-# application imports
-from aws_lambda_fsm.handler import lambda_handler
-from aws_lambda_fsm.handler import lambda_timer_handler
-from aws_lambda_fsm.aws import get_connection
-from aws_lambda_fsm.aws import get_arn_from_arn_string
-from aws_lambda_fsm.aws import validate_config
-from aws_lambda_fsm.aws import _get_sqs_queue_url
-from aws_lambda_fsm.constants import AWS_KINESIS
-from aws_lambda_fsm.constants import AWS_DYNAMODB
-from aws_lambda_fsm.constants import AWS_LAMBDA
-from aws_lambda_fsm.constants import AWS_SNS
-from aws_lambda_fsm.constants import AWS_SQS
-from aws_lambda_fsm.constants import STREAM_DATA
-from aws_lambda_fsm.constants import AWS
-
-import settings
-
-# setup the command line args
+# setup the command line args very early in the process because
+# they are need to setup the log level in basicConfig, and that
+# must happen before aws_lambda_fsm code is imported (see below)
 parser = argparse.ArgumentParser(description='Mock AWS Lambda service.')
 parser.add_argument('--kinesis_stream_arn', default='PRIMARY_STREAM_SOURCE')
 parser.add_argument('--dynamodb_table_arn', default='PRIMARY_STREAM_SOURCE')
@@ -75,17 +52,37 @@ parser.add_argument('--lambda_command', help='command to run lambda code (eg. do
                                              '"$PWD":/var/task lambci/lambda:python2.7 main.lambda_handler)')
 args = parser.parse_args()
 
-random.seed(args.random_seed)
-STARTED_AT = str(int(time.time()))
-
+# setup the logger BEFORE any aws_lambda_fsm code is imported otherwise that code emits
+# 'No handlers could be found for logger "aws_lambda_fsm.aws"'
 logging.basicConfig(
     format='[%(levelname)s] %(asctime)-15s %(message)s',
     level=int(args.log_level) if args.log_level.isdigit() else args.log_level,
     datefmt='%Y-%m-%d %H:%M:%S'
 )
-
 logging.getLogger('boto3').setLevel(args.boto_log_level)
 logging.getLogger('botocore').setLevel(args.boto_log_level)
+
+# library imports
+
+# application imports
+from aws_lambda_fsm.handler import lambda_handler        # noqa: E402
+from aws_lambda_fsm.handler import lambda_timer_handler  # noqa: E402
+from aws_lambda_fsm.aws import get_connection            # noqa: E402
+from aws_lambda_fsm.aws import get_arn_from_arn_string   # noqa: E402
+from aws_lambda_fsm.aws import validate_config           # noqa: E402
+from aws_lambda_fsm.aws import _get_sqs_queue_url        # noqa: E402
+from aws_lambda_fsm.constants import AWS_KINESIS         # noqa: E402
+from aws_lambda_fsm.constants import AWS_DYNAMODB        # noqa: E402
+from aws_lambda_fsm.constants import AWS_LAMBDA          # noqa: E402
+from aws_lambda_fsm.constants import AWS_SNS             # noqa: E402
+from aws_lambda_fsm.constants import AWS_SQS             # noqa: E402
+from aws_lambda_fsm.constants import STREAM_DATA         # noqa: E402
+from aws_lambda_fsm.constants import AWS                 # noqa: E402
+
+import settings                                          # noqa: E402
+
+random.seed(args.random_seed)
+STARTED_AT = str(int(time.time()))
 
 validate_config()
 
