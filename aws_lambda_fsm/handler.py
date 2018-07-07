@@ -252,15 +252,14 @@ def lambda_handler(lambda_event, lambda_context):
     #         "arn:aws:events:us-east-1:123456789012:rule/my-schedule"
     #     ]
     # }
-    if 'source' in lambda_event \
-            and lambda_event.get('source') == 'aws.events':
+    if lambda_event.get(AWS_LAMBDA.Source) == AWS_LAMBDA.SOURCE.EVENTS:
         lambda_timer_handler()
 
-    elif 'Records' in lambda_event:
+    elif AWS_LAMBDA.Records in lambda_event:
 
-        records = lambda_event.get('Records', [])
+        records = lambda_event.get(AWS_LAMBDA.Records, [])
 
-        logger.info('Processing %s records...', Counter(record.get('eventSource') for record in records))
+        logger.info('Processing %s records...', Counter(record.get(AWS_LAMBDA.EVENT_SOURCE) for record in records))
 
         for record in records:
 
@@ -285,7 +284,7 @@ def lambda_handler(lambda_event, lambda_context):
             #         }
             #     ]
             # }
-            if record.get('eventSource') == 'aws:kinesis':
+            if record.get(AWS_LAMBDA.EventSource) == AWS_LAMBDA.EVENT_SOURCE.KINESIS:
                 lambda_kinesis_handler(record)
 
             # https://docs.aws.amazon.com/lambda/latest/dg/eventsources.html#eventsources-ddb-update
@@ -317,70 +316,10 @@ def lambda_handler(lambda_event, lambda_context):
             #             "eventName": "INSERT",
             #             "eventSourceARN": eventsourcearn,
             #             "eventSource": "aws:dynamodb"
-            #         },
-            #         {
-            #             "eventID": "2",
-            #             "eventVersion": "1.0",
-            #             "dynamodb": {
-            #                 "OldImage": {
-            #                     "Message": {
-            #                         "S": "New item!"
-            #                     },
-            #                     "Id": {
-            #                         "N": "101"
-            #                     }
-            #                 },
-            #                 "SequenceNumber": "222",
-            #                 "Keys": {
-            #                     "Id": {
-            #                         "N": "101"
-            #                     }
-            #                 },
-            #                 "SizeBytes": 59,
-            #                 "NewImage": {
-            #                     "Message": {
-            #                         "S": "This item has changed"
-            #                     },
-            #                     "Id": {
-            #                         "N": "101"
-            #                     }
-            #                 },
-            #                 "StreamViewType": "NEW_AND_OLD_IMAGES"
-            #             },
-            #             "awsRegion": "us-west-2",
-            #             "eventName": "MODIFY",
-            #             "eventSourceARN": sourcearn,
-            #             "eventSource": "aws:dynamodb"
-            #         },
-            #         {
-            #             "eventID": "3",
-            #             "eventVersion": "1.0",
-            #             "dynamodb": {
-            #                 "Keys": {
-            #                     "Id": {
-            #                         "N": "101"
-            #                     }
-            #                 },
-            #                 "SizeBytes": 38,
-            #                 "SequenceNumber": "333",
-            #                 "OldImage": {
-            #                     "Message": {
-            #                         "S": "This item has changed"
-            #                     },
-            #                     "Id": {
-            #                         "N": "101"
-            #                     }
-            #                 },
-            #                 "StreamViewType": "NEW_AND_OLD_IMAGES"
-            #             },
-            #             "awsRegion": "us-west-2",
-            #             "eventName": "REMOVE",
-            #             "eventSourceARN": sourcearn,
-            #             "eventSource": "aws:dynamodb"
-            #         }
+            #         }, ...
             #     ]
             # }
-            elif record.get('eventSource') == 'aws:dynamodb':
+            elif record.get(AWS_LAMBDA.EventSource) == AWS_LAMBDA.EVENT_SOURCE.DYNAMODB:
                 lambda_dynamodb_handler(record)
 
             # https://docs.aws.amazon.com/lambda/latest/dg/eventsources.html#eventsources-sns
@@ -416,7 +355,7 @@ def lambda_handler(lambda_event, lambda_context):
             #         }
             #     ]
             # }
-            elif record.get('eventSource') == 'aws:sns':
+            elif record.get(AWS_LAMBDA.EventSource) == AWS_LAMBDA.EVENT_SOURCE.SNS:
                 lambda_sns_handler(record)
 
             # https://docs.aws.amazon.com/lambda/latest/dg/eventsources.html#eventsources-sqs
@@ -441,7 +380,7 @@ def lambda_handler(lambda_event, lambda_context):
             #         }
             #     ]
             # }
-            elif record.get('eventSource') == 'aws:sqs':
+            elif record.get(AWS_LAMBDA.EventSource) == AWS_LAMBDA.EVENT_SOURCE.SQS:
                 lambda_sqs_handler(record)
 
     # TODO: see if there is some other way to distinguish step function calls from api gateway calls
