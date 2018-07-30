@@ -20,6 +20,7 @@ import mock
 # application imports
 from aws_lambda_fsm.fsm import FSM
 from aws_lambda_fsm.config import get_current_configuration
+from aws_lambda_fsm.constants import AWS as AWS_CONSTANTS
 from tests.integration.utils import AWSStub
 from tests.integration.utils import BaseFunctionalTest
 
@@ -383,3 +384,13 @@ class Test(BaseFunctionalTest):
             ]
         ]
         self.assertEqual(expected, AWS.errors.trace(raw=True))
+
+
+class TestSqs(Test):
+
+    MESSAGE_TYPE = AWS_CONSTANTS.SQS
+
+
+class TestSns(Test):
+
+    MESSAGE_TYPE = AWS_CONSTANTS.SNS

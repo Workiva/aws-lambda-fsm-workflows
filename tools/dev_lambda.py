@@ -30,35 +30,20 @@ import json
 import sys
 import subprocess
 
-# library imports
-
-# application imports
-from aws_lambda_fsm.handler import lambda_kinesis_handler
-from aws_lambda_fsm.handler import lambda_dynamodb_handler
-from aws_lambda_fsm.handler import lambda_timer_handler
-from aws_lambda_fsm.handler import lambda_sns_handler
-from aws_lambda_fsm.aws import get_connection
-from aws_lambda_fsm.aws import get_arn_from_arn_string
-from aws_lambda_fsm.aws import validate_config
-from aws_lambda_fsm.constants import AWS_KINESIS
-from aws_lambda_fsm.constants import AWS_DYNAMODB
-from aws_lambda_fsm.constants import AWS_LAMBDA
-from aws_lambda_fsm.constants import AWS_SNS
-from aws_lambda_fsm.constants import STREAM_DATA
-from aws_lambda_fsm.constants import AWS
-
-import settings
-
-# setup the command line args
+# setup the command line args very early in the process because
+# they are need to setup the log level in basicConfig, and that
+# must happen before aws_lambda_fsm code is imported (see below)
 parser = argparse.ArgumentParser(description='Mock AWS Lambda service.')
 parser.add_argument('--kinesis_stream_arn', default='PRIMARY_STREAM_SOURCE')
 parser.add_argument('--dynamodb_table_arn', default='PRIMARY_STREAM_SOURCE')
 parser.add_argument('--sns_topic_arn', default='PRIMARY_STREAM_SOURCE')
+parser.add_argument('--sqs_queue_arn', default='PRIMARY_STREAM_SOURCE')
 parser.add_argument('--log_level', default='INFO')
 parser.add_argument('--boto_log_level', default='INFO')
 parser.add_argument('--lambda_batch_size', type=int, default=100)
 parser.add_argument('--sleep_time', type=float, default=0.2)
 parser.add_argument('--run_kinesis_lambda', type=int, default=0)
+parser.add_argument('--run_sqs_lambda', type=int, default=0)
 parser.add_argument('--run_dynamodb_lambda', type=int, default=0)
 parser.add_argument('--run_timer_lambda', type=int, default=0)
 parser.add_argument('--run_sns_lambda', type=int, default=0)
@@ -67,17 +52,37 @@ parser.add_argument('--lambda_command', help='command to run lambda code (eg. do
                                              '"$PWD":/var/task lambci/lambda:python2.7 main.lambda_handler)')
 args = parser.parse_args()
 
-random.seed(args.random_seed)
-STARTED_AT = str(int(time.time()))
-
+# setup the logger BEFORE any aws_lambda_fsm code is imported otherwise that code emits
+# 'No handlers could be found for logger "aws_lambda_fsm.aws"'
 logging.basicConfig(
     format='[%(levelname)s] %(asctime)-15s %(message)s',
     level=int(args.log_level) if args.log_level.isdigit() else args.log_level,
     datefmt='%Y-%m-%d %H:%M:%S'
 )
-
 logging.getLogger('boto3').setLevel(args.boto_log_level)
 logging.getLogger('botocore').setLevel(args.boto_log_level)
+
+# library imports
+
+# application imports
+from aws_lambda_fsm.handler import lambda_handler        # noqa: E402
+from aws_lambda_fsm.handler import lambda_timer_handler  # noqa: E402
+from aws_lambda_fsm.aws import get_connection            # noqa: E402
+from aws_lambda_fsm.aws import get_arn_from_arn_string   # noqa: E402
+from aws_lambda_fsm.aws import validate_config           # noqa: E402
+from aws_lambda_fsm.aws import _get_sqs_queue_url        # noqa: E402
+from aws_lambda_fsm.constants import AWS_KINESIS         # noqa: E402
+from aws_lambda_fsm.constants import AWS_DYNAMODB        # noqa: E402
+from aws_lambda_fsm.constants import AWS_LAMBDA          # noqa: E402
+from aws_lambda_fsm.constants import AWS_SNS             # noqa: E402
+from aws_lambda_fsm.constants import AWS_SQS             # noqa: E402
+from aws_lambda_fsm.constants import STREAM_DATA         # noqa: E402
+from aws_lambda_fsm.constants import AWS                 # noqa: E402
+
+import settings                                          # noqa: E402
+
+random.seed(args.random_seed)
+STARTED_AT = str(int(time.time()))
 
 validate_config()
 
@@ -92,6 +97,18 @@ if args.run_kinesis_lambda:
     kinesis_conn = get_connection(kinesis_stream_arn, disable_chaos=True)
     kinesis_stream = get_arn_from_arn_string(kinesis_stream_arn).slash_resource()
     logging.info('Kinesis stream: %s', kinesis_stream)
+
+if args.run_sqs_lambda:
+    sqs_queue_arn = getattr(settings, args.sqs_queue_arn)
+    logging.info('SQS queue ARN: %s', sqs_queue_arn)
+    logging.info('SQS endpoint: %s', settings.ENDPOINTS.get(AWS.SQS))
+    if get_arn_from_arn_string(sqs_queue_arn).service != AWS.SQS:
+        logging.fatal("%s is not a SQS ARN", sqs_queue_arn)
+        sys.exit(1)
+    sqs_conn = get_connection(sqs_queue_arn, disable_chaos=True)
+    sqs_queue = get_arn_from_arn_string(sqs_queue_arn).colon_resource()
+    sqs_queue_url = _get_sqs_queue_url(sqs_queue_arn)
+    logging.info('SQS queue: %s', sqs_queue)
 
 if args.run_dynamodb_lambda:
     dynamodb_table_arn = getattr(settings, args.dynamodb_table_arn)
@@ -154,10 +171,56 @@ seen_seq_num = set()
 # request
 while True:
 
+    lambda_context = {}
+
     if args.run_timer_lambda:
 
         # run the timer handler
         lambda_timer_handler()
+
+    if args.run_sqs_lambda and sqs_conn:
+
+        # receive up to 10 messages from SQS
+        sqs_messages = []
+        response = sqs_conn.receive_message(
+            QueueUrl=sqs_queue_url,
+            MaxNumberOfMessages=10
+        )
+        sqs_messages = response.get(AWS_SQS.Messages, [])
+
+        if sqs_messages:
+
+            # create the lambda event
+            lambda_event = {
+                AWS_LAMBDA.Records: []
+            }
+
+            # populate the lambda event
+            for sqs_message in sqs_messages:
+                body = sqs_message[AWS_SQS.MESSAGE.Body]
+                tmp = {
+                    AWS_LAMBDA.EventSource: AWS_LAMBDA.EVENT_SOURCE.SQS,
+                    AWS_LAMBDA.SQS_RECORD.BODY: body
+                }
+                lambda_event[AWS_LAMBDA.Records].append(tmp)
+
+            # and call the handler with the records
+            if args.lambda_command:
+                subprocess.call(['/bin/bash', '-c', args.lambda_command + " '" + json.dumps(lambda_event) + "'"])
+            else:
+                lambda_handler(lambda_event, lambda_context)
+
+            # after processing, the SQS messages need to be deleted
+            response = sqs_conn.delete_message_batch(
+                QueueUrl=sqs_queue_url,
+                Entries=[
+                    {
+                        AWS_SQS.MESSAGE.Id: str(i),
+                        AWS_SQS.MESSAGE.ReceiptHandle: sqs_message[AWS_SQS.MESSAGE.ReceiptHandle]
+                    }
+                    for i, sqs_message in enumerate(sqs_messages)
+                ]
+            )
 
     if args.run_kinesis_lambda and kinesis_conn:
 
@@ -188,14 +251,19 @@ while True:
                     seen_seq_num.add(seq_num)
 
                     data = record[AWS_KINESIS.RECORD.Data]
-                    tmp = {AWS_LAMBDA.KINESIS_RECORD.KINESIS: {AWS_LAMBDA.KINESIS_RECORD.DATA: base64.b64encode(data)}}
+                    tmp = {
+                        AWS_LAMBDA.EventSource: AWS_LAMBDA.EVENT_SOURCE.KINESIS,
+                        AWS_LAMBDA.KINESIS_RECORD.KINESIS: {
+                            AWS_LAMBDA.KINESIS_RECORD.DATA: base64.b64encode(data)
+                        }
+                    }
                     lambda_event[AWS_LAMBDA.Records].append(tmp)
 
                 # and call the handler with the records
                 if args.lambda_command:
                     subprocess.call(['/bin/bash', '-c', args.lambda_command + " '" + json.dumps(lambda_event) + "'"])
                 else:
-                    lambda_kinesis_handler(lambda_event)
+                    lambda_handler(lambda_event, lambda_context)
 
     if args.run_sns_lambda and sns_server:
 
@@ -205,8 +273,9 @@ while True:
             lambda_event = {
                 AWS_LAMBDA.Records: [
                     {
+                        AWS_LAMBDA.EventSource: AWS_LAMBDA.EVENT_SOURCE.SNS,
                         AWS_LAMBDA.SNS_RECORD.SNS: {
-                            AWS_LAMBDA.SNS_RECORD.Message: json.dumps({AWS_LAMBDA.SNS_RECORD.DEFAULT: message})
+                            AWS_LAMBDA.SNS_RECORD.Message: message
                         }
                     }
                 ]
@@ -215,7 +284,7 @@ while True:
             if args.lambda_command:
                 subprocess.call(['/bin/bash', '-c', args.lambda_command + " '" + json.dumps(lambda_event) + "'"])
             else:
-                lambda_sns_handler(lambda_event)
+                lambda_handler(lambda_event, lambda_context)
 
     if args.run_dynamodb_lambda and dynamodb_conn:
 
@@ -248,6 +317,7 @@ while True:
                 if create or update:
                     # this is a CREATE or UPDATE
                     tmp = {
+                        AWS_LAMBDA.EventSource: AWS_LAMBDA.EVENT_SOURCE.DYNAMODB,
                         AWS_LAMBDA.DYNAMODB_RECORD.DYNAMODB: {
                             AWS_LAMBDA.DYNAMODB_RECORD.NewImage: {
                                 STREAM_DATA.PAYLOAD: {
@@ -265,6 +335,6 @@ while True:
                 if args.lambda_command:
                     subprocess.call(['/bin/bash', '-c', args.lambda_command + " '" + json.dumps(lambda_event) + "'"])
                 else:
-                    lambda_dynamodb_handler(lambda_event)
+                    lambda_handler(lambda_event, lambda_context)
 
     time.sleep(args.sleep_time)

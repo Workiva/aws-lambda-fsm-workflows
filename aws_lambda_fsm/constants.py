@@ -306,6 +306,17 @@ class AWS_DYNAMODB(object):
 
 class AWS_LAMBDA(object):
     Records = 'Records'
+    EventSource = 'eventSource'
+    Source = 'source'
+
+    class EVENT_SOURCE(object):
+        KINESIS = 'aws:kinesis'
+        DYNAMODB = 'aws:dynamodb'
+        SNS = 'aws:sns'
+        SQS = 'aws:sqs'
+
+    class SOURCE(object):
+        EVENTS = 'aws.events'
 
     class KINESIS_RECORD(object):
         KINESIS = 'kinesis'
@@ -319,3 +330,7 @@ class AWS_LAMBDA(object):
         SNS = 'Sns'
         Message = 'Message'
         DEFAULT = 'default'
+
+    class SQS_RECORD(object):
+        SQS = 'sqs'
+        BODY = 'body'
