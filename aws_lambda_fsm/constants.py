@@ -198,7 +198,6 @@ class AWS_ELASTICACHE(object):
 
         CLUSTER = 'cluster'
         SNAPSHOT = 'snapshot'
-        REPLICATION_GROUP = 'repgroup'
 
     class ENDPOINT(object):
 

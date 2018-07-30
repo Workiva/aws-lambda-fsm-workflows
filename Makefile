@@ -34,10 +34,14 @@ test: clean check-config
 	echo ${COVER_PACKAGE}
 	nosetests -a '!functional' --logging-level=ERROR --with-xunit --xunit-file=unit.xml
 
+unit: test
+
 functional: clean check-config
 	echo ${COVER_PACKAGE}
 	nosetests -a 'functional' --logging-level=ERROR --with-xunit --xunit-file=unit.xml
 
 flake8:
 	flake8 --max-line-length=120 --ignore=E000 --exclude=settingslocal.py .
+
+all: test flake8 coverage
 
