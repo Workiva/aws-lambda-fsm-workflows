@@ -281,7 +281,7 @@ def lambda_handler(lambda_event, lambda_context):
             #             "eventSourceARN": eventsourcearn,
             #             "eventSource": "aws:kinesis",
             #             "awsRegion": "us-east-1"
-            #         }
+            #         }, ...
             #     ]
             # }
             if record.get(AWS_LAMBDA.EventSource) == AWS_LAMBDA.EVENT_SOURCE.KINESIS:
@@ -352,7 +352,7 @@ def lambda_handler(lambda_event, lambda_context):
             #                 "TopicArn": topicarn,
             #                 "Subject": "TestInvoke"
             #             }
-            #         }
+            #         }, ...
             #     ]
             # }
             elif record.get(AWS_LAMBDA.EventSource) == AWS_LAMBDA.EVENT_SOURCE.SNS:
@@ -377,7 +377,7 @@ def lambda_handler(lambda_event, lambda_context):
             #             "eventSource": "aws:sqs",
             #             "eventSourceARN": "arn:aws:sqs:us-west-2:594035263019:NOTFIFOQUEUE",
             #             "awsRegion": "us-west-2"
-            #         }
+            #         }, ...
             #     ]
             # }
             elif record.get(AWS_LAMBDA.EventSource) == AWS_LAMBDA.EVENT_SOURCE.SQS:
