@@ -56,7 +56,6 @@ setup_args = dict(
     author_email="shawn.rusaw@workiva.com",
     packages=get_packages(),
     scripts=["tools/fsm_docker_runner.py",
-             "tools/fsm_sqs_to_arn.py",
              "tools/dev_lambda.py",
              "tools/dev_ecs.py",
              "tools/create_resources.py",
