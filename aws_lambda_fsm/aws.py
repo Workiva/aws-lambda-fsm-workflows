@@ -958,7 +958,15 @@ def _acquire_lease_memcache(cache_arn, correlation_id, steps, retries, timeout=L
             new_fence_token = current_fence_token + 1
             new_lease_value = _serialize_lease_value(steps, retries, new_expires, new_fence_token)
             success = memcache_conn.cas(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_CLEANUP_TIMEOUT)
-            return new_fence_token if success else success
+            if not success:
+                logger.warn("Cannot acquire memcache lease: unexpectedly lost 'memcache.cas' race")
+            # memcache.cas returns 0 when it fails properly OR when there is a system error
+            # either ultimately results in retry, so we simply decide to return False so the log
+            # messages are not misleading when the cache is operating correctly.
+            return new_fence_token if success else False
+
+        logger.warn("Cannot acquire memcache lease: self %s, owner %s",
+                    (steps, retries), (current_steps, current_retries))
 
         # default fall-through is to re-try to acquire the lease
         return False
@@ -969,7 +977,9 @@ def _acquire_lease_memcache(cache_arn, correlation_id, steps, retries, timeout=L
         new_fence_token = 1
         new_lease_value = _serialize_lease_value(steps, retries, new_expires, new_fence_token)
         success = memcache_conn.cas(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_CLEANUP_TIMEOUT)
-        return new_fence_token if success else success
+        if not success:
+            logger.warn("Cannot acquire memcache lease: unexpectedly lost 'memcache.cas' race")
+        return new_fence_token if success else False
 
 
 def _acquire_lease_redis(cache_arn, correlation_id, steps, retries, timeout=LEASE_DATA.LEASE_TIMEOUT):
@@ -1020,6 +1030,8 @@ def _acquire_lease_redis(cache_arn, correlation_id, steps, retries, timeout=LEAS
 
                 # default fall-through is to re-try to acquire the lease
                 else:
+                    logger.warn("Cannot acquire redis lease: self %s, owner %s",
+                                (steps, retries), (current_steps, current_retries))
                     return False
 
             else:
@@ -1036,6 +1048,7 @@ def _acquire_lease_redis(cache_arn, correlation_id, steps, retries, timeout=LEAS
             return new_fence_token
 
         except redis.WatchError:
+            logger.warn("Cannot acquire redis lease: unexpectedly lost 'pipe.watch' race")
             return False
 
         except redis.exceptions.ConnectionError:
@@ -1122,6 +1135,7 @@ def _acquire_lease_dynamodb(table_arn, correlation_id, steps, retries, timeout=L
 
         # operating as expected for entity already existing
         if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            logger.warn("Cannot acquire dynamodb lease: unexpectedly lost 'ConditionExpression' race")
             return False
 
         logger.exception('')
@@ -1190,15 +1204,24 @@ def _release_lease_memcache(cache_arn, correlation_id, steps, retries, fence_tok
         if (current_steps, current_retries, current_fence_token) == (steps, retries, fence_token):
             new_fence_token = fence_token
             new_lease_value = _serialize_lease_value(-1, -1, 0, new_fence_token)
-            return memcache_conn.cas(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_CLEANUP_TIMEOUT)
+            success = memcache_conn.cas(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_CLEANUP_TIMEOUT)
+            if not success:
+                logger.warn("Cannot release memcache lease: unexpectedly lost 'memcache.cas' race")
+            # memcache.cas returns 0 when it fails properly OR when there is a system error
+            # either ultimately results in an error message, so we simply decide to return False so the log
+            # messages are not misleading when the cache is operating correctly.
+            return True if success else False
 
         # otherwise, something else owns the lease, so we can't release it
         else:
+            logger.warn("Cannot release memcache lease: self %s, owner %s",
+                        (steps, retries), (current_steps, current_retries))
             return False
 
     else:
 
         # the lease is no longer owned by anyone
+        logger.warn("Cannot release memcache lease: not owned by anyone")
         return False
 
 
@@ -1240,11 +1263,14 @@ def _release_lease_redis(cache_arn, correlation_id, steps, retries, fence_token)
 
                 # otherwise, something else owns the lease, so we can't release it
                 else:
+                    logger.warn("Cannot release redis lease: self %s, owner %s",
+                                (steps, retries), (current_steps, current_retries))
                     return False
 
             else:
 
                 # the lease is no longer owned by anyone
+                logger.warn("Cannot release redis lease: not owned by anyone")
                 return False
 
             # execute the transaction
@@ -1254,6 +1280,7 @@ def _release_lease_redis(cache_arn, correlation_id, steps, retries, fence_token)
             return True
 
         except redis.WatchError:
+            logger.warn("Cannot release redis lease: unexpectedly lost 'pipe.watch' race")
             return False
 
         except redis.exceptions.ConnectionError:
@@ -1334,6 +1361,7 @@ def _release_lease_dynamodb(table_arn, correlation_id, steps, retries, fence_tok
 
         # operating as expected for entity already existing
         if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            logger.warn("Cannot release dynamodb lease: unexpectedly lost 'ConditionExpression' race")
             return False
 
         logger.exception('')

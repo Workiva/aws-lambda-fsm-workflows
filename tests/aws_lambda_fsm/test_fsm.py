@@ -206,6 +206,7 @@ class TestDispatchAndRetry(TestFsmBase):
                 'source': 'dynamodb_retry'
             }
         )
+        self.assertEqual(instance.retries, 0)
         return instance
 
     @mock.patch('aws_lambda_fsm.fsm.get_message_dispatched')
@@ -532,6 +533,46 @@ class TestDispatchExclusiveLock(TestFsmBase):
             'bobloblaw',
             0,
             0,
+            primary=True
+        )
+        mock_release_lease.assert_called_with(
+            'bobloblaw',
+            0,
+            0,
+            False,
+            primary=True
+        )
+        self.assertEqual(
+            [
+                mock.call('cache', 'Could not acquire lease. Retrying.'),
+                mock.call('cache', 'Could not release lease.')
+            ],
+            mock_queue_error.mock_calls
+        )
+        mock_retry.assert_called_with(
+            {'foo': 'bar'}
+        )
+
+    @mock.patch('aws_lambda_fsm.fsm.uuid')
+    @mock.patch('aws_lambda_fsm.fsm.acquire_lease')
+    @mock.patch('aws_lambda_fsm.fsm.release_lease')
+    @mock.patch('aws_lambda_fsm.fsm.Context._queue_error')
+    @mock.patch('aws_lambda_fsm.fsm.Context._retry')
+    def test_lease_0(self,
+                     mock_retry,
+                     mock_queue_error,
+                     mock_release_lease,
+                     mock_acquire_lease,
+                     mock_uuid):
+        mock_uuid.uuid4.return_value.hex = 'bobloblaw'
+        mock_acquire_lease.return_value = 0
+        mock_release_lease.return_value = 0
+        instance = Context('name')
+        instance.dispatch('event', {'foo': 'bar'})
+        mock_acquire_lease.assert_called_with(
+            'bobloblaw',
+            0,
+            0,
             primary=False
         )
         mock_release_lease.assert_called_with(
@@ -717,6 +758,7 @@ class TestRetry(TestFsmBase):
             'pseudo_init',
             {'payload': json.dumps(payload), 'source': 'dynamodb_retry'}
         )
+        self.assertEqual(instance.retries, retries)
         return instance
 
     @mock.patch('aws_lambda_fsm.fsm.Context._queue_error')

@@ -570,8 +570,6 @@ class Context(dict):
 
         :param obj: a dict.
         """
-        logger.exception('Error occurred during FSM.dispatch().')
-
         # fetch the original payload from the obj in-memory data. we grab the original
         # payload rather than the current context to avoid passing any vars that were
         # potentially mutated up to this point.
@@ -614,6 +612,8 @@ class Context(dict):
             self._dispatch(event, obj)
 
         except Exception:
+            logger.exception('Error occurred during FSM.dispatch().')
+            
             # not-normal, un-happy path
             self._retry(obj)
 
@@ -680,7 +680,7 @@ class Context(dict):
                                         primary=self.lease_primary)
 
             # 0 indicates system error, False indicates lease acquisition failure
-            if fence_token == 0:
+            if fence_token is 0:
                 self._queue_error(ERRORS.CACHE, 'System error acquiring primary=%s lease.' % self.lease_primary)
                 self.lease_primary = not self.lease_primary
                 fence_token = acquire_lease(self.correlation_id, self.steps, self.retries,
