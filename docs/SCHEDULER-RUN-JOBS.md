@@ -22,5 +22,5 @@ The system design details.
 
 # Scheduler Run Jobs Machine States
 
-![AWS Architecture](images/scheduler_runjobs_FSM.png)
+![Scheduler Run Job States](images/scheduler_runjobs_FSM.jpg)
 
