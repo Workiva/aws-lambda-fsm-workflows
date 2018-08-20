@@ -613,7 +613,7 @@ class Context(dict):
 
         except Exception:
             logger.exception('Error occurred during FSM.dispatch().')
-            
+
             # not-normal, un-happy path
             self._retry(obj)
 
