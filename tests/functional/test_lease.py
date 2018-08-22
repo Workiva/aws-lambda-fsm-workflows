@@ -76,7 +76,7 @@ class MemcachedSmokeTest(MemcachedTest, SmokeTest):
         self.smoke()
 
     @mock.patch('aws_lambda_fsm.aws.logger')
-    def test_cas_collision_when_missing(self, mock_logger):
+    def test_add_collision_when_missing(self, mock_logger):
         correlation_id = uuid.uuid4().hex
 
         # init aws memcache connection

@@ -1234,9 +1234,22 @@ def _release_lease_memcache(cache_arn, correlation_id, steps, retries, fence_tok
             current_steps, current_retries, current_time, current_fence_token = \
                 _deserialize_lease_value(current_lease_value)
 
+            # >>> import memcache
+            # >>> c1 = memcache.Client(['localhost:11211'],cache_cas=True)
+            # >>> c2 = memcache.Client(['localhost:22222'],cache_cas=True)
+            # >>> c1.set('a','a')
+            # True
+            # >>> c1.delete('a')
+            # 1
+            # >>> c1.delete('a')
+            # 1
+            # >>> c1.get('a')
+            # >>> c2.delete('a')
+            # 0
+
             # release it by:
             # 1. setting the lease value to "unowned" (steps/retries = -1)
-            # 2. setting it as expired (expires = 0) with cas, rather than just client.delete, which can race.
+            # 2. setting it as expired (expires = 0) with cas, rather than just client.delete, which can race (see above).
             # 3. setting the fence token to the current value so it can be incremented later
             if (current_steps, current_retries, current_fence_token) == (steps, retries, fence_token):
                 new_fence_token = fence_token
