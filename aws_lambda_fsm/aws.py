@@ -1249,7 +1249,7 @@ def _release_lease_memcache(cache_arn, correlation_id, steps, retries, fence_tok
 
             # release it by:
             # 1. setting the lease value to "unowned" (steps/retries = -1)
-            # 2. setting it as expired (expires = 0) with cas, rather than just client.delete, which can race (see above).
+            # 2. setting it as expired (expires = 0) with cas, rather than just client.delete, which can race.
             # 3. setting the fence token to the current value so it can be incremented later
             if (current_steps, current_retries, current_fence_token) == (steps, retries, fence_token):
                 new_fence_token = fence_token
