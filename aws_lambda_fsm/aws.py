@@ -960,12 +960,25 @@ def _acquire_lease_memcache(cache_arn, correlation_id, steps, retries, timeout=L
                 new_fence_token = current_fence_token + 1
                 new_lease_value = _serialize_lease_value(steps, retries, new_expires, new_fence_token)
                 success = memcache_conn.cas(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_CLEANUP_TIMEOUT)
-                if not success:
+                # >>> import memcache
+                # >>> c1=memcache.Client(['localhost:11211'],cache_cas=True)
+                # >>> c2=memcache.Client(['localhost:11211'],cache_cas=True)
+                # >>> c3=memcache.Client(['localhost:22222'],cache_cas=True)
+                # >>> c1.set('abc123', 'def456')
+                # True
+                # >>> c1.gets('abc123')
+                # 'def456'
+                # >>> c2.gets('abc123')
+                # 'def456'
+                # >>> c2.cas('abc123', 'zzz111')
+                # True
+                # >>> c1.cas('abc123', 'yyy333')
+                # False
+                # >>> c3.cas('abc123', '123456')
+                # 0
+                if success is False:
                     logger.warn("Cannot acquire memcache lease: unexpectedly lost 'memcache.cas' race")
-                # memcache.cas returns 0 when it fails properly OR when there is a system error
-                # either ultimately results in retry, so we simply decide to return False so the log
-                # messages are not misleading when the cache is operating correctly.
-                return new_fence_token if success else False
+                return new_fence_token if success else success
 
             logger.warn("Cannot acquire memcache lease: self %s, owner %s",
                         (steps, retries), (current_steps, current_retries))
@@ -979,9 +992,19 @@ def _acquire_lease_memcache(cache_arn, correlation_id, steps, retries, timeout=L
             new_fence_token = 1
             new_lease_value = _serialize_lease_value(steps, retries, new_expires, new_fence_token)
             success = memcache_conn.add(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_CLEANUP_TIMEOUT)
-            if not success:
+            # >>> import memcache
+            # >>> c1=memcache.Client(['localhost:11211'],cache_cas=True)
+            # >>> c2=memcache.Client(['localhost:11211'],cache_cas=True)
+            # >>> c3=memcache.Client(['localhost:22222'],cache_cas=True)
+            # >>> c1.add('aaa','aaa')
+            # True
+            # >>> c2.add('aaa','aaa')
+            # False
+            # >>> c3.add('aaa','aaa')
+            # 0
+            if success is False:
                 logger.warn("Cannot acquire memcache lease: unexpectedly lost 'memcache.add' race")
-            return new_fence_token if success else False
+            return new_fence_token if success else success
 
     finally:
         # as per the comment in memcache.Client:
@@ -1219,12 +1242,9 @@ def _release_lease_memcache(cache_arn, correlation_id, steps, retries, fence_tok
                 new_fence_token = fence_token
                 new_lease_value = _serialize_lease_value(-1, -1, 0, new_fence_token)
                 success = memcache_conn.cas(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_CLEANUP_TIMEOUT)
-                if not success:
+                if success is False:
                     logger.warn("Cannot release memcache lease: unexpectedly lost 'memcache.cas' race")
-                # memcache.cas returns 0 when it fails properly OR when there is a system error
-                # either ultimately results in an error message, so we simply decide to return False so the log
-                # messages are not misleading when the cache is operating correctly.
-                return True if success else False
+                return success
 
             # otherwise, something else owns the lease, so we can't release it
             else:

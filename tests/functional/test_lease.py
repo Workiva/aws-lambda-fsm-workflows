@@ -16,7 +16,6 @@
 from __future__ import print_function
 import uuid
 import time
-from threading import Thread
 
 # library imports
 from nose.plugins.attrib import attr
@@ -144,8 +143,8 @@ class RedisSmokeTest(RedisTest, SmokeTest):
     def test_watch_collision_when_missing(self, mock_logger):
         correlation_id = uuid.uuid4().hex
 
-        # init aws memcache connection
-        connection = aws.get_connection(self.mock_settings.PRIMARY_CACHE_SOURCE)
+        # init aws redis connection
+        aws.get_connection(self.mock_settings.PRIMARY_CACHE_SOURCE)
 
         def inline(a, b, c, d, ac):
             r = aws.original_serialize_lease_value(a, b, c, d)
@@ -171,7 +170,7 @@ class RedisSmokeTest(RedisTest, SmokeTest):
     def test_watch_collision_when_expired(self, mock_logger):
         correlation_id = uuid.uuid4().hex
 
-        # init aws memcache connection
+        # init aws redis connection
         connection = aws.get_connection(self.mock_settings.PRIMARY_CACHE_SOURCE)
         connection.setex('lease-' + correlation_id, 3600, '-1:-1:0:99')
 
