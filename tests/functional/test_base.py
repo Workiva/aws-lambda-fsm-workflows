@@ -65,6 +65,7 @@ class MockSettingsTest(unittest.TestCase):
         self.patcher = mock.patch('aws_lambda_fsm.aws.settings')
         self.addCleanup(self.patcher.stop)
         self.mock_settings = self.patcher.start()
+        self.mock_settings.AWS_CHAOS = None
         self.patch_settings()
 
     def patch_settings(self):

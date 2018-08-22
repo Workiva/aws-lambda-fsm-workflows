@@ -978,9 +978,9 @@ def _acquire_lease_memcache(cache_arn, correlation_id, steps, retries, timeout=L
             # if there is no current lease, then get the lease and initialize the fence token
             new_fence_token = 1
             new_lease_value = _serialize_lease_value(steps, retries, new_expires, new_fence_token)
-            success = memcache_conn.cas(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_CLEANUP_TIMEOUT)
+            success = memcache_conn.add(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_CLEANUP_TIMEOUT)
             if not success:
-                logger.warn("Cannot acquire memcache lease: unexpectedly lost 'memcache.cas' race")
+                logger.warn("Cannot acquire memcache lease: unexpectedly lost 'memcache.add' race")
             return new_fence_token if success else False
 
     finally:
