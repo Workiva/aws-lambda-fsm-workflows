@@ -1591,7 +1591,7 @@ class LeaseMemcacheTest(unittest.TestCase):
         mock_get_connection.return_value.gets.return_value = None
         mock_get_connection.return_value.add.return_value = 0
         ret = acquire_lease('a', 1, 1, primary=False)
-        self.assertFalse(ret)
+        self.assertTrue(0 is ret)
         mock_get_connection.return_value.gets.assert_called_with('lease-a')
         mock_get_connection.return_value.add.assert_called_with('lease-a', '1:1:1299:1', time=86400)
 
@@ -1738,7 +1738,7 @@ class LeaseMemcacheTest(unittest.TestCase):
         mock_get_connection.return_value.gets.return_value = "99:99:99:99"
         mock_get_connection.return_value.cas.return_value = 0
         ret = release_lease('a', 99, 99, 99, primary=False)
-        self.assertFalse(ret)
+        self.assertTrue(0 is ret)
         mock_get_connection.return_value.gets.assert_called_with('lease-a')
         mock_get_connection.return_value.cas.assert_called_with('lease-a', '-1:-1:0:99', time=86400)
 
