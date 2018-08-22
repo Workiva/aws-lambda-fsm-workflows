@@ -16,6 +16,7 @@ FROM python:2.7-alpine
 
 # install python stuff
 RUN pip install aws-lambda-fsm==0.16.0 docker-py==1.8.1 boto3==1.4.8
+ADD settings.py.docker /usr/local/bin/settings.py
 
 # set the cmd
 CMD ["fsm_docker_runner.py"]
