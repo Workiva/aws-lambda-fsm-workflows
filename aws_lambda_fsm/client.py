@@ -36,7 +36,7 @@ def start_state_machine(machine_name,
                         current_state=STATE.PSEUDO_INIT,
                         current_event=STATE.PSEUDO_INIT):
     """
-    Insert a AWS Kinesis message that will kick off a state machine.
+    Insert an AWS SQS/Kinesis/SNS/DynamoDB/... message that will kick off a state machine.
 
     :param machine_name: a str name for the machine to start.
     :param initial_context: a dict of initial data for the state machine.
@@ -72,7 +72,7 @@ def start_state_machines(machine_name,
                          current_state=STATE.PSEUDO_INIT,
                          current_event=STATE.PSEUDO_INIT):
     """
-    Insert a bulk AWS Kinesis message that will kick off several state machines.
+    Insert a bulk AWS SQS/Kinesis/SNS/DynamoDB/... message that will kick off several state machines.
 
     :param machine_name: a str name for the machine to start.
     :param user_contexts: a list of dict of initial data for the state machines.

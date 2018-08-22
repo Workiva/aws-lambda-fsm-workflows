@@ -40,10 +40,10 @@ Event dispatch can be handled by several different AWS services. Since AWS Lambd
 can be driven from several event sources, it is possible to select any of the following for
 event dispatch:
  
+1. [AWS SQS](https://aws.amazon.com/sqs/) or
 1. [AWS Kinesis](https://aws.amazon.com/kinesis/) or
-1. [AWS DynamoDB](https://aws.amazon.com/dynamodb/) or
 1. [AWS SNS](https://aws.amazon.com/sns/) or
-1. [AWS SQS](https://aws.amazon.com/sqs/)
+1. [AWS DynamoDB](https://aws.amazon.com/dynamodb/)
 
 The system also supports the notion of primary and secondary/failover event sources,
 so it is possible to specify two of the above sources. In the event of service issues on 
@@ -54,10 +54,10 @@ source.
 
 Retries of failed state transitions can be handled by several different AWS services:
 
-1. [AWS DynamoDB](https://aws.amazon.com/dynamodb/) or
 1. [AWS SQS](https://aws.amazon.com/sqs/) or
 1. [AWS Kinesis](https://aws.amazon.com/kinesis/) or
-1. [AWS SNS](https://aws.amazon.com/sns/)
+1. [AWS SNS](https://aws.amazon.com/sns/) or
+1. [AWS DynamoDB](https://aws.amazon.com/dynamodb/)
 
 Either AWS DynamoDB or AWS SQS are the preferred mechanism for retries, since they 
 are the only two sources that support the notion of backoff (running something after
@@ -68,7 +68,6 @@ a specified delay).
 Checkpointing can be handled by a only a single system at the moment:
 
 1. [AWS DynamoDB](https://aws.amazon.com/dynamodb/)
-1. [AWS Kinesis](https://aws.amazon.com/kinesis/)
 
 DynamoDB is able to store the offset of the mostly dispatch AWS Kinesis message.
 
@@ -78,7 +77,7 @@ A cache is used to prevent re-execution of state transitions and to prevent
 concurrent execution in error scenarios. Two AWS services are suitable for 
 this task:
 
-1. [Memcache](https://aws.amazon.com/elasticache/)
+1. [Memcache/Redis](https://aws.amazon.com/elasticache/)
 1. [AWS DynamoDB](https://aws.amazon.com/dynamodb/)
 
 ## Monitoring

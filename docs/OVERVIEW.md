@@ -87,7 +87,7 @@ All you need to do is configure your state machine, and aws-lambda-fsm will take
         do_action: path.to.Action8
         exit_action: path.to.Action9
         
-## Lambda/Kinesis Calls
+## Lambda Calls
 
 An AWS Lambda function executes for each transition. A diagram and listing of each entry/exit/do action ran in each AWS Lambda function is shown below.
 

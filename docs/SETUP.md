@@ -21,6 +21,27 @@ limitations under the License.
 Each of the AWS services requires some initial setup and configuration. This is accomplished with 
 python applications in the `tools` folder. These can be used to setup the local mock services, or
 the actual AWS services (with valid `~/.aws/credentials`).
+
+## Running `create_sqs_queue.py`
+ 
+This creates a SQS queue to store fsm/event information.
+ 
+    $ workon aws-lambda-fsm
+    $ python tools/create_sqs_queue.py --sqs_queue_arn=PRIMARY_STREAM_SOURCE
+
+## Running `create_kinesis_stream.py`
+ 
+This creates a Kinesis stream to store fsm/event information.
+ 
+    $ workon aws-lambda-fsm
+    $ python tools/create_kinesis_stream.py --kinesis_stream_arn=PRIMARY_STREAM_SOURCE
+    
+## Running `create_sns_topic.py`
+ 
+This creates an SNS topic to store fsm/event information.
+ 
+    $ workon aws-lambda-fsm
+    $ python tools/create_sns_topic.py --sns_topic_arn=PRIMARY_STREAM_SOURCE
     
 ## Running `create_dynamodb_table.py`
  
@@ -35,19 +56,5 @@ This creates a number of DynamoDB tables to store checkpoint and retry informati
 The strings `PRIMARY_CHECKPOINT_SOURCE` etc. are obtained from you current `settings.py`/`settingslocal.py`.
 If the setting for `SECONDARY_STREAM_SOURCE` for example, is not a `dynamodb` ARN, then the script will
 warn the user and do nothing. All scripts have similar validation.
-    
-## Running `create_kinesis_stream.py`
- 
-This creates a Kinesis stream to store fsm/event information.
- 
-    $ workon aws-lambda-fsm
-    $ python tools/create_kinesis_stream.py --kinesis_stream_arn=PRIMARY_STREAM_SOURCE
-    
-## Running `create_sns_topic.py`
- 
-This creates an SNS topic to store fsm/event information.
- 
-    $ workon aws-lambda-fsm
-    $ python tools/create_sns_topic.py --sns_topic_arn=PRIMARY_STREAM_SOURCE
     
 [<< Running on AWS](AWS.md) | [TODO: >>](TODO.md)

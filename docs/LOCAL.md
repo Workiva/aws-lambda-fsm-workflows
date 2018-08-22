@@ -18,6 +18,23 @@ limitations under the License.
 
 # Running Locally
 
+## Docker
+
+Install `docker` (https://www.docker.com/)
+
+## Localstack
+
+Run localstack (https://github.com/localstack/localstack), which contains stubs for AWS 
+services like SQS, Kinesis, etc.
+
+    $ git clone git@github.com:localstack/localstack.git
+    $ cd localstack
+    $ docker-compose up
+    
+## Memcache and Redis
+
+Add memcache 
+
 ## Settings
 
 It is possible to use local stubs for various AWS services. By adding the following
@@ -25,21 +42,18 @@ to `settingslocal.py` the framework will send requests to localhost, rather than
 amazonaws.com.
 
     ENDPOINTS = {
+        'sqs': {
+            'us-east-1': 'http://localhost:4576'
+        },
         'kinesis': {
             'us-east-1': 'http://localhost:4567'
         },
         'dynamodb': {
-            'us-east-1': 'http://localhost:7654'
+            'us-east-1': 'http://localhost:4568'
         },
         'arn:partition:elasticache:testing:account:cluster:aws-lambda-fsm': 'localhost:11211',
         'elasticache': {
             'us-east-1': 'localhost:11211'
-        },
-        'sns': {
-            'us-east-1': 'http://localhost:9292'
-        },
-        'ecs': {
-            'us-east-1': 'http://localhost:8888'
         }
     }
     
@@ -47,53 +61,6 @@ The `settings.ENDPOINTS` dictionary is similar in structure to boto's `endpoints
 but also allows specifying endpoints by ARN directly. Matches to full ARN take 
 precedence to matching the service and region.
 
-## Running Services
-
-Depending on the configuration in `settings.py`, the following local services should be started
-    
-### Running `kinesalite` (https://github.com/mhart/kinesalite)
-
-    $ kinesalite --port 4567
-    Listening at http://:::4567
-    
-### Running `dynalite` (https://github.com/mhart/dynalite)
-
-    $ dynalite --port 7654
-    Listening at http://:::7654
-    
-### Running `memcached` (http://memcached.org/downloads)
-
-    $ memcached -vv
-    slab class   1: chunk size        96 perslab   10922
-    ...
-    
-### Running `fake_sns` (https://github.com/yourkarma/fake_sns)
-
-    $ fake_sns --database :memory:
-    
-`fake_sns` does not automatically send the messages, so one needs to repeatedly use `curl`
-to step the state machines forward.
-
-    $ curl -X POST http://localhost:9292/drain # drain the messages
-
-### Running `fake_sqs` (https://github.com/iain/fake_sqs)
-
-    $ fake_sqs
-    
-### Running `dev_ecs` 
-
-Get host etc to docker daemon setup
-
-    $ export DOCKER_HOST=tcp://192.168.99.100:2376
-    $ export DOCKER_MACHINE_NAME=default
-    $ export DOCKER_TLS_VERIFY=1
-    $ export DOCKER_CERT_PATH=/Users/shawnrusaw/.docker/machine/machines/default
-
-Run `dev_ecs.py` which uses `docker run` to simulate an AWS ECS service
-
-    $ workon aws-lambda-fsm
-    $ python tools/dev_ecs.py --port=8888 --image=image:tag
-    
 ### Running `dev_lambda.py`
 
 This runs a local Lambda service.
@@ -110,6 +77,25 @@ This runs a local Lambda service.
     INFO:root:action.name=t2-action
     INFO:root:action.name=s1-entry-action
     ...
+    
+### Running `dev_ecs`
+ 
+Get host etc to docker daemon setup
+
+    $ export DOCKER_HOST=tcp://192.168.99.100:2376
+    $ export DOCKER_MACHINE_NAME=default
+    $ export DOCKER_TLS_VERIFY=1
+    $ export DOCKER_CERT_PATH=/absolute/path/to/.docker/machine/machines/default
+    
+Build the `docker` image that knows how to run other `docker` images and emit
+events back onto the FSM's Kinesis/SQS/... stream/queue/...
+
+    $ docker build -t runner .
+ 
+Run `dev_ecs.py` which uses `docker run` to simulate an AWS ECS service
+
+    $ workon aws-lambda-fsm
+    $ python tools/dev_ecs.py --port=8888 --image=runner:latest
     
 ### Running `start_state_machine.py`
 
