@@ -53,10 +53,10 @@ parser.add_argument('--lambda_command', help='command to run lambda code (eg. do
 args = parser.parse_args()
 
 if (not args.run_kinesis_lambda) and \
-    (not args.run_sqs_lambda) and \
-    (not args.run_dynamodb_lambda) and \
-    (not args.run_timer_lambda) and \
-    (not args.run_sns_lambda):
+   (not args.run_sqs_lambda) and \
+   (not args.run_dynamodb_lambda) and \
+   (not args.run_timer_lambda) and \
+   (not args.run_sns_lambda):
     parser.error("One of --run_(kinesis|sqs|dynamodb|sn|timer)_lambda is required.")
 
 # setup the logger BEFORE any aws_lambda_fsm code is imported otherwise that code emits
