@@ -41,7 +41,7 @@ functional: clean check-config
 	nosetests -a 'functional' --logging-level=ERROR --with-xunit --xunit-file=unit.xml
 
 flake8:
-	flake8 --max-line-length=120 --ignore=E000 --exclude=settingslocal.py .
+	flake8 --max-line-length=120 --ignore=E000,E402 --exclude=settingslocal.py .
 
 all: test flake8 coverage
 

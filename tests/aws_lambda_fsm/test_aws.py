@@ -2520,7 +2520,7 @@ class ValidateConfigTest(unittest.TestCase):
                                'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename'),
              mock.call.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (port)",
                                'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename')],
-list(            filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
+            list(filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
 
     @mock.patch('aws_lambda_fsm.aws.logger')

@@ -18,13 +18,13 @@
 # dev_ecs.py
 #
 # system imports
-from future import standard_library
-standard_library.install_aliases()
 import http.server
 import socketserver
 import argparse
 import json
 import subprocess
+from future import standard_library
+standard_library.install_aliases()
 
 # library imports
 

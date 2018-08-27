@@ -54,10 +54,10 @@ class Messages(object):
             return serialized
         data = enumerate(serialized)
         return [(
-                x[0],
-                tuple(x[1][s][v] for v in svars),
-                tuple(x[1][u].get(v) for v in uvars)
-            ) for x in data]
+            x[0],
+            tuple(x[1][s][v] for v in svars),
+            tuple(x[1][u].get(v) for v in uvars)
+        ) for x in data]
 
 
 # not threadsafe, yada yada
