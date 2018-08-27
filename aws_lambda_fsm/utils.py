@@ -122,7 +122,7 @@ class ECSTaskEntryAction(Action):
         }
         # this second set of variables are used by actual docker image that
         # does actual stuff (pdf processing etc.)
-        for name, value in list(task_details.get(ENVIRONMENT_KEY, {}).items()):
+        for name, value in task_details.get(ENVIRONMENT_KEY, {}).items():
             environment[name] = value
 
         # store the environment and record the guid.

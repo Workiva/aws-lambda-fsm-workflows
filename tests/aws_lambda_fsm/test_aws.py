@@ -2303,7 +2303,7 @@ class ValidateConfigTest(unittest.TestCase):
                 mock.call.warning('%s_CACHE_SOURCE supports only _advisory_ locks', 'PRIMARY'),
                 mock.call.warning('%s_CACHE_SOURCE supports only _advisory_ locks', 'SECONDARY'),
             ],
-            [x for x in mock_logger.mock_calls if '__str__' not in x[0]]
+            list(filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
 
     # _validate_sqs_urls
@@ -2317,7 +2317,7 @@ class ValidateConfigTest(unittest.TestCase):
         _validate_sqs_urls()
         self.assertEqual(
             [],
-            [x for x in mock_logger.mock_calls if '__str__' not in x[0]]
+            list(filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
 
     @mock.patch('aws_lambda_fsm.aws.logger')
@@ -2334,7 +2334,7 @@ class ValidateConfigTest(unittest.TestCase):
         self.assertEqual(
             [mock.call.warning("SQS_URLS has invalid key '%s' (service)",
                                'arn:aws:dynamodb:testing:1234567890:resourcetype/resourcename')],
-            [x for x in mock_logger.mock_calls if '__str__' not in x[0]]
+            list(filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
 
     @mock.patch('aws_lambda_fsm.aws.logger')
@@ -2351,7 +2351,7 @@ class ValidateConfigTest(unittest.TestCase):
         self.assertEqual(
             [mock.call.warning("SQS_URLS has invalid entry for key '%s' (url)",
                                'arn:aws:sqs:testing:1234567890:resourcetype/resourcename')],
-            [x for x in mock_logger.mock_calls if '__str__' not in x[0]]
+            list(filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
 
     @mock.patch('aws_lambda_fsm.aws.logger')
@@ -2367,7 +2367,7 @@ class ValidateConfigTest(unittest.TestCase):
         _validate_sqs_urls()
         self.assertEqual(
             [],
-            [x for x in mock_logger.mock_calls if '__str__' not in x[0]]
+            list(filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
 
     # _validate_elasticache_endpoints
@@ -2418,7 +2418,7 @@ class ValidateConfigTest(unittest.TestCase):
         _validate_elasticache_endpoints()
         self.assertEqual(
             [],
-            [x for x in mock_logger.mock_calls if '__str__' not in x[0]]
+            list(filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
 
     @mock.patch('aws_lambda_fsm.aws.logger')
@@ -2433,7 +2433,7 @@ class ValidateConfigTest(unittest.TestCase):
         self.assertEqual(
             [mock.call.warning("ELASTICACHE_ENDPOINTS has invalid key '%s'",
                                'arn:aws:dynamodb:testing:1234567890:resourcetype/resourcename')],
-            [x for x in mock_logger.mock_calls if '__str__' not in x[0]]
+            list(filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
 
     @mock.patch('aws_lambda_fsm.aws.logger')
@@ -2448,7 +2448,7 @@ class ValidateConfigTest(unittest.TestCase):
         self.assertEqual(
             [mock.call.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (cache type)",
                                'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename')],
-            [x for x in mock_logger.mock_calls if '__str__' not in x[0]]
+            list(filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
 
     @mock.patch('aws_lambda_fsm.aws.logger')
@@ -2465,7 +2465,7 @@ class ValidateConfigTest(unittest.TestCase):
         self.assertEqual(
             [mock.call.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (engine)",
                                'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename')],
-            [x for x in mock_logger.mock_calls if '__str__' not in x[0]]
+            list(filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
 
     @mock.patch('aws_lambda_fsm.aws.logger')
@@ -2482,7 +2482,7 @@ class ValidateConfigTest(unittest.TestCase):
         self.assertEqual(
             [mock.call.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (unknown engine)",
                                'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename')],
-            [x for x in mock_logger.mock_calls if '__str__' not in x[0]]
+            list(filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
 
     # _validate_elasticache_endpoints : memcached cluster
@@ -2501,7 +2501,7 @@ class ValidateConfigTest(unittest.TestCase):
         self.assertEqual(
             [mock.call.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (endpoint)",
                                'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename')],
-            [x for x in mock_logger.mock_calls if '__str__' not in x[0]]
+            list(filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
 
     @mock.patch('aws_lambda_fsm.aws.logger')
@@ -2520,7 +2520,7 @@ class ValidateConfigTest(unittest.TestCase):
                                'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename'),
              mock.call.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (port)",
                                'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename')],
-            [x for x in mock_logger.mock_calls if '__str__' not in x[0]]
+list(            filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
 
     @mock.patch('aws_lambda_fsm.aws.logger')
@@ -2534,7 +2534,7 @@ class ValidateConfigTest(unittest.TestCase):
         _validate_elasticache_endpoints()
         self.assertEqual(
             [],
-            [x for x in mock_logger.mock_calls if '__str__' not in x[0]]
+            list(filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
 
     # _validate_elasticache_endpoints : redis cluster
@@ -2553,7 +2553,7 @@ class ValidateConfigTest(unittest.TestCase):
         self.assertEqual(
             [mock.call.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (cache nodes)",
                                'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename')],
-            [x for x in mock_logger.mock_calls if '__str__' not in x[0]]
+            list(filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
 
     @mock.patch('aws_lambda_fsm.aws.logger')
@@ -2570,7 +2570,7 @@ class ValidateConfigTest(unittest.TestCase):
         self.assertEqual(
             [mock.call.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (endpoint)",
                                'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename')],
-            [x for x in mock_logger.mock_calls if '__str__' not in x[0]]
+            list(filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
 
     @mock.patch('aws_lambda_fsm.aws.logger')
@@ -2589,7 +2589,7 @@ class ValidateConfigTest(unittest.TestCase):
                                'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename'),
              mock.call.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (port)",
                                'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename')],
-            [x for x in mock_logger.mock_calls if '__str__' not in x[0]]
+            list(filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
 
     @mock.patch('aws_lambda_fsm.aws.logger')
@@ -2603,7 +2603,7 @@ class ValidateConfigTest(unittest.TestCase):
         _validate_elasticache_endpoints()
         self.assertEqual(
             [],
-            [x for x in mock_logger.mock_calls if '__str__' not in x[0]]
+            list(filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
 
     # _validate_elasticache_endpoints : redis replication group
@@ -2622,7 +2622,7 @@ class ValidateConfigTest(unittest.TestCase):
         self.assertEqual(
             [mock.call.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (node groups)",
                                'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename')],
-            [x for x in mock_logger.mock_calls if '__str__' not in x[0]]
+            list(filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
 
     @mock.patch('aws_lambda_fsm.aws.logger')
@@ -2639,7 +2639,7 @@ class ValidateConfigTest(unittest.TestCase):
         self.assertEqual(
             [mock.call.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (endpoint)",
                                'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename')],
-            [x for x in mock_logger.mock_calls if '__str__' not in x[0]]
+            list(filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
 
     @mock.patch('aws_lambda_fsm.aws.logger')
@@ -2658,7 +2658,7 @@ class ValidateConfigTest(unittest.TestCase):
                                'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename'),
              mock.call.warning("ELASTICACHE_ENDPOINTS has invalid entry for key '%s' (port)",
                                'arn:aws:elasticache:testing:1234567890:resourcetype/resourcename')],
-            [x for x in mock_logger.mock_calls if '__str__' not in x[0]]
+            list(filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
 
     @mock.patch('aws_lambda_fsm.aws.logger')
@@ -2672,7 +2672,7 @@ class ValidateConfigTest(unittest.TestCase):
         _validate_elasticache_endpoints()
         self.assertEqual(
             [],
-            [x for x in mock_logger.mock_calls if '__str__' not in x[0]]
+            list(filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
 
     # validate_config
@@ -2715,7 +2715,7 @@ class ValidateConfigTest(unittest.TestCase):
                 mock.call.warning('SECONDARY_%s_SOURCE is unset (failover not configured).',
                                   'KEY')
             ],
-            [x for x in mock_logger.mock_calls if '__str__' not in x[0]]
+            list(filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
 
     @mock.patch('aws_lambda_fsm.aws.logger')
@@ -2735,5 +2735,5 @@ class ValidateConfigTest(unittest.TestCase):
                 mock.call.warning('PRIMARY_%s_SOURCE = SECONDARY_%s_SOURCE (failover not configured optimally).',
                                   'KEY', 'KEY')
             ],
-            [x for x in mock_logger.mock_calls if '__str__' not in x[0]]
+            list(filter(lambda x: '__str__' not in x[0], mock_logger.mock_calls))
         )
