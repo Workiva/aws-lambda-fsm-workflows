@@ -32,15 +32,19 @@ paper, and those found out through practical implementation are outlined in the 
 Take for instance a process that needs to send an email and also send an sms message. You can define two
 action classes that implement email and sms sending.
 
-    class SendEmailAction(action):
-      def execute(self, context, obj):
-        send_email(context['to_email'])
-        return "done"
+```python
+class SendEmailAction(action):
+  def execute(self, context, obj):
+    send_email(context['to_email'])
+    return "done"
+```
         
-    class SendSMSAction(action):
-      def execute(self, context, obj):
-        send_sms(context['to_sms'])
-        return "done"
+```python
+class SendSMSAction(action):
+  def execute(self, context, obj):
+    send_sms(context['to_sms'])
+    return "done"
+```
 
 However, these actions can be hooked together in arbitrary order via configuration **WITHOUT ALTERING THE CODE**. 
 This helps in code organisation and import efficiency.
@@ -64,22 +68,24 @@ JSON serializable, and a reasonable size, then pretty much anything can go into 
 
 FSM actions should be nothing more than thin shims on well-tested business logic. 
 
-    class MyAction(action):
+```python
+class MyAction(action):
+
+  def execute(self, context, obj):
+  
+    # step 1) pull needed data from the context
+    arg1 = context['arg1']
+    arg2 = context['arg2']
     
-      def execute(self, context, obj):
-      
-        # step 1) pull needed data from the context
-        arg1 = context['arg1']
-        arg2 = context['arg2']
-        
-        # step 2) call your (well unit tested) business logic
-        result = my_business_logic(arg1, arg2)
-        
-        # step 3) put the result back in the context for subsequent states
-        context['arg3'] = result
-        
-        # step 4) return an event to drive the state machine forward
-        return "done"
+    # step 2) call your (well unit tested) business logic
+    result = my_business_logic(arg1, arg2)
+    
+    # step 3) put the result back in the context for subsequent states
+    context['arg3'] = result
+    
+    # step 4) return an event to drive the state machine forward
+    return "done"
+```
 
 ## 6. Single source of truth for "how it works"
 

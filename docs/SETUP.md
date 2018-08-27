@@ -23,35 +23,59 @@ python applications in the `tools` folder. These can be used to setup the local 
 the actual AWS services (with valid `~/.aws/credentials`).
 
 ## Running `create_sqs_queue.py`
+
+If any of `settings.PRIMARY|SECONDARY_STREAM_SOURCE` or `settings.PRIMARY|SECONDARY_RETRY_SOURCE`
+are set to an [AWS SQS](https://aws.amazon.com/sqs/) ARN, then a queue must be created for each ARN. 
  
-This creates a SQS queue to store fsm/event information.
+This creates a [AWS SQS](https://aws.amazon.com/sqs/) queue to publish fsm/event information.
  
-    $ workon aws-lambda-fsm
-    $ python tools/create_sqs_queue.py --sqs_queue_arn=PRIMARY_STREAM_SOURCE
+```bash
+$ workon aws-lambda-fsm
+$ python tools/create_sqs_queue.py --sqs_queue_arn=PRIMARY_STREAM_SOURCE
+```
 
 ## Running `create_kinesis_stream.py`
+
+If any of `settings.PRIMARY|SECONDARY_STREAM_SOURCE` or `settings.PRIMARY|SECONDARY_RETRY_SOURCE`
+are set to an [AWS Kinesis](https://aws.amazon.com/kinesis/) ARN, then a stream must be
+created for each ARN. 
  
-This creates a Kinesis stream to store fsm/event information.
+This creates a [AWS Kinesis](https://aws.amazon.com/kinesis/) stream to store fsm/event information.
  
-    $ workon aws-lambda-fsm
-    $ python tools/create_kinesis_stream.py --kinesis_stream_arn=PRIMARY_STREAM_SOURCE
+```bash
+$ workon aws-lambda-fsm
+$ python tools/create_kinesis_stream.py --kinesis_stream_arn=PRIMARY_STREAM_SOURCE
+```
     
 ## Running `create_sns_topic.py`
+
+If any of `settings.PRIMARY|SECONDARY_STREAM_SOURCE` or `settings.PRIMARY|SECONDARY_RETRY_SOURCE`
+are set to an [AWS SNS](https://aws.amazon.com/sns/) ARN, then a topic must be
+created for each ARN. 
  
 This creates an SNS topic to store fsm/event information.
  
-    $ workon aws-lambda-fsm
-    $ python tools/create_sns_topic.py --sns_topic_arn=PRIMARY_STREAM_SOURCE
+```bash
+$ workon aws-lambda-fsm
+$ python tools/create_sns_topic.py --sns_topic_arn=PRIMARY_STREAM_SOURCE
+```
     
 ## Running `create_dynamodb_table.py`
+
+If any of `settings.PRIMARY|SECONDARY_RETRY_SOURCE`, `settings.PRIMARY|SECONDARY_CHECKPOINT_SOURCE`,
+`settings.PRIMARY|SECONDARY_ENVIRONMENT_SOURCE` or`settings.PRIMARY|SECONDARY_STREAM_SOURCE` 
+are set to an [AWS DynamoDB](https://aws.amazon.com/dynamodb/) ARN, then a table must be
+created for each ARN. 
  
 This creates a number of DynamoDB tables to store checkpoint and retry information.
  
-    $ workon aws-lambda-fsm
-    $ python tools/create_dynamodb_table.py --dynamodb_table_arn=PRIMARY_CHECKPOINT_SOURCE
-    $ python tools/create_dynamodb_table.py --dynamodb_table_arn=PRIMARY_RETRY_SOURCE
-    $ python tools/create_dynamodb_table.py --dynamodb_table_arn=PRIMARY_ENVIRONMENT_SOURCE
-    $ python tools/create_dynamodb_table.py --dynamodb_table_arn=SECONDARY_STREAM_SOURCE
+ ```bash
+$ workon aws-lambda-fsm
+$ python tools/create_dynamodb_table.py --dynamodb_table_arn=PRIMARY_CHECKPOINT_SOURCE
+$ python tools/create_dynamodb_table.py --dynamodb_table_arn=PRIMARY_RETRY_SOURCE
+$ python tools/create_dynamodb_table.py --dynamodb_table_arn=PRIMARY_ENVIRONMENT_SOURCE
+$ python tools/create_dynamodb_table.py --dynamodb_table_arn=SECONDARY_STREAM_SOURCE
+```
     
 The strings `PRIMARY_CHECKPOINT_SOURCE` etc. are obtained from you current `settings.py`/`settingslocal.py`.
 If the setting for `SECONDARY_STREAM_SOURCE` for example, is not a `dynamodb` ARN, then the script will

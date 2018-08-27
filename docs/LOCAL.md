@@ -18,87 +18,111 @@ limitations under the License.
 
 # Running Locally
 
-## Install Virtualenv
+## 1. Install Docker
 
-    $ pip install virtualenv
-    $ pip install virtualenvwrapper
-    
-## Install Python Dependencies
+Install [Docker](https://www.docker.com/).
 
-    $ mkvirtualenv aws-lambda-fsm
-    $ pip install -Ur requirements_dev.txt
+## 2. Install Virtualenv
 
-## Install Docker
+Installing `virtualenv` allows all the python dependencies to be installed locally, so that
+state machines can be run and debugged locally using `dev_lambda.py` (see below). 
 
-Install `docker` (https://www.docker.com/)
+```bash
+$ pip install virtualenv
+$ pip install virtualenvwrapper
+$ mkvirtualenv aws-lambda-fsm
+$ pip install -Ur requirements_dev.txt
+```
 
-## Localstack + Memcache + Redis
+## 3. Localstack + Memcache + Redis
 
-A docker-compose.yaml file is supplied that runs localstack (https://github.com/localstack/localstack), which contains 
-stubs for AWS services like SQS, Kinesis, etc. It also runs memcache and redis instances, since 
-[Elasticache](https://aws.amazon.com/elasticache/) is not supported by localstack.
+A docker-compose.yaml file is supplied that runs [LocalStack](https://github.com/localstack/localstack), which 
+contains stubs for AWS services like SQS, Kinesis, etc. 
 
-    $ docker-compose -f tools/docker-compose.yaml up
+It also runs memcache and redis instances, since 
+[AWS Elasticache](https://aws.amazon.com/elasticache/) is not supported by localstack.
 
-## Settings
+```bash
+$ docker-compose -f tools/experimental/docker-compose.yaml up
+```
 
-It is possible to use local stubs for various AWS services. An example that can be used local
-development is included in the `tools` folder. You can simply symlink it as follows.
+## 4. Settings
 
-    $ ln -s tools/settings.py.local settings.py
+See [Settings](SETTINGS.md)
+
+It is possible to use local stubs for various AWS services. An example that can be used for
+local development is included in the `tools/experimental` folder. You can simply symlink it as 
+follows.
+
+```bash
+$ ln -s tools/experimental/settings.py.local settings.py
+```
 
 It contains a mapping of ARN to localstack/memcache endpoint
 
-    ENDPOINTS = {
-        'arn:partition:kinesis:testing:account:stream/aws-lambda-fsm': 'http://localhost:4568',
-        'arn:partition:elasticache:testing:account:cluster:aws-lambda-fsm': 'localhost:11211'
-    }
-
-## Running `dev_lambda.py`
-
-This runs a local Lambda service.
- 
-    $ workon aws-lambda-fsm
-    $ ln -s tools/settings.py.local settings.py
-    $ PYTHONPATH=. python tools/dev_lambda.py --kinesis_uri=http://localhost:4567 --dynamodb_uri=http://localhost:7654 --memcache_uri=localhost:11211
-    INFO:root:fsm data={u'current_state': u's1', u'current_event': u'e1', u'machine_name': u'm1'}
-    INFO:root:action.name=s1-exit-action
-    INFO:root:action.name=t1-action
-    INFO:root:action.name=s2-entry-action
-    INFO:root:action.name=a5-do-action
-    INFO:root:fsm data={u'current_state': u's2', u'current_event': u'e2', u'machine_name': u'm1', u'context': {}}
-    INFO:root:action.name=s2-exit-action
-    INFO:root:action.name=t2-action
-    INFO:root:action.name=s1-entry-action
-    ...
+```python
+ENDPOINTS = {
+     'arn:partition:dynamodb:testing:account:table/aws-lambda-fsm.env': 'http://localhost:4569',
+     'arn:partition:kinesis:testing:account:stream/aws-lambda-fsm': 'http://localhost:4568',
+     'arn:partition:elasticache:testing:account:cluster:aws-lambda-fsm': 'localhost:11211',
+     'arn:aws:ecs:testing:account:cluster/aws-lambda-fsm': 'http://localhost:8888'
+}
+```
     
-## Running `dev_ecs.py`
+## 5. Creating Resources
 
-This runs a local ECS-like service.
- 
-Get host etc to docker daemon setup
+See [Setup](SETUP.md)
 
-    $ export DOCKER_HOST=tcp://192.168.99.100:2376
-    $ export DOCKER_MACHINE_NAME=default
-    $ export DOCKER_TLS_VERIFY=1
-    $ export DOCKER_CERT_PATH=/absolute/path/to/.docker/machine/machines/default
-    
-Build the `docker` image that knows how to run other `docker` images and emit
-events back onto the FSM's Kinesis/SQS/... stream/queue/...
+## 6. Running `dev_lambda.py`
 
-    $ docker build -t runner tools
- 
-Run `dev_ecs.py` which uses `docker run` to simulate an AWS ECS service
+This runs a local [AWS Lambda](https://aws.amazon.com/lambda/)-like service. In the following example
+we have started up a `dev_lambda.py` listening to the default `settings.PRIMARY_STREAM_SOURCE`. It is
+possible to start multiple `dev_lambda.py` instances, each listening to different event sources, 
+as per the configuration in your settings.
 
-    $ workon aws-lambda-fsm
-    $ PYTHONPATH=. python tools/dev_ecs.py --port=8888 --image=runner:latest
-    
-## Running `start_state_machine.py`
+```bash
+$ workon aws-lambda-fsm # ensure
+$ PYTHONPATH=. python tools/dev_lambda.py --run_kinesis_lambda=1
+INFO:root:fsm data={u'current_state': u's1', u'current_event': u'e1', u'machine_name': u'm1'}
+INFO:root:action.name=s1-exit-action
+INFO:root:action.name=t1-action
+INFO:root:action.name=s2-entry-action
+INFO:root:action.name=a5-do-action
+INFO:root:fsm data={u'current_state': u's2', u'current_event': u'e2', u'machine_name': u'm1', u'context': {}}
+INFO:root:action.name=s2-exit-action
+INFO:root:action.name=t2-action
+INFO:root:action.name=s1-entry-action
+...
+```
+   
+## 7. Running `start_state_machine.py`
 
 This injects a message into Kinesis/DynamoDB/SNS to kick off a state machine.
  
-    $ workon aws-lambda-fsm
-    $ PYTHONPATH=. python tools/start_state_machine.py --machine_name=tracer --kinesis_uri=http://localhost:4567 --dynamodb_uri=http://localhost:4568
+```bash
+$ workon aws-lambda-fsm
+$ PYTHONPATH=. python tools/start_state_machine.py --machine_name=tracer
+```
+    
+ 
+## 8. (EXPERIMENTAL) Running `dev_ecs.py`
 
+This runs a local [AWS ECS](https://aws.amazon.com/ecs/)-like service.
+
+Build the `docker` image that knows how to run other `docker` images and emit
+events back onto the FSM's Kinesis/SQS/... stream/queue/...
+
+```bash
+$ docker build -t fsm_docker_runner -f ./tools/experimental/Dockerfile.fsm_docker_runner ./tools/experimental
+$ docker build -t dev_ecs -f ./tools/experimental/Dockerfile.dev_ecs ./tools/experimental
+```
+ 
+Run `dev_ecs.py` which uses `docker run` to simulate an AWS ECS service
+
+```bash
+$ workon aws-lambda-fsm
+$ PYTHONPATH=. python tools/dev_ecs.py --port=8888 --image=runner:latest
+```
+    
 [<< FSM YAML](YAML.md) | [Running on AWS >>](AWS.md)
     

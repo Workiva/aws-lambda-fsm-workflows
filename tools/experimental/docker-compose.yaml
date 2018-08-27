@@ -45,8 +45,8 @@ services:
         aliases:
           - redis
 
-  ecs:
-    image: "ecs:latest"
+  dev_ecs:
+    image: "dev_ecs:latest"
     ports:
       - 8888:8888
     volumes:
@@ -58,4 +58,4 @@ services:
     networks:
       aws-lambda-fsm-workflows:
         aliases:
-          - ecs
+          - dev_ecs
