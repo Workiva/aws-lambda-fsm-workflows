@@ -15,7 +15,7 @@
 COVER_PACKAGE := `find aws_lambda_fsm -name "*.py" | grep -vE "vendor|tests|__init__|_pkg_meta|aws_lambda_fsm/utils.py" | sed s/[.]py// | sed s/[/]/./g | sed "s/aws_lambda_fsm/--cover-package aws_lambda_fsm/"`
 
 clean:
-	echo Y | pycleaner
+	find . -name '*.pyc' -delete
 	rm -f aws-lambda-fsm.zip
 	rm -f .coverage
 	ln -sf settings.py.example settings.py

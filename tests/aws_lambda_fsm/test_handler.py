@@ -150,7 +150,7 @@ class TestHandler(unittest.TestCase):
         return {
             'eventSource': 'aws:kinesis',
             'kinesis': {
-                'data': base64.b64encode(json.dumps({'machine_name': 'barfoo'}, sort_keys=True))
+                'data': base64.b64encode(json.dumps({'machine_name': 'barfoo'}, sort_keys=True).encode('utf-8'))
             }
         }
 
@@ -158,7 +158,7 @@ class TestHandler(unittest.TestCase):
     def test_lambda_kinesis_handler(self,
                                     mock_process_payload):
         lambda_kinesis_handler(self.get_kinesis_record())
-        mock_process_payload.assert_called_with('{"machine_name": "barfoo"}', {'source': 'kinesis'})
+        mock_process_payload.assert_called_with(b'{"machine_name": "barfoo"}', {'source': 'kinesis'})
 
     @mock.patch('aws_lambda_fsm.handler.FSM')
     @mock.patch('aws_lambda_fsm.handler.logger')
@@ -169,7 +169,7 @@ class TestHandler(unittest.TestCase):
         lambda_kinesis_handler(self.get_kinesis_record())
         mock_logging.exception.assert_called_with(
             'Critical error handling record: %s',
-            {'eventSource': 'aws:kinesis', 'kinesis': {'data': 'eyJtYWNoaW5lX25hbWUiOiAiYmFyZm9vIn0='}}
+            {'eventSource': 'aws:kinesis', 'kinesis': {'data': b'eyJtYWNoaW5lX25hbWUiOiAiYmFyZm9vIn0='}}
         )
 
 ################################################################################

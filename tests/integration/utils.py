@@ -208,7 +208,7 @@ def to_kinesis_message(data):
     return {
         "eventSource": "aws:kinesis",
         "kinesis": {
-            "data": base64.b64encode(data)
+            "data": base64.b64encode(data.encode('utf-8'))
         }
     }
 
