@@ -18,10 +18,10 @@ SECONDARY_ENVIRONMENT_SOURCE = 'arn:partition:dynamodb:testing:account:table/aws
 
 AWS_CHAOS = {}
 ENDPOINTS = {
-     'arn:partition:dynamodb:testing:account:table/aws-lambda-fsm.env': 'http://localstack:4569',
-     'arn:partition:kinesis:testing:account:stream/aws-lambda-fsm': 'http://localstack:4568',
-     'arn:partition:elasticache:testing:account:cluster:aws-lambda-fsm': 'memcache:11211',
-     'arn:aws:ecs:testing:account:cluster/aws-lambda-fsm': 'http://ecs:8888'
+     'arn:partition:dynamodb:testing:account:table/aws-lambda-fsm.env': 'http://localhost:4569',
+     'arn:partition:kinesis:testing:account:stream/aws-lambda-fsm': 'http://localhost:4568',
+     'arn:partition:elasticache:testing:account:cluster:aws-lambda-fsm': 'localhost:11211',
+     'arn:aws:ecs:testing:account:cluster/aws-lambda-fsm': 'http://localhost:8888'
 }
 
 try:

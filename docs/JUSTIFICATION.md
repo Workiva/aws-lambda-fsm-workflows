@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 
-[<< Overview](OVERVIEW.md) | [Installing Dependencies >>](INSTALL.md)
+[<< Overview](OVERVIEW.md) | [Settings >>](SETTINGS.md)
 
 # Justification
 

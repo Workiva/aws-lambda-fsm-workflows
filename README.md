@@ -50,7 +50,6 @@ The FSM implementation is inspired by the paper:
 1. [Architecture](docs/ARCHITECTURE.md)
 1. [Overview](docs/OVERVIEW.md)
 1. [Justification](docs/JUSTIFICATION.md)
-1. [Installing Dependencies](docs/INSTALL.md)
 1. [Settings](docs/SETTINGS.md)
 1. [Chaos](docs/CHAOS.md)
 1. [Idempotency](docs/IDEMPOTENCY.md)

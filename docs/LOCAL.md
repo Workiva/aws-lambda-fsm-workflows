@@ -18,55 +18,49 @@ limitations under the License.
 
 # Running Locally
 
-## Docker
+## Install Virtualenv
+
+    $ pip install virtualenv
+    $ pip install virtualenvwrapper
+    
+## Install Python Dependencies
+
+    $ mkvirtualenv aws-lambda-fsm
+    $ pip install -Ur requirements_dev.txt
+
+## Install Docker
 
 Install `docker` (https://www.docker.com/)
 
-## Localstack
+## Localstack + Memcache + Redis
 
-Run localstack (https://github.com/localstack/localstack), which contains stubs for AWS 
-services like SQS, Kinesis, etc.
+A docker-compose.yaml file is supplied that runs localstack (https://github.com/localstack/localstack), which contains 
+stubs for AWS services like SQS, Kinesis, etc. It also runs memcache and redis instances, since 
+[Elasticache](https://aws.amazon.com/elasticache/) is not supported by localstack.
 
-    $ git clone git@github.com:localstack/localstack.git
-    $ cd localstack
-    $ docker-compose up
-    
-## Memcache and Redis
-
-Add memcache 
+    $ docker-compose -f tools/docker-compose.yaml up
 
 ## Settings
 
-It is possible to use local stubs for various AWS services. By adding the following
-to `settingslocal.py` the framework will send requests to localhost, rather than 
-amazonaws.com.
+It is possible to use local stubs for various AWS services. An example that can be used local
+development is included in the `tools` folder. You can simply symlink it as follows.
+
+    $ ln -s tools/settings.py.local settings.py
+
+It contains a mapping of ARN to localstack/memcache endpoint
 
     ENDPOINTS = {
-        'sqs': {
-            'us-east-1': 'http://localhost:4576'
-        },
-        'kinesis': {
-            'us-east-1': 'http://localhost:4567'
-        },
-        'dynamodb': {
-            'us-east-1': 'http://localhost:4568'
-        },
-        'arn:partition:elasticache:testing:account:cluster:aws-lambda-fsm': 'localhost:11211',
-        'elasticache': {
-            'us-east-1': 'localhost:11211'
-        }
+        'arn:partition:kinesis:testing:account:stream/aws-lambda-fsm': 'http://localhost:4568',
+        'arn:partition:elasticache:testing:account:cluster:aws-lambda-fsm': 'localhost:11211'
     }
-    
-The `settings.ENDPOINTS` dictionary is similar in structure to boto's `endpoints.json`
-but also allows specifying endpoints by ARN directly. Matches to full ARN take 
-precedence to matching the service and region.
 
-### Running `dev_lambda.py`
+## Running `dev_lambda.py`
 
 This runs a local Lambda service.
  
     $ workon aws-lambda-fsm
-    $ python tools/dev_lambda.py --kinesis_uri=http://localhost:4567 --dynamodb_uri=http://localhost:7654 --memcache_uri=localhost:11211
+    $ ln -s tools/settings.py.local settings.py
+    $ PYTHONPATH=. python tools/dev_lambda.py --kinesis_uri=http://localhost:4567 --dynamodb_uri=http://localhost:7654 --memcache_uri=localhost:11211
     INFO:root:fsm data={u'current_state': u's1', u'current_event': u'e1', u'machine_name': u'm1'}
     INFO:root:action.name=s1-exit-action
     INFO:root:action.name=t1-action
@@ -78,7 +72,9 @@ This runs a local Lambda service.
     INFO:root:action.name=s1-entry-action
     ...
     
-### Running `dev_ecs`
+## Running `dev_ecs.py`
+
+This runs a local ECS-like service.
  
 Get host etc to docker daemon setup
 
@@ -90,19 +86,19 @@ Get host etc to docker daemon setup
 Build the `docker` image that knows how to run other `docker` images and emit
 events back onto the FSM's Kinesis/SQS/... stream/queue/...
 
-    $ docker build -t runner .
+    $ docker build -t runner tools
  
 Run `dev_ecs.py` which uses `docker run` to simulate an AWS ECS service
 
     $ workon aws-lambda-fsm
-    $ python tools/dev_ecs.py --port=8888 --image=runner:latest
+    $ PYTHONPATH=. python tools/dev_ecs.py --port=8888 --image=runner:latest
     
-### Running `start_state_machine.py`
+## Running `start_state_machine.py`
 
 This injects a message into Kinesis/DynamoDB/SNS to kick off a state machine.
  
     $ workon aws-lambda-fsm
-    $ python tools/start_state_machine.py --machine_name=tracer --kinesis_uri=http://localhost:4567 --dynamodb_uri=http://localhost:7654
+    $ PYTHONPATH=. python tools/start_state_machine.py --machine_name=tracer --kinesis_uri=http://localhost:4567 --dynamodb_uri=http://localhost:4568
 
 [<< FSM YAML](YAML.md) | [Running on AWS >>](AWS.md)
     

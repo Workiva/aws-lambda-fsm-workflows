@@ -23,6 +23,7 @@ import SocketServer
 import argparse
 import json
 import subprocess
+import os
 
 # library imports
 
@@ -57,7 +58,12 @@ class Handler(BaseHTTPServer.BaseHTTPRequestHandler):
         length = int(self.headers['content-length'])
         data = json.loads(self.rfile.read(length))
 
-        subprocess_args = ['docker', 'run', '-v', '/var/run/docker.sock:/var/run/docker.sock']
+        subprocess_args = [
+            'docker', 'run',
+            '--network', 'aws-lambda-fsm-workflows',
+            '-v', '/var/run/docker.sock:/var/run/docker.sock',
+            '-v', os.environ['SETTINGS_PY'] + ':/usr/local/bin/settings.py'
+        ]
         co = data.get('overrides', {}).get('containerOverrides', [])
         environ = {}
         if co:
