@@ -24,8 +24,9 @@ Install [Docker](https://www.docker.com/).
 
 ## 2. Install Virtualenv
 
-Installing `virtualenv` allows all the python dependencies to be installed locally, so that
-state machines can be run and debugged locally using `dev_lambda.py` (see below). 
+Installing [Virtualenv](https://virtualenv.pypa.io/en/stable/) and 
+[Virtualenv Wrapper](https://virtualenvwrapper.readthedocs.io/en/latest/) allows all the python dependencies to be 
+installed locally, so that state machines can be run and debugged locally using `dev_lambda.py` (see below). 
 
 ```bash
 $ pip install virtualenv
@@ -36,11 +37,12 @@ $ pip install -Ur requirements_dev.txt
 
 ## 3. Localstack + Memcache + Redis
 
-A docker-compose.yaml file is supplied that runs [LocalStack](https://github.com/localstack/localstack), which 
+A `docker-compose.yaml` file is supplied that runs [LocalStack](https://github.com/localstack/localstack), which 
 contains stubs for AWS services like SQS, Kinesis, etc. 
 
-It also runs memcache and redis instances, since 
-[AWS Elasticache](https://aws.amazon.com/elasticache/) is not supported by localstack.
+It also runs [Memcached](https://memcached.org/) and [Redis](https://redis.io/) instances, since 
+[AWS Elasticache](https://aws.amazon.com/elasticache/) is not supported by 
+[LocalStack](https://github.com/localstack/localstack).
 
 ```bash
 $ docker-compose -f tools/experimental/docker-compose.yaml up
@@ -97,7 +99,9 @@ INFO:root:action.name=s1-entry-action
    
 ## 7. Running `start_state_machine.py`
 
-This injects a message into Kinesis/DynamoDB/SNS to kick off a state machine.
+This injects a message into [AWS Kinesis](https://aws.amazon.com/kinesis/), 
+[AWS DynamoDB](https://aws.amazon.com/dynamodb/), [AWS SNS](https://aws.amazon.com/sns/), or
+[AWS SQS](https://aws.amazon.com/sqs/) to kick off a state machine.
  
 ```bash
 $ workon aws-lambda-fsm
@@ -110,18 +114,18 @@ $ PYTHONPATH=. python tools/start_state_machine.py --machine_name=tracer
 This runs a local [AWS ECS](https://aws.amazon.com/ecs/)-like service.
 
 Build the `docker` image that knows how to run other `docker` images and emit
-events back onto the FSM's Kinesis/SQS/... stream/queue/...
+events back onto the FSM's event dispatching machinery.
 
 ```bash
 $ docker build -t fsm_docker_runner -f ./tools/experimental/Dockerfile.fsm_docker_runner ./tools/experimental
 $ docker build -t dev_ecs -f ./tools/experimental/Dockerfile.dev_ecs ./tools/experimental
 ```
  
-Run `dev_ecs.py` which uses `docker run` to simulate an AWS ECS service
+`dev_ecs.py` is configured to run in the supplied `docker-compose.yaml`. Just start it up alongside
+[LocalStack](https://github.com/localstack/localstack) etc. using
 
 ```bash
-$ workon aws-lambda-fsm
-$ PYTHONPATH=. python tools/dev_ecs.py --port=8888 --image=runner:latest
+$ docker-compose -f tools/experimental/docker-compose.yaml up
 ```
     
 [<< FSM YAML](YAML.md) | [Running on AWS >>](AWS.md)

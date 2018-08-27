@@ -27,7 +27,7 @@ The system is designed to run on AWS.
 Code execution is accomplished via both:
 
 1. [AWS Lambda](https://aws.amazon.com/lambda/) and 
-1. [AWS ECS](https://aws.amazon.com/ecs/). 
+1. (EXPERIMENTAL) [AWS ECS](https://aws.amazon.com/ecs/). 
 
  [AWS ECS](https://aws.amazon.com/ecs/) is used to run any containerized applications you may want to add to a 
 workflow, but it is not the only option.  It is very straightforward 
@@ -69,8 +69,8 @@ Checkpointing can be handled by a only a single system at the moment:
 
 1. [AWS DynamoDB](https://aws.amazon.com/dynamodb/)
 
-[AWS DynamoDB](https://aws.amazon.com/dynamodb/) is able to store the offset of the mostly 
-dispatch [AWS Kinesis](https://aws.amazon.com/kinesis/) message.
+[AWS DynamoDB](https://aws.amazon.com/dynamodb/) is able to store the offset of the most recently
+dispatched [AWS Kinesis](https://aws.amazon.com/kinesis/) message.
 
 ## Locks and Idempotency
 
