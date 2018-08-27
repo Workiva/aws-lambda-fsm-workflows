@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 # Copyright 2016-2018 Workiva Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,6 +14,7 @@
 # limitations under the License.
 
 # system imports
+from builtins import object
 import uuid
 import time
 
@@ -21,9 +23,9 @@ from nose.plugins.attrib import attr
 
 # application imports
 from aws_lambda_fsm import aws
-from test_base import MemcachedTest
-from test_base import RedisTest
-from test_base import DynamodbTest
+from .test_base import MemcachedTest
+from .test_base import RedisTest
+from .test_base import DynamodbTest
 
 
 class SmokeTest(object):

@@ -17,6 +17,7 @@
 ################################################################################
 
 
+from builtins import object
 class ENVIRONMENT(object):
     FSM_CONTEXT = 'FSM_CONTEXT'
     FSM_PRIMARY_STREAM_SOURCE = 'FSM_PRIMARY_STREAM_SOURCE'
@@ -194,7 +195,7 @@ class AWS_ELASTICACHE(object):
     CacheNodes = 'CacheNodes'
     NodeGroups = 'NodeGroups'
 
-    class RESOURCE_TYPE:
+    class RESOURCE_TYPE(object):
 
         CLUSTER = 'cluster'
         SNAPSHOT = 'snapshot'

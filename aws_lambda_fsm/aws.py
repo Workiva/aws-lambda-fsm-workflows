@@ -13,6 +13,11 @@
 # limitations under the License.
 
 # system imports
+from builtins import map
+from builtins import zip
+from builtins import str
+from builtins import range
+from builtins import object
 from threading import RLock
 import logging
 import time
@@ -122,7 +127,7 @@ class ChaosConnection(object):
             if attr == 'pipeline':
                 return ChaosConnection(self.resource_arn, original_attr, self.original_chaos)
             if callable(original_attr):
-                for exception_or_return, percentage in self.chaos.iteritems():
+                for exception_or_return, percentage in self.chaos.items():
                     if random.uniform(0.0, 1.0) < percentage:
                         return ChaosFunction(exception_or_return, original_attr)
         return original_attr
@@ -697,11 +702,11 @@ def increment_error_counters(data, dimensions):
             {
                 AWS_CLOUDWATCH.MetricName: name,
                 AWS_CLOUDWATCH.Dimensions: [
-                    {AWS_CLOUDWATCH.Name: key, AWS_CLOUDWATCH.Value: val} for key, val in dimensions.iteritems()
+                    {AWS_CLOUDWATCH.Name: key, AWS_CLOUDWATCH.Value: val} for key, val in dimensions.items()
                 ],
                 AWS_CLOUDWATCH.Timestamp: utcnow,
                 AWS_CLOUDWATCH.Value: value
-            } for name, value in data.items()
+            } for name, value in list(data.items())
         ]
     )
     return return_value
@@ -918,7 +923,7 @@ def _serialize_lease_value(steps, retries, expires, fence_token):
 
 
 def _deserialize_lease_value(value):
-    return map(int, value.split(':'))
+    return list(map(int, value.split(':')))
 
 
 def _acquire_lease_memcache(cache_arn, correlation_id, steps, retries, timeout=LEASE_DATA.LEASE_TIMEOUT):
@@ -1118,7 +1123,7 @@ def _acquire_lease_dynamodb(table_arn, correlation_id, steps, retries, timeout=L
         fence_token_str = return_value[AWS_DYNAMODB.Attributes][LEASE_DATA.FENCE][AWS_DYNAMODB.NUMBER]
         return int(fence_token_str)
 
-    except ClientError, e:
+    except ClientError as e:
 
         # operating as expected for entity already existing
         if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
@@ -1330,7 +1335,7 @@ def _release_lease_dynamodb(table_arn, correlation_id, steps, retries, fence_tok
         # the conditional update and atomic increment worked
         return True
 
-    except ClientError, e:
+    except ClientError as e:
 
         # operating as expected for entity already existing
         if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
@@ -2096,7 +2101,7 @@ def retriable_entities(table_arn, index, run_at, limit=100):
 
     table_name = get_arn_from_arn_string(table_arn).slash_resource()
 
-    for partition in xrange(16):
+    for partition in range(16):
 
         # query by partition
         results = _trace(
@@ -2244,7 +2249,7 @@ def _validate_sqs_urls():
 
     """
     if hasattr(settings, 'SQS_URLS'):
-        for queue_arn, entry in settings.SQS_URLS.iteritems():
+        for queue_arn, entry in settings.SQS_URLS.items():
             arn = get_arn_from_arn_string(queue_arn)
             if arn.service != AWS.SQS:
                 log_once(logger.warning, "SQS_URLS has invalid key '%s' (service)", queue_arn)
@@ -2307,7 +2312,7 @@ def _validate_elasticache_endpoints():
     }
     """
     if hasattr(settings, 'ELASTICACHE_ENDPOINTS'):
-        for cache_arn, entry in settings.ELASTICACHE_ENDPOINTS.iteritems():
+        for cache_arn, entry in settings.ELASTICACHE_ENDPOINTS.items():
             arn = get_arn_from_arn_string(cache_arn)
             if arn.service != AWS.ELASTICACHE:
                 log_once(logger.warning, "ELASTICACHE_ENDPOINTS has invalid key '%s'", cache_arn)

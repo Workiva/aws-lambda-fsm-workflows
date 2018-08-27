@@ -18,8 +18,10 @@
 # dev_ecs.py
 #
 # system imports
-import BaseHTTPServer
-import SocketServer
+from future import standard_library
+standard_library.install_aliases()
+import http.server
+import socketserver
 import argparse
 import json
 import subprocess
@@ -51,7 +53,7 @@ args = parser.parse_args()
 # }
 
 
-class Handler(BaseHTTPServer.BaseHTTPRequestHandler):
+class Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
 
         length = int(self.headers['content-length'])
@@ -76,6 +78,6 @@ class Handler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write('{}')
 
-httpd = SocketServer.TCPServer(("", args.port), Handler)
+httpd = socketserver.TCPServer(("", args.port), Handler)
 
 httpd.serve_forever()

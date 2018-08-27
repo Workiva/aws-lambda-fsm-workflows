@@ -13,6 +13,7 @@
 # limitations under the License.
 
 # system imports
+from builtins import object
 import logging
 
 # library imports

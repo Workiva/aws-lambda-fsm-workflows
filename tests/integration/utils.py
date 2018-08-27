@@ -13,6 +13,7 @@
 # limitations under the License.
 
 # system imports
+from builtins import object
 import base64
 import json
 import unittest
@@ -48,18 +49,15 @@ class Messages(object):
         s = 'system_context'
         u = 'user_context'
         svars = ('current_state', 'current_event', 'steps', 'retries')
-        serialized = map(lambda x: json.loads(x), self.all_messages)
+        serialized = [json.loads(x) for x in self.all_messages]
         if raw:
             return serialized
         data = enumerate(serialized)
-        return map(
-            lambda x: (
+        return [(
                 x[0],
                 tuple(x[1][s][v] for v in svars),
                 tuple(x[1][u].get(v) for v in uvars)
-            ),
-            data
-        )
+            ) for x in data]
 
 
 # not threadsafe, yada yada

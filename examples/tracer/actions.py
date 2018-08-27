@@ -13,6 +13,7 @@
 # limitations under the License.
 
 # system imports
+from builtins import str
 import logging
 import random
 import time

@@ -12,5 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from builtins import map
 version_info = (0, 16, 0)
 version = '.'.join(map(str, version_info))
