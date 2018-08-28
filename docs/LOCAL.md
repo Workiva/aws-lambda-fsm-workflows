@@ -71,7 +71,7 @@ ENDPOINTS = {
 }
 ```
     
-## 5. Creating Resources
+## 5. Running `create_resources.py`
 
 See [Setup](SETUP.md)
 
