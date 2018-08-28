@@ -1,3 +1,5 @@
+import os
+
 PRIMARY_METRICS_SOURCE = None
 SECONDARY_METRICS_SOURCE = None
 
@@ -14,14 +16,14 @@ PRIMARY_RETRY_SOURCE = 'arn:partition:kinesis:testing:account:stream/aws-lambda-
 SECONDARY_RETRY_SOURCE = 'arn:partition:kinesis:testing:account:stream/aws-lambda-fsm'
 
 PRIMARY_ENVIRONMENT_SOURCE = 'arn:partition:dynamodb:testing:account:table/aws-lambda-fsm.env'
-SECONDARY_ENVIRONMENT_SOURCE = 'arn:partition:dynamodb:testing:account:table/aws-lambda-fsm.env'
+SECONDARY_ENVIRONMENT_SOURCE = None
 
 AWS_CHAOS = {}
 ENDPOINTS = {
-     'arn:partition:dynamodb:testing:account:table/aws-lambda-fsm.env': 'http://localhost:4569',
-     'arn:partition:kinesis:testing:account:stream/aws-lambda-fsm': 'http://localhost:4568',
-     'arn:partition:elasticache:testing:account:cluster:aws-lambda-fsm': 'localhost:11211',
-     'arn:aws:ecs:testing:account:cluster/aws-lambda-fsm': 'http://localhost:8888'
+     'arn:partition:dynamodb:testing:account:table/aws-lambda-fsm.env': 'http://%s:4569' % os.environ.get('DYNAMODB_HOST', 'localstack'),
+     'arn:partition:kinesis:testing:account:stream/aws-lambda-fsm': 'http://%s:4568' % os.environ.get('KINESIS_HOST', 'localstack'),
+     'arn:partition:elasticache:testing:account:cluster:aws-lambda-fsm': '%s:11211' % os.environ.get('MEMCACHE_HOST', 'memcached'),
+     'arn:aws:ecs:testing:account:cluster/aws-lambda-fsm': 'http://%s:8888' % os.environ.get('ECS_HOST', 'ecs')
 }
 
 try:

@@ -70,7 +70,7 @@ AWS ARN for [AWS DynamoDB](https://aws.amazon.com/dynamodb/) is the preferred va
 ## Cache
 
 * `settings.PRIMARY_CACHE_SOURCE` controls the primary location for cache messages. Valid values are AWS ARNs for [Elasticache](https://aws.amazon.com/elasticache/) and [AWS DynamoDB](https://aws.amazon.com/dynamodb/).
-* `settings.SECONDARY_CACHE_SOURCE` controls the primary location for cache messages. Valid values are AWS ARNs for [Elasticache](https://aws.amazon.com/elasticache/) and [AWS DynamoDB](https://aws.amazon.com/dynamodb/).
+* `settings.SECONDARY_CACHE_SOURCE` controls the secondary/failover location for cache messages. Valid values are AWS ARNs for [Elasticache](https://aws.amazon.com/elasticache/) and [AWS DynamoDB](https://aws.amazon.com/dynamodb/).
 
 It is valid, but not useful, to specify the same value for each. 
 

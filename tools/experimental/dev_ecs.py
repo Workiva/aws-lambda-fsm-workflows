@@ -58,12 +58,13 @@ class Handler(BaseHTTPServer.BaseHTTPRequestHandler):
         length = int(self.headers['content-length'])
         data = json.loads(self.rfile.read(length))
 
-        subprocess_args = [
-            'docker', 'run',
-            '--network', 'aws-lambda-fsm-workflows',
-            '-v', '/var/run/docker.sock:/var/run/docker.sock',
-            '-v', os.environ['SETTINGS_PY'] + ':/usr/local/bin/settings.py'
-        ]
+        subprocess_args = ['docker', 'run', '-v', '/var/run/docker.sock:/var/run/docker.sock']
+        if 'VOLUME' in os.environ:
+            subprocess_args.extend(['-v', os.environ['VOLUME']])
+        if 'LINK' in os.environ:
+            subprocess_args.extend(['--link=' + os.environ['LINK']])
+        if 'NETWORK' in os.environ:
+            subprocess_args.extend(['--network=' + os.environ['NETWORK']])
         co = data.get('overrides', {}).get('containerOverrides', [])
         environ = {}
         if co:
@@ -81,6 +82,7 @@ class Handler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.send_header("Content-Length", "2")
         self.end_headers()
         self.wfile.write('{}')
+
 
 httpd = SocketServer.TCPServer(("", args.port), Handler)
 

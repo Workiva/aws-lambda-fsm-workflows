@@ -51,11 +51,12 @@ services:
       - 8888:8888
     volumes:
       - ./dev_ecs.py:/usr/local/bin/dev_ecs.py
-      - ./settings.py.docker:/usr/local/bin/settings.py
+      - ./settings.py.dev_ecs:/usr/local/bin/settings.py
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      - SETTINGS_PY=${PWD}/tools/settings.py.docker
+      - VOLUME=${PWD}/tools/experimental/settings.py.dev_ecs:/usr/local/bin/settings.py
+      - NETWORK=aws-lambda-fsm-workflows
     networks:
       aws-lambda-fsm-workflows:
         aliases:
-          - dev_ecs
+          - ecs

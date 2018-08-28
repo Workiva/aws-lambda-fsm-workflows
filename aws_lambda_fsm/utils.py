@@ -43,6 +43,8 @@ DEFAULT_RUNNER_CONTAINER_NAME = 'aws-lambda-fsm'
 
 
 def _testing(environment):
+    if 'AWS_HOSTNAME' in os.environ:
+        environment.append({'name': 'AWS_HOSTNAME', 'value': os.environ['AWS_HOSTNAME']})
     environment.append({'name': 'AWS_DEFAULT_REGION', 'value': os.environ['AWS_DEFAULT_REGION']})
     if os.environ.get('SQS_URI'):
         environment.append({'name': 'SQS_URI', 'value': os.environ['SQS_URI']})

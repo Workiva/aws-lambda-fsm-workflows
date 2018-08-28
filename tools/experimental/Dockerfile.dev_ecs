@@ -20,4 +20,4 @@ RUN apk add docker
 RUN pip install aws-lambda-fsm==0.16.0 docker-py==1.8.1 boto3==1.4.8
 
 # set the cmd
-CMD ["dev_ecs.py", "--image=runner:latest"]
+CMD ["dev_ecs.py", "--image=fsm_docker_runner:latest"]
