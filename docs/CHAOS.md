@@ -28,19 +28,21 @@ will fail.
 
 For example
 
-    PRIMARY_STREAM_SOURCE = 'arn:aws:kinesis:eu-west-1:999999999999:stream/aws-lambda-fsm'
-    PRIMARY_CACHE_SOURCE = 'arn:aws:dynamodb:eu-west-1:999999999999:table/aws-lambda-fsm.cache'
+```python
+PRIMARY_STREAM_SOURCE = 'arn:aws:kinesis:eu-west-1:999999999999:stream/aws-lambda-fsm'
+PRIMARY_CACHE_SOURCE = 'arn:aws:dynamodb:eu-west-1:999999999999:table/aws-lambda-fsm.cache'
 
-    from botocore.exceptions import ClientError
-    
-    AWS_CHAOS = {
-        PRIMARY_STREAM_SOURCE': {
-            ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.1,
-        },
-        PRIMARY_CACHE_SOURCE: {
-            ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.1,
-        }
+from botocore.exceptions import ClientError
+
+AWS_CHAOS = {
+    PRIMARY_STREAM_SOURCE': {
+        ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.1,
+    },
+    PRIMARY_CACHE_SOURCE: {
+        ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.1,
     }
+}
+```
     
 This works locally and when deployed to AWS.
 
