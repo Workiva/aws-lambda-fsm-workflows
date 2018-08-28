@@ -45,7 +45,7 @@ It also runs [Memcached](https://memcached.org/) and [Redis](https://redis.io/) 
 [LocalStack](https://github.com/localstack/localstack).
 
 ```bash
-$ docker-compose -f tools/experimental/docker-compose.yaml up
+$ docker-compose -f tools/experimental/docker-compose.yaml up localstack memcached redis
 ```
 
 ## 4. Settings
@@ -57,23 +57,38 @@ local development is included in the `tools/experimental` folder. You can simply
 follows.
 
 ```bash
-$ ln -s tools/experimental/settings.py.local settings.py
+$ ln -s tools/experimental/settings.py.dev_ecs settings.py
 ```
 
 It contains a mapping of ARN to localstack/memcache endpoint
 
 ```python
 ENDPOINTS = {
-     'arn:partition:dynamodb:testing:account:table/aws-lambda-fsm.env': 'http://localhost:4569',
-     'arn:partition:kinesis:testing:account:stream/aws-lambda-fsm': 'http://localhost:4568',
-     'arn:partition:elasticache:testing:account:cluster:aws-lambda-fsm': 'localhost:11211',
-     'arn:aws:ecs:testing:account:cluster/aws-lambda-fsm': 'http://localhost:8888'
+     'arn:partition:dynamodb:testing:account:table/aws-lambda-fsm.env': 'http://%s:4569' % os.environ.get('DYNAMODB_HOST', 'localstack'),
+     'arn:partition:kinesis:testing:account:stream/aws-lambda-fsm': 'http://%s:4568' % os.environ.get('KINESIS_HOST', 'localstack'),
+     'arn:partition:elasticache:testing:account:cluster:aws-lambda-fsm': '%s:11211' % os.environ.get('MEMCACHE_HOST', 'memcached'),
+     'arn:aws:ecs:testing:account:cluster/aws-lambda-fsm': 'http://%s:8888' % os.environ.get('ECS_HOST', 'ecs')
 }
 ```
     
 ## 5. Creating Resources
 
 See [Setup](SETUP.md)
+
+You can setup all the resource in `settings(local).py` using the `create_resources.py` script. Feel free
+to `export` to the environment variables rather than adding them to every comment. They are only listed
+to be explicit about requirements.
+
+```bash
+$ workon aws-lambda-fsm
+$ PATH=tools:${PATH} PYTHONPATH=. DYNAMODB_HOST=localhost KINESIS_HOST=localhost MEMCACHE_HOST=localhost ECS_HOST=localhost \
+  python tools/create_resources.py
+...
+INFO:root:********************************************************************************
+INFO:root:CREATING arn:partition:dynamodb:testing:account:table/aws-lambda-fsm.env
+INFO:root:********************************************************************************
+...
+```
 
 ## 6. Running `dev_lambda.py`
 
@@ -83,8 +98,9 @@ possible to start multiple `dev_lambda.py` instances, each listening to differen
 as per the configuration in your settings.
 
 ```bash
-$ workon aws-lambda-fsm # ensure
-$ PYTHONPATH=. python tools/dev_lambda.py --run_kinesis_lambda=1
+$ workon aws-lambda-fsm
+$ AWS_DEFAULT_REGION=testing PYTHONPATH=. DYNAMODB_HOST=localhost KINESIS_HOST=localhost MEMCACHE_HOST=localhost ECS_HOST=localhost \
+  python tools/dev_lambda.py --run_kinesis_lambda=1
 INFO:root:fsm data={u'current_state': u's1', u'current_event': u'e1', u'machine_name': u'm1'}
 INFO:root:action.name=s1-exit-action
 INFO:root:action.name=t1-action
@@ -105,9 +121,9 @@ This injects a message into [AWS Kinesis](https://aws.amazon.com/kinesis/),
  
 ```bash
 $ workon aws-lambda-fsm
-$ PYTHONPATH=. python tools/start_state_machine.py --machine_name=tracer
+$ PYTHONPATH=. DYNAMODB_HOST=localhost KINESIS_HOST=localhost MEMCACHE_HOST=localhost ECS_HOST=localhost \
+  python tools/start_state_machine.py --machine_name=tracer
 ```
-    
  
 ## 8. (EXPERIMENTAL) Running `dev_ecs.py`
 
@@ -127,6 +143,8 @@ $ docker build -t dev_ecs -f ./tools/experimental/Dockerfile.dev_ecs ./tools/exp
 ```bash
 $ docker-compose -f tools/experimental/docker-compose.yaml up
 ```
+
+It can also be run directly in a terminal like `dev_lambda.py` above.
     
 [<< FSM YAML](YAML.md) | [Running on AWS >>](AWS.md)
     
