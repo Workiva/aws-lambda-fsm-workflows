@@ -13,6 +13,7 @@
 # limitations under the License.
 
 # system imports
+from builtins import int
 from builtins import object
 import json
 import importlib
@@ -747,7 +748,7 @@ class Context(dict):
                 # understand fence tokens.
 
                 # make the fence token available
-                if isinstance(fence_token, (int, int)):
+                if isinstance(fence_token, int):
                     obj[OBJ.FENCE_TOKEN] = fence_token
 
                 self._dispatch_and_retry(event, obj)
