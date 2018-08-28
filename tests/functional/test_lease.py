@@ -18,6 +18,9 @@ import time
 
 # library imports
 from nose.plugins.attrib import attr
+import memcache
+import mock
+import redis
 
 # application imports
 from aws_lambda_fsm import aws
@@ -72,12 +75,123 @@ class MemcachedSmokeTest(MemcachedTest, SmokeTest):
     def test_smoke(self):
         self.smoke()
 
+    @mock.patch('aws_lambda_fsm.aws.logger')
+    def test_add_collision_when_missing(self, mock_logger):
+        correlation_id = uuid.uuid4().hex
+
+        # init aws memcache connection
+        connection = aws.get_connection(self.mock_settings.PRIMARY_CACHE_SOURCE)
+
+        def inline(x, c, ac):
+            y = c.original_gets(x)
+            ac.add('lease-' + correlation_id, '99:99:99:99')
+            return y
+
+        try:
+            connection.original_gets = connection.gets
+            another_connection = memcache.Client(['localhost:11211'], cache_cas=True)
+            connection.gets = lambda x: inline(x, connection, another_connection)
+            acquired = aws.acquire_lease(correlation_id, 1, 1, primary=True)
+            self.assertFalse(acquired)
+            self.assertEqual(
+                mock.call.warn("Cannot acquire memcache lease: unexpectedly lost 'memcache.add' race"),
+                mock_logger.mock_calls[-1]
+            )
+
+        finally:
+            connection.gets = connection.original_gets
+            del connection.original_gets
+
+    @mock.patch('aws_lambda_fsm.aws.logger')
+    def test_cas_collision_when_expired(self, mock_logger):
+        correlation_id = uuid.uuid4().hex
+
+        # init aws memcache connection
+        connection = aws.get_connection(self.mock_settings.PRIMARY_CACHE_SOURCE)
+        connection.set('lease-' + correlation_id, '-1:-1:0:99')
+
+        def inline(x, c, ac):
+            y = c.original_gets(x)
+            ac.gets('lease-' + correlation_id)
+            ac.cas('lease-' + correlation_id, '99:99:99:99')
+            return y
+
+        try:
+            connection.original_gets = connection.gets
+            another_connection = memcache.Client(['localhost:11211'], cache_cas=True)
+            connection.gets = lambda x: inline(x, connection, another_connection)
+            acquired = aws.acquire_lease(correlation_id, 1, 1, primary=True)
+            self.assertFalse(acquired)
+            self.assertEqual(
+                mock.call.warn("Cannot acquire memcache lease: unexpectedly lost 'memcache.cas' race"),
+                mock_logger.mock_calls[-1]
+            )
+
+        finally:
+            connection.gets = connection.original_gets
+            del connection.original_gets
+
 
 @attr('functional')
 class RedisSmokeTest(RedisTest, SmokeTest):
 
     def test_smoke(self):
         self.smoke()
+
+    @mock.patch('aws_lambda_fsm.aws.logger')
+    def test_watch_collision_when_missing(self, mock_logger):
+        correlation_id = uuid.uuid4().hex
+
+        # init aws redis connection
+        aws.get_connection(self.mock_settings.PRIMARY_CACHE_SOURCE)
+
+        def inline(a, b, c, d, ac):
+            r = aws.original_serialize_lease_value(a, b, c, d)
+            ac.setex('lease-' + correlation_id, 3600, '99:99:99:99')
+            return r
+
+        try:
+            aws.original_serialize_lease_value = aws._serialize_lease_value
+            another_connection = redis.StrictRedis(host='localhost', port=6379, db=0)
+            aws._serialize_lease_value = lambda a, b, c, d: inline(a, b, c, d, another_connection)
+            acquired = aws.acquire_lease(correlation_id, 1, 1, primary=True)
+            self.assertFalse(acquired)
+            self.assertEqual(
+                mock.call.warn("Cannot acquire redis lease: unexpectedly lost 'pipe.watch' race"),
+                mock_logger.mock_calls[-1]
+            )
+
+        finally:
+            aws._serialize_lease_value = aws._serialize_lease_value
+            del aws.original_serialize_lease_value
+
+    @mock.patch('aws_lambda_fsm.aws.logger')
+    def test_watch_collision_when_expired(self, mock_logger):
+        correlation_id = uuid.uuid4().hex
+
+        # init aws redis connection
+        connection = aws.get_connection(self.mock_settings.PRIMARY_CACHE_SOURCE)
+        connection.setex('lease-' + correlation_id, 3600, '-1:-1:0:99')
+
+        def inline(x, c, ac):
+            r = aws.original_deserialize_lease_value(x)
+            ac.setex('lease-' + correlation_id, 3600, '99:99:99:99')
+            return r
+
+        try:
+            aws.original_deserialize_lease_value = aws._deserialize_lease_value
+            another_connection = redis.StrictRedis(host='localhost', port=6379, db=0)
+            aws._deserialize_lease_value = lambda x: inline(x, connection, another_connection)
+            acquired = aws.acquire_lease(correlation_id, 1, 1, primary=True)
+            self.assertFalse(acquired)
+            self.assertEqual(
+                mock.call.warn("Cannot acquire redis lease: unexpectedly lost 'pipe.watch' race"),
+                mock_logger.mock_calls[-1]
+            )
+
+        finally:
+            aws._deserialize_lease_value = aws._deserialize_lease_value
+            del aws.original_deserialize_lease_value
 
 
 @attr('functional')
