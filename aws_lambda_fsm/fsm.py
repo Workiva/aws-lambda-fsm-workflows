@@ -680,7 +680,16 @@ class Context(dict):
                                         primary=self.lease_primary)
 
             # 0 indicates system error, False indicates lease acquisition failure
-            if fence_token is 0:
+            #
+            # >>> 0 == False
+            # True
+            # >>> 0 is 0
+            # True
+            # >>> 0 is 0L
+            # False
+            # >>>
+            #
+            if fence_token is 0 or fence_token is 0L:
                 self._queue_error(ERRORS.CACHE, 'System error acquiring primary=%s lease.' % self.lease_primary)
                 self.lease_primary = not self.lease_primary
                 fence_token = acquire_lease(self.correlation_id, self.steps, self.retries,
