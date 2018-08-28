@@ -52,6 +52,13 @@ parser.add_argument('--lambda_command', help='command to run lambda code (eg. do
                                              '"$PWD":/var/task lambci/lambda:python2.7 main.lambda_handler)')
 args = parser.parse_args()
 
+if (not args.run_kinesis_lambda) and \
+   (not args.run_sqs_lambda) and \
+   (not args.run_dynamodb_lambda) and \
+   (not args.run_timer_lambda) and \
+   (not args.run_sns_lambda):
+    parser.error("One of --run_(kinesis|sqs|dynamodb|sns|timer)_lambda is required.")
+
 # setup the logger BEFORE any aws_lambda_fsm code is imported otherwise that code emits
 # 'No handlers could be found for logger "aws_lambda_fsm.aws"'
 logging.basicConfig(

@@ -21,8 +21,8 @@ limitations under the License.
 A Python 2.7 framework for running Finite State Machine (FSM) Workflows on 
 
 1. [AWS Lambda](https://aws.amazon.com/lambda/) for code execution,
-1. (Optionally) [AWS ECS](https://aws.amazon.com/ecs/) for long-running code execution,
-1. [AWS Kinesis](https://aws.amazon.com/kinesis/) for event dispatch
+1. (Optionally/Experimental) [AWS ECS](https://aws.amazon.com/ecs/) for long-running code execution,
+1. (Optionally) [AWS Kinesis](https://aws.amazon.com/kinesis/) for event dispatch
 1. (Optionally) [AWS DynamoDB](https://aws.amazon.com/dynamodb/) for event dispatch
 1. (Optionally) [AWS SNS](https://aws.amazon.com/sns/) for event dispatch
 1. (Optionally) [AWS SQS](https://aws.amazon.com/sqs/) for event dispatch
@@ -40,7 +40,6 @@ or
 1. [AWS Lambda](https://aws.amazon.com/lambda/) for code execution
 1. (Experimental) [AWS Step Functions](https://aws.amazon.com/step-functions/) for orchestration and retries,
 
-
 The FSM implementation is inspired by the paper:
 
 [1] J. van Gurp, J. Bosch, "On the Implementation of Finite State Machines", in Proceedings of the 3rd Annual IASTED
@@ -50,7 +49,6 @@ The FSM implementation is inspired by the paper:
 1. [Architecture](docs/ARCHITECTURE.md)
 1. [Overview](docs/OVERVIEW.md)
 1. [Justification](docs/JUSTIFICATION.md)
-1. [Installing Dependencies](docs/INSTALL.md)
 1. [Settings](docs/SETTINGS.md)
 1. [Chaos](docs/CHAOS.md)
 1. [Idempotency](docs/IDEMPOTENCY.md)

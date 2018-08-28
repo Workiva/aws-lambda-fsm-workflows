@@ -1,0 +1,62 @@
+version: '2.1'
+
+networks:
+  aws-lambda-fsm-workflows:
+    name: aws-lambda-fsm-workflows
+
+services:
+
+  localstack:
+    image: localstack/localstack
+    ports:
+      - "4567-4583:4567-4583"
+      - "${PORT_WEB_UI-8080}:${PORT_WEB_UI-8080}"
+    environment:
+      - SERVICES=${SERVICES- }
+      - DEBUG=${DEBUG- }
+      - DATA_DIR=${DATA_DIR- }
+      - PORT_WEB_UI=${PORT_WEB_UI- }
+      - LAMBDA_EXECUTOR=${LAMBDA_EXECUTOR- }
+      - KINESIS_ERROR_PROBABILITY=${KINESIS_ERROR_PROBABILITY- }
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - "${TMPDIR:-/tmp/localstack}:/tmp/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      aws-lambda-fsm-workflows:
+        aliases:
+          - localstack
+
+  memcached:
+    image: memcached:1.5.4
+    ports:
+      - 11211:11211
+    networks:
+      aws-lambda-fsm-workflows:
+        aliases:
+          - memcached
+
+  redis:
+    image: "redis:alpine"
+    ports:
+      - 6379:6379
+    networks:
+      aws-lambda-fsm-workflows:
+        aliases:
+          - redis
+
+  dev_ecs:
+    image: "dev_ecs:latest"
+    ports:
+      - 8888:8888
+    volumes:
+      - ./dev_ecs.py:/usr/local/bin/dev_ecs.py
+      - ./settings.py.dev_ecs:/usr/local/bin/settings.py
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - VOLUME=${PWD}/tools/experimental/settings.py.dev_ecs:/usr/local/bin/settings.py
+      - NETWORK=aws-lambda-fsm-workflows
+    networks:
+      aws-lambda-fsm-workflows:
+        aliases:
+          - ecs

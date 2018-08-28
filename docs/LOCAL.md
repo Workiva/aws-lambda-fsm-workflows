@@ -18,105 +18,133 @@ limitations under the License.
 
 # Running Locally
 
-## Settings
+## 1. Install Docker
 
-It is possible to use local stubs for various AWS services. By adding the following
-to `settingslocal.py` the framework will send requests to localhost, rather than 
-amazonaws.com.
+Install [Docker](https://www.docker.com/).
 
-    ENDPOINTS = {
-        'kinesis': {
-            'us-east-1': 'http://localhost:4567'
-        },
-        'dynamodb': {
-            'us-east-1': 'http://localhost:7654'
-        },
-        'arn:partition:elasticache:testing:account:cluster:aws-lambda-fsm': 'localhost:11211',
-        'elasticache': {
-            'us-east-1': 'localhost:11211'
-        },
-        'sns': {
-            'us-east-1': 'http://localhost:9292'
-        },
-        'ecs': {
-            'us-east-1': 'http://localhost:8888'
-        }
-    }
+## 2. Install Virtualenv
+
+Installing [Virtualenv](https://virtualenv.pypa.io/en/stable/) and 
+[Virtualenv Wrapper](https://virtualenvwrapper.readthedocs.io/en/latest/) allows all the python dependencies to be 
+installed locally, so that state machines can be run and debugged locally using `dev_lambda.py` (see below). 
+
+```bash
+$ pip install virtualenv
+$ pip install virtualenvwrapper
+$ mkvirtualenv aws-lambda-fsm
+$ pip install -Ur requirements_dev.txt
+```
+
+## 3. Localstack + Memcache + Redis
+
+A `docker-compose.yaml` file is supplied that runs [LocalStack](https://github.com/localstack/localstack), which 
+contains stubs for AWS services like SQS, Kinesis, etc. 
+
+It also runs [Memcached](https://memcached.org/) and [Redis](https://redis.io/) instances, since 
+[AWS Elasticache](https://aws.amazon.com/elasticache/) is not supported by 
+[LocalStack](https://github.com/localstack/localstack).
+
+```bash
+$ docker-compose -f tools/experimental/docker-compose.yaml up localstack memcached redis
+```
+
+## 4. Settings
+
+See [Settings](SETTINGS.md)
+
+It is possible to use local stubs for various AWS services. An example that can be used for
+local development is included in the `tools/experimental` folder. You can simply symlink it as 
+follows.
+
+```bash
+$ ln -s tools/experimental/settings.py.dev_ecs settings.py
+```
+
+It contains a mapping of ARN to localstack/memcache endpoint
+
+```python
+ENDPOINTS = {
+     'arn:partition:dynamodb:testing:account:table/aws-lambda-fsm.env': 'http://%s:4569' % os.environ.get('DYNAMODB_HOST', 'localstack'),
+     'arn:partition:kinesis:testing:account:stream/aws-lambda-fsm': 'http://%s:4568' % os.environ.get('KINESIS_HOST', 'localstack'),
+     'arn:partition:elasticache:testing:account:cluster:aws-lambda-fsm': '%s:11211' % os.environ.get('MEMCACHE_HOST', 'memcached'),
+     'arn:aws:ecs:testing:account:cluster/aws-lambda-fsm': 'http://%s:8888' % os.environ.get('ECS_HOST', 'ecs')
+}
+```
     
-The `settings.ENDPOINTS` dictionary is similar in structure to boto's `endpoints.json`
-but also allows specifying endpoints by ARN directly. Matches to full ARN take 
-precedence to matching the service and region.
+## 5. Creating Resources
 
-## Running Services
+See [Setup](SETUP.md)
 
-Depending on the configuration in `settings.py`, the following local services should be started
-    
-### Running `kinesalite` (https://github.com/mhart/kinesalite)
+You can setup all the resource in `settings(local).py` using the `create_resources.py` script. Feel free
+to `export` to the environment variables rather than adding them to every comment. They are only listed
+to be explicit about requirements.
 
-    $ kinesalite --port 4567
-    Listening at http://:::4567
-    
-### Running `dynalite` (https://github.com/mhart/dynalite)
+```bash
+$ workon aws-lambda-fsm
+$ PATH=tools:${PATH} PYTHONPATH=. DYNAMODB_HOST=localhost KINESIS_HOST=localhost MEMCACHE_HOST=localhost ECS_HOST=localhost \
+  python tools/create_resources.py
+...
+INFO:root:********************************************************************************
+INFO:root:CREATING arn:partition:dynamodb:testing:account:table/aws-lambda-fsm.env
+INFO:root:********************************************************************************
+...
+```
 
-    $ dynalite --port 7654
-    Listening at http://:::7654
-    
-### Running `memcached` (http://memcached.org/downloads)
+## 6. Running `dev_lambda.py`
 
-    $ memcached -vv
-    slab class   1: chunk size        96 perslab   10922
-    ...
-    
-### Running `fake_sns` (https://github.com/yourkarma/fake_sns)
+This runs a local [AWS Lambda](https://aws.amazon.com/lambda/)-like service. In the following example
+we have started up a `dev_lambda.py` listening to the default `settings.PRIMARY_STREAM_SOURCE`. It is
+possible to start multiple `dev_lambda.py` instances, each listening to different event sources, 
+as per the configuration in your settings.
 
-    $ fake_sns --database :memory:
-    
-`fake_sns` does not automatically send the messages, so one needs to repeatedly use `curl`
-to step the state machines forward.
+```bash
+$ workon aws-lambda-fsm
+$ AWS_DEFAULT_REGION=testing PYTHONPATH=. DYNAMODB_HOST=localhost KINESIS_HOST=localhost MEMCACHE_HOST=localhost ECS_HOST=localhost \
+  python tools/dev_lambda.py --run_kinesis_lambda=1
+INFO:root:fsm data={u'current_state': u's1', u'current_event': u'e1', u'machine_name': u'm1'}
+INFO:root:action.name=s1-exit-action
+INFO:root:action.name=t1-action
+INFO:root:action.name=s2-entry-action
+INFO:root:action.name=a5-do-action
+INFO:root:fsm data={u'current_state': u's2', u'current_event': u'e2', u'machine_name': u'm1', u'context': {}}
+INFO:root:action.name=s2-exit-action
+INFO:root:action.name=t2-action
+INFO:root:action.name=s1-entry-action
+...
+```
+   
+## 7. Running `start_state_machine.py`
 
-    $ curl -X POST http://localhost:9292/drain # drain the messages
-
-### Running `fake_sqs` (https://github.com/iain/fake_sqs)
-
-    $ fake_sqs
-    
-### Running `dev_ecs` 
-
-Get host etc to docker daemon setup
-
-    $ export DOCKER_HOST=tcp://192.168.99.100:2376
-    $ export DOCKER_MACHINE_NAME=default
-    $ export DOCKER_TLS_VERIFY=1
-    $ export DOCKER_CERT_PATH=/Users/shawnrusaw/.docker/machine/machines/default
-
-Run `dev_ecs.py` which uses `docker run` to simulate an AWS ECS service
-
-    $ workon aws-lambda-fsm
-    $ python tools/dev_ecs.py --port=8888 --image=image:tag
-    
-### Running `dev_lambda.py`
-
-This runs a local Lambda service.
+This injects a message into [AWS Kinesis](https://aws.amazon.com/kinesis/), 
+[AWS DynamoDB](https://aws.amazon.com/dynamodb/), [AWS SNS](https://aws.amazon.com/sns/), or
+[AWS SQS](https://aws.amazon.com/sqs/) to kick off a state machine.
  
-    $ workon aws-lambda-fsm
-    $ python tools/dev_lambda.py --kinesis_uri=http://localhost:4567 --dynamodb_uri=http://localhost:7654 --memcache_uri=localhost:11211
-    INFO:root:fsm data={u'current_state': u's1', u'current_event': u'e1', u'machine_name': u'm1'}
-    INFO:root:action.name=s1-exit-action
-    INFO:root:action.name=t1-action
-    INFO:root:action.name=s2-entry-action
-    INFO:root:action.name=a5-do-action
-    INFO:root:fsm data={u'current_state': u's2', u'current_event': u'e2', u'machine_name': u'm1', u'context': {}}
-    INFO:root:action.name=s2-exit-action
-    INFO:root:action.name=t2-action
-    INFO:root:action.name=s1-entry-action
-    ...
-    
-### Running `start_state_machine.py`
-
-This injects a message into Kinesis/DynamoDB/SNS to kick off a state machine.
+```bash
+$ workon aws-lambda-fsm
+$ PYTHONPATH=. DYNAMODB_HOST=localhost KINESIS_HOST=localhost MEMCACHE_HOST=localhost ECS_HOST=localhost \
+  python tools/start_state_machine.py --machine_name=tracer
+```
  
-    $ workon aws-lambda-fsm
-    $ python tools/start_state_machine.py --machine_name=tracer --kinesis_uri=http://localhost:4567 --dynamodb_uri=http://localhost:7654
+## 8. (EXPERIMENTAL) Running `dev_ecs.py`
 
+This runs a local [AWS ECS](https://aws.amazon.com/ecs/)-like service.
+
+Build the `docker` image that knows how to run other `docker` images and emit
+events back onto the FSM's event dispatching machinery.
+
+```bash
+$ docker build -t fsm_docker_runner -f ./tools/experimental/Dockerfile.fsm_docker_runner ./tools/experimental
+$ docker build -t dev_ecs -f ./tools/experimental/Dockerfile.dev_ecs ./tools/experimental
+```
+ 
+`dev_ecs.py` is configured to run in the supplied `docker-compose.yaml`. Just start it up alongside
+[LocalStack](https://github.com/localstack/localstack) etc. using
+
+```bash
+$ docker-compose -f tools/experimental/docker-compose.yaml up
+```
+
+It can also be run directly in a terminal like `dev_lambda.py` above.
+    
 [<< FSM YAML](YAML.md) | [Running on AWS >>](AWS.md)
     
