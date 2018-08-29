@@ -307,6 +307,7 @@ class AWS_DYNAMODB(object):
 class AWS_LAMBDA(object):
     Records = 'Records'
     EventSource = 'eventSource'
+    EventSourceCaps = 'EventSource'
     Source = 'source'
 
     class EVENT_SOURCE(object):

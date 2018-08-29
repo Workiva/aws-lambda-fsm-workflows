@@ -233,6 +233,10 @@ def lambda_timer_handler():
             logger.exception('Critical error handling entity: %s', entity)
 
 
+def _get_event_source(record):
+    return record.get(AWS_LAMBDA.EventSource, record.get(AWS_LAMBDA.EventSourceCaps))
+
+
 def lambda_handler(lambda_event, lambda_context):
     """
     AWS Lambda handler that handles all Kinesis/DynamoDB/Timer/SNS/SQS events.
@@ -259,7 +263,7 @@ def lambda_handler(lambda_event, lambda_context):
 
         records = lambda_event.get(AWS_LAMBDA.Records, [])
 
-        logger.info('Processing %s records...', Counter(record.get(AWS_LAMBDA.EVENT_SOURCE) for record in records))
+        logger.info('Processing %s records...', Counter(_get_event_source(record) for record in records))
 
         for record in records:
 

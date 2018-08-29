@@ -21,6 +21,7 @@ import json
 import mock
 
 # application imports
+from aws_lambda_fsm.handler import _get_event_source
 from aws_lambda_fsm.handler import _process_payload
 from aws_lambda_fsm.handler import _process_payload_step
 from aws_lambda_fsm.handler import lambda_dynamodb_handler
@@ -34,6 +35,15 @@ from aws_lambda_fsm.handler import lambda_step_handler
 
 
 class TestHandler(unittest.TestCase):
+
+    def test_get_event_source(self):
+        self.assertEqual('foo', _get_event_source({'eventSource': 'foo'}))
+
+    def test_get_event_source_caps(self):
+        self.assertEqual('foo', _get_event_source({'EventSource': 'foo'}))
+
+    def test_get_event_source_missing(self):
+        self.assertEqual(None, _get_event_source({'foo': 'bar'}))
 
     @mock.patch('aws_lambda_fsm.fsm.FSM')
     def test_process_payload(self,
