@@ -12,20 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM ubuntu:xenial
+FROM ubuntu:bionic
 
 # apt stuff
 RUN apt-get update
-RUN apt-get -y install python-pip nodejs npm software-properties-common python-software-properties supervisor memcached redis-server
-RUN apt-add-repository ppa:brightbox/ruby-ng
-RUN apt-get update
-RUN apt-get -y install ruby2.4
+RUN apt-get -y install nodejs npm software-properties-common \
+    python2.7 python-pip python3-pip ruby supervisor memcached redis-server
 
 # aws fakes
 RUN gem install fake_sqs -v 0.4.3
-# kinesalite@1.11.5 and above have a duplicate message bug. do not use.
-RUN npm install -g kinesalite@1.14.0 dynalite@1.3.1
-RUN ln -s `which nodejs` /usr/bin/node
+RUN npm install -g kinesalite@1.14.0 dynalite@2.0
 
 COPY requirements.txt requirements.txt
 COPY requirements_dev.txt requirements_dev.txt

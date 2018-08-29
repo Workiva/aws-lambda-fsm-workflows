@@ -1,0 +1,12 @@
+FROM fsm
+
+# RUN rm /usr/bin/python
+# RUN ln -s /usr/bin/python3 /usr/bin/python
+RUN pip3 install virtualenv
+RUN virtualenv -p python3 fsm_py3
+RUN /bin/bash -c "source /fsm_py3/bin/activate"
+RUN pip3 install -Ur requirements_dev.txt
+RUN pip3 list
+# RUN pip3 list
+
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisor.conf", "-l", "/dev/null", "-y", "0"]
