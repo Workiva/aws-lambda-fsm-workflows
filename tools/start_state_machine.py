@@ -42,9 +42,6 @@ import settings
 
 # setup the command line args
 parser = argparse.ArgumentParser(description='Starts a state machine.')
-parser.add_argument('--kinesis_stream_arn', default='PRIMARY_STREAM_SOURCE')
-parser.add_argument('--dynamodb_table_arn', default='PRIMARY_STREAM_SOURCE')
-parser.add_argument('--sns_topic_arn', default='PRIMARY_STREAM_SOURCE')
 parser.add_argument('--machine_name')
 parser.add_argument('--checkpoint_shard_id')
 parser.add_argument('--checkpoint_sequence_number')

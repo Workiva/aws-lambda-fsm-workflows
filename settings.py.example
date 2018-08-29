@@ -18,7 +18,7 @@ PRIMARY_METRICS_SOURCE = 'arn:partition:cloudwatch:testing:account:aws-lambda-fs
 SECONDARY_METRICS_SOURCE = None  # NOT SUPPORTED YET
 
 # used to dictate the primary location for caching
-# valid services = elasticache (memcache), dynamodb
+# valid services = elasticache (memcache), elasticache (redis), dynamodb
 PRIMARY_CACHE_SOURCE = 'arn:partition:elasticache:testing:account:cluster:aws-lambda-fsm1'
 SECONDARY_CACHE_SOURCE = 'arn:partition:elasticache:testing:account:cluster:aws-lambda-fsm2'
 
@@ -43,7 +43,7 @@ PRIMARY_ENVIRONMENT_SOURCE = 'arn:partition:dynamodb:testing:account:table/aws-l
 SECONDARY_ENVIRONMENT_SOURCE = None  # NOT SUPPORTED YET
 
 # stores SQS arn->QueueUrl mappings as an optimization to avoid
-# going on the wire for data that never changes
+# going on the wire for data that rarely changes (ever?)
 SQS_URLS = {}
 
 # stores Elasticache arn->endpoint mappings as an optimization to avoid

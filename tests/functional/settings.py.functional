@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 from botocore.exceptions import ClientError
-import redis
 
 PRIMARY_METRICS_SOURCE = None
 SECONDARY_METRICS_SOURCE = None
@@ -24,13 +24,13 @@ SECONDARY_CACHE_SOURCE = 'arn:partition:elasticache:testing:account:secondary_ca
 PRIMARY_STREAM_SOURCE = 'arn:partition:sqs:testing:account:primary_stream_source'
 SECONDARY_STREAM_SOURCE = 'arn:partition:kinesis:testing:account:stream/secondary_stream_source'
 
-PRIMARY_CHECKPOINT_SOURCE = None
+PRIMARY_CHECKPOINT_SOURCE = 'arn:partition:dynamodb:testing:account:table/secondary_checkpoint_source'
 SECONDARY_CHECKPOINT_SOURCE = None
 
 PRIMARY_RETRY_SOURCE = 'arn:partition:sqs:testing:account:primary_retry_source'
 SECONDARY_RETRY_SOURCE = 'arn:partition:kinesis:testing:account:stream/secondary_retry_source'
 
-PRIMARY_ENVIRONMENT_SOURCE = None
+PRIMARY_ENVIRONMENT_SOURCE = 'arn:partition:dynamodb:testing:account:table/primary_environment_source'
 SECONDARY_ENVIRONMENT_SOURCE = None
 
 AWS_CHAOS = {
@@ -38,8 +38,7 @@ AWS_CHAOS = {
     SECONDARY_STREAM_SOURCE: {ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.1},
     PRIMARY_RETRY_SOURCE: {ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.1},
     SECONDARY_RETRY_SOURCE: {ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.1},
-    PRIMARY_CACHE_SOURCE: {0: 0.1, None: 0.1},
-    SECONDARY_CACHE_SOURCE: {redis.exceptions.ConnectionError(): 0.1},
+    PRIMARY_CACHE_SOURCE: {0: 0.1, None: 0.1}
 }
 
 ELASTICACHE_ENDPOINTS = {
@@ -47,7 +46,7 @@ ELASTICACHE_ENDPOINTS = {
         'CacheClusterId': 'memcached-cluster',
         'Engine': 'memcached',
         'ConfigurationEndpoint': {
-            'Address': 'localhost',
+            'Address': os.environ.get('AWS_HOSTNAME', 'localhost'),
             'Port': 11211
         }
     },
@@ -57,7 +56,7 @@ ELASTICACHE_ENDPOINTS = {
         'CacheNodes': [
             {
                 'Endpoint': {
-                    'Address': 'localhost',
+                    'Address': os.environ.get('AWS_HOSTNAME', 'localhost'),
                     'Port': 6379
                 }
             }
@@ -66,8 +65,11 @@ ELASTICACHE_ENDPOINTS = {
 }
 
 ENDPOINTS = {
-    PRIMARY_STREAM_SOURCE: 'http://localhost:1111',
-    SECONDARY_STREAM_SOURCE: 'http://localhost:2222',
-    PRIMARY_RETRY_SOURCE: 'http://localhost:3333',
-    SECONDARY_RETRY_SOURCE: 'http://localhost:4444',
+    PRIMARY_CHECKPOINT_SOURCE: 'http://%s:4568' % os.environ.get('AWS_HOSTNAME', 'localhost'),
+    PRIMARY_ENVIRONMENT_SOURCE: 'http://%s:4568' % os.environ.get('AWS_HOSTNAME', 'localhost'),
+    PRIMARY_STREAM_SOURCE: 'http://%s:1111' % os.environ.get('AWS_HOSTNAME', 'localhost'),
+    SECONDARY_STREAM_SOURCE: 'http://%s:2222' % os.environ.get('AWS_HOSTNAME', 'localhost'),
+    PRIMARY_RETRY_SOURCE: 'http://%s:3333' % os.environ.get('AWS_HOSTNAME', 'localhost'),
+    SECONDARY_RETRY_SOURCE: 'http://%s:4444' % os.environ.get('AWS_HOSTNAME', 'localhost'),
+    'arn:aws:ecs:testing:account:cluster/aws-lambda-fsm': 'http://%s:8888' % os.environ.get('AWS_HOSTNAME', 'localhost')
 }

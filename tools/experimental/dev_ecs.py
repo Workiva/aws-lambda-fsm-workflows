@@ -23,6 +23,7 @@ import socketserver
 import argparse
 import json
 import subprocess
+import os
 from future import standard_library
 standard_library.install_aliases()
 
@@ -60,6 +61,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         data = json.loads(self.rfile.read(length))
 
         subprocess_args = ['docker', 'run', '-v', '/var/run/docker.sock:/var/run/docker.sock']
+        if 'VOLUME' in os.environ:
+            subprocess_args.extend(['-v', os.environ['VOLUME']])
+        if 'LINK' in os.environ:
+            subprocess_args.extend(['--link=' + os.environ['LINK']])
+        if 'NETWORK' in os.environ:
+            subprocess_args.extend(['--network=' + os.environ['NETWORK']])
         co = data.get('overrides', {}).get('containerOverrides', [])
         environ = {}
         if co:
@@ -78,6 +85,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write('{}')
 
+<<<<<<< HEAD:tools/dev_ecs.py
 httpd = socketserver.TCPServer(("", args.port), Handler)
+=======
+
+httpd = SocketServer.TCPServer(("", args.port), Handler)
+>>>>>>> upstream/master:tools/experimental/dev_ecs.py
 
 httpd.serve_forever()

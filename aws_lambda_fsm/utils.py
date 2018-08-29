@@ -43,7 +43,11 @@ DEFAULT_RUNNER_CONTAINER_NAME = 'aws-lambda-fsm'
 
 
 def _testing(environment):
+    if 'AWS_HOSTNAME' in os.environ:
+        environment.append({'name': 'AWS_HOSTNAME', 'value': os.environ['AWS_HOSTNAME']})
     environment.append({'name': 'AWS_DEFAULT_REGION', 'value': os.environ['AWS_DEFAULT_REGION']})
+    if os.environ.get('SQS_URI'):
+        environment.append({'name': 'SQS_URI', 'value': os.environ['SQS_URI']})
     if os.environ.get('KINESIS_URI'):
         environment.append({'name': 'KINESIS_URI', 'value': os.environ['KINESIS_URI']})
     if os.environ.get('DYNAMODB_URI'):
@@ -93,7 +97,7 @@ class ECSTaskEntryAction(Action):
         # construct a version of the context that can be base64 encoded
         # and stuffed into a environment variable for the container program.
         # all the container program needs to do is extract this data, add
-        # an event, and send the message onto kinesis. since this is an
+        # an event, and send the message onto sqs/kinesis/... since this is an
         # ENTRY action, we inspect the current transition for the state we
         # will be in AFTER this code executes.
         ctx = Context.from_payload_dict(context.to_payload_dict())

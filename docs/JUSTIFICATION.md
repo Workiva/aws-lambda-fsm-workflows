@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 
-[<< Overview](OVERVIEW.md) | [Installing Dependencies >>](INSTALL.md)
+[<< Overview](OVERVIEW.md) | [Settings >>](SETTINGS.md)
 
 # Justification
 
@@ -32,15 +32,19 @@ paper, and those found out through practical implementation are outlined in the 
 Take for instance a process that needs to send an email and also send an sms message. You can define two
 action classes that implement email and sms sending.
 
-    class SendEmailAction(action):
-      def execute(self, context, obj):
-        send_email(context['to_email'])
-        return "done"
+```python
+class SendEmailAction(action):
+  def execute(self, context, obj):
+    send_email(context['to_email'])
+    return "done"
+```
         
-    class SendSMSAction(action):
-      def execute(self, context, obj):
-        send_sms(context['to_sms'])
-        return "done"
+```python
+class SendSMSAction(action):
+  def execute(self, context, obj):
+    send_sms(context['to_sms'])
+    return "done"
+```
 
 However, these actions can be hooked together in arbitrary order via configuration **WITHOUT ALTERING THE CODE**. 
 This helps in code organisation and import efficiency.
@@ -64,22 +68,24 @@ JSON serializable, and a reasonable size, then pretty much anything can go into 
 
 FSM actions should be nothing more than thin shims on well-tested business logic. 
 
-    class MyAction(action):
+```python
+class MyAction(action):
+
+  def execute(self, context, obj):
+  
+    # step 1) pull needed data from the context
+    arg1 = context['arg1']
+    arg2 = context['arg2']
     
-      def execute(self, context, obj):
-      
-        # step 1) pull needed data from the context
-        arg1 = context['arg1']
-        arg2 = context['arg2']
-        
-        # step 2) call your (well unit tested) business logic
-        result = my_business_logic(arg1, arg2)
-        
-        # step 3) put the result back in the context for subsequent states
-        context['arg3'] = result
-        
-        # step 4) return an event to drive the state machine forward
-        return "done"
+    # step 2) call your (well unit tested) business logic
+    result = my_business_logic(arg1, arg2)
+    
+    # step 3) put the result back in the context for subsequent states
+    context['arg3'] = result
+    
+    # step 4) return an event to drive the state machine forward
+    return "done"
+```
 
 ## 6. Single source of truth for "how it works"
 
@@ -96,4 +102,4 @@ The following diagrams are closely related to [UML State Diagram](https://en.wik
 
 ![UML](https://chart.googleapis.com/chart?cht=gv&chl=digraph+G+%7B%0Alabel%3D%22description%22%0Alabelloc%3D%22t%22%0A%22__start__%22+%5Blabel%3D%22start%22%2Cshape%3Dcircle%2Cstyle%3Dfilled%2Cfillcolor%3Dblack%2Cfontcolor%3Dwhite%2Cfontsize%3D9%5D%3B%0A%22StateName1%22+%5Bshape%3DMrecord%2Clabel%3D%22%7BStateName1%7Centry%2F+full.path.of.CodeClassToRunOnEntry%5Cldo%2F+full.path.of.CodeClassToRunInState%5Clexit%2F+full.path.of.CodeClassToRunOnExit%7D%22%5D%3B%0A%22__start__%22+-%3E+%22StateName1%22+%5Blabel%3D%22%22%5D%0A%22StateName1%22+-%3E+%22StateName2%22+%5Blabel%3D%22event%22%5D%3B%0A%22StateName2%22+%5Bshape%3DMrecord%2Clabel%3D%22%7BStateName2%7Centry%2F+full.path.of.CodeClassToRunOnEntry%5Cldo%2F+full.path.of.CodeClassToRunInState%5Clexit%2F+full.path.of.CodeClassToRunOnExit%7D%22%5D%3B%0A%22StateName2%22+-%3E+%22__end__%22+%5Blabel%3D%22%22%5D%0A%22__end__%22+%5Blabel%3D%22end%22%2Cshape%3Ddoublecircle%2Cstyle%3Dfilled%2Cfillcolor%3Dblack%2Cfontcolor%3Dwhite%2Cfontsize%3D9%5D%3B%0A%7D)
 
-[<< Overview](OVERVIEW.md) | [Installing Dependencies >>](INSTALL.md)
+[<< Overview](OVERVIEW.md) | [Settings >>](SETTINGS.md)

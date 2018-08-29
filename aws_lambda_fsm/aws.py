@@ -498,7 +498,7 @@ def _get_memcached_connection(cache_arn, entry):
             if host and port:
                 import memcache
                 endpoint_url = host + ":" + str(port)
-                connection = memcache.Client([endpoint_url])  # memcache library does not discover nodes
+                connection = memcache.Client([endpoint_url], cache_cas=True)  # memcache library does not discover nodes
 
             if not connection:
                 log_once(logger.fatal, "Memcached Cache ARN %s is not valid.", cache_arn)
@@ -949,32 +949,77 @@ def _acquire_lease_memcache(cache_arn, correlation_id, steps, retries, timeout=L
 
     # get the current value of the lease
     memcache_key = LEASE_DATA.LEASE_KEY_PREFIX + correlation_id
-    current_lease_value = memcache_conn.gets(memcache_key)
 
-    # if there is already a lease holder, then we have a few options
-    if current_lease_value:
+    try:
+        current_lease_value = memcache_conn.gets(memcache_key)
 
-        # split the current lease apart
-        current_steps, current_retries, current_expires, current_fence_token = \
-            _deserialize_lease_value(current_lease_value)
+        # if there is already a lease holder, then we have a few options
+        if current_lease_value:
 
-        # the existing lease has expired, forcibly take it
-        if timestamp > current_expires:
-            new_fence_token = current_fence_token + 1
+            # split the current lease apart
+            current_steps, current_retries, current_expires, current_fence_token = \
+                _deserialize_lease_value(current_lease_value)
+
+            # the existing lease has expired, forcibly take it
+            if timestamp > current_expires:
+                new_fence_token = current_fence_token + 1
+                new_lease_value = _serialize_lease_value(steps, retries, new_expires, new_fence_token)
+                success = memcache_conn.cas(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_CLEANUP_TIMEOUT)
+                # >>> import memcache
+                # >>> c1=memcache.Client(['localhost:11211'],cache_cas=True)
+                # >>> c2=memcache.Client(['localhost:11211'],cache_cas=True)
+                # >>> c3=memcache.Client(['localhost:22222'],cache_cas=True)
+                # >>> c1.set('abc123', 'def456')
+                # True
+                # >>> c1.gets('abc123')
+                # 'def456'
+                # >>> c2.gets('abc123')
+                # 'def456'
+                # >>> c2.cas('abc123', 'zzz111')
+                # True
+                # >>> c1.cas('abc123', 'yyy333')
+                # False
+                # >>> c3.cas('abc123', '123456')
+                # 0
+                if success is False:
+                    logger.warn("Cannot acquire memcache lease: unexpectedly lost 'memcache.cas' race")
+                return new_fence_token if success else success
+
+            logger.warn("Cannot acquire memcache lease: self %s, owner %s",
+                        (steps, retries), (current_steps, current_retries))
+
+            # default fall-through is to re-try to acquire the lease
+            return False
+
+        else:
+
+            # if there is no current lease, then get the lease and initialize the fence token
+            new_fence_token = 1
             new_lease_value = _serialize_lease_value(steps, retries, new_expires, new_fence_token)
-            success = memcache_conn.cas(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_CLEANUP_TIMEOUT)
+            success = memcache_conn.add(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_CLEANUP_TIMEOUT)
+            # >>> import memcache
+            # >>> c1=memcache.Client(['localhost:11211'],cache_cas=True)
+            # >>> c2=memcache.Client(['localhost:11211'],cache_cas=True)
+            # >>> c3=memcache.Client(['localhost:22222'],cache_cas=True)
+            # >>> c1.add('aaa','aaa')
+            # True
+            # >>> c2.add('aaa','aaa')
+            # False
+            # >>> c3.add('aaa','aaa')
+            # 0
+            if success is False:
+                logger.warn("Cannot acquire memcache lease: unexpectedly lost 'memcache.add' race")
             return new_fence_token if success else success
 
-        # default fall-through is to re-try to acquire the lease
-        return False
-
-    else:
-
-        # if there is no current lease, then get the lease and initialize the fence token
-        new_fence_token = 1
-        new_lease_value = _serialize_lease_value(steps, retries, new_expires, new_fence_token)
-        success = memcache_conn.cas(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_CLEANUP_TIMEOUT)
-        return new_fence_token if success else success
+    finally:
+        # as per the comment in memcache.Client:
+        #
+        # @param cache_cas: (default False) If true, cas operations will
+        # be cached.  WARNING: This cache is not expired internally, if
+        # you have a long-running process you will need to expire it
+        # manually via client.reset_cas(), or the cache can grow
+        # unlimited.
+        memcache_conn.cas_ids.pop(memcache_key, None)
 
 
 def _acquire_lease_redis(cache_arn, correlation_id, steps, retries, timeout=LEASE_DATA.LEASE_TIMEOUT):
@@ -1025,6 +1070,8 @@ def _acquire_lease_redis(cache_arn, correlation_id, steps, retries, timeout=LEAS
 
                 # default fall-through is to re-try to acquire the lease
                 else:
+                    logger.warn("Cannot acquire redis lease: self %s, owner %s",
+                                (steps, retries), (current_steps, current_retries))
                     return False
 
             else:
@@ -1041,6 +1088,7 @@ def _acquire_lease_redis(cache_arn, correlation_id, steps, retries, timeout=LEAS
             return new_fence_token
 
         except redis.WatchError:
+            logger.warn("Cannot acquire redis lease: unexpectedly lost 'pipe.watch' race")
             return False
 
         except redis.exceptions.ConnectionError:
@@ -1127,6 +1175,7 @@ def _acquire_lease_dynamodb(table_arn, correlation_id, steps, retries, timeout=L
 
         # operating as expected for entity already existing
         if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            logger.warn("Cannot acquire dynamodb lease: unexpectedly lost 'ConditionExpression' race")
             return False
 
         logger.exception('')
@@ -1179,32 +1228,63 @@ def _release_lease_memcache(cache_arn, correlation_id, steps, retries, fence_tok
 
     # get the current value of the lease
     memcache_key = LEASE_DATA.LEASE_KEY_PREFIX + correlation_id
-    current_lease_value = memcache_conn.gets(memcache_key)
 
-    # if there is already a lease holder, then we have a few options
-    if current_lease_value:
+    try:
+        current_lease_value = memcache_conn.gets(memcache_key)
 
-        # split the current lease apart
-        current_steps, current_retries, current_time, current_fence_token = \
-            _deserialize_lease_value(current_lease_value)
+        # if there is already a lease holder, then we have a few options
+        if current_lease_value:
 
-        # release it by:
-        # 1. setting the lease value to "unowned" (steps/retries = -1)
-        # 2. setting it as expired (expires = 0) with cas, rather than just client.delete, which can race.
-        # 3. setting the fence token to the current value so it can be incremented later
-        if (current_steps, current_retries, current_fence_token) == (steps, retries, fence_token):
-            new_fence_token = fence_token
-            new_lease_value = _serialize_lease_value(-1, -1, 0, new_fence_token)
-            return memcache_conn.cas(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_CLEANUP_TIMEOUT)
+            # split the current lease apart
+            current_steps, current_retries, current_time, current_fence_token = \
+                _deserialize_lease_value(current_lease_value)
 
-        # otherwise, something else owns the lease, so we can't release it
+            # >>> import memcache
+            # >>> c1 = memcache.Client(['localhost:11211'],cache_cas=True)
+            # >>> c2 = memcache.Client(['localhost:22222'],cache_cas=True)
+            # >>> c1.set('a','a')
+            # True
+            # >>> c1.delete('a')
+            # 1
+            # >>> c1.delete('a')
+            # 1
+            # >>> c1.get('a')
+            # >>> c2.delete('a')
+            # 0
+
+            # release it by:
+            # 1. setting the lease value to "unowned" (steps/retries = -1)
+            # 2. setting it as expired (expires = 0) with cas, rather than just client.delete, which can race.
+            # 3. setting the fence token to the current value so it can be incremented later
+            if (current_steps, current_retries, current_fence_token) == (steps, retries, fence_token):
+                new_fence_token = fence_token
+                new_lease_value = _serialize_lease_value(-1, -1, 0, new_fence_token)
+                success = memcache_conn.cas(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_CLEANUP_TIMEOUT)
+                if success is False:
+                    logger.warn("Cannot release memcache lease: unexpectedly lost 'memcache.cas' race")
+                return success
+
+            # otherwise, something else owns the lease, so we can't release it
+            else:
+                logger.warn("Cannot release memcache lease: self %s, owner %s",
+                            (steps, retries), (current_steps, current_retries))
+                return False
+
         else:
+
+            # the lease is no longer owned by anyone
+            logger.warn("Cannot release memcache lease: not owned by anyone")
             return False
 
-    else:
-
-        # the lease is no longer owned by anyone
-        return False
+    finally:
+        # as per the comment in memcache.Client:
+        #
+        # @param cache_cas: (default False) If true, cas operations will
+        # be cached.  WARNING: This cache is not expired internally, if
+        # you have a long-running process you will need to expire it
+        # manually via client.reset_cas(), or the cache can grow
+        # unlimited.
+        memcache_conn.cas_ids.pop(memcache_key, None)
 
 
 def _release_lease_redis(cache_arn, correlation_id, steps, retries, fence_token):
@@ -1245,11 +1325,14 @@ def _release_lease_redis(cache_arn, correlation_id, steps, retries, fence_token)
 
                 # otherwise, something else owns the lease, so we can't release it
                 else:
+                    logger.warn("Cannot release redis lease: self %s, owner %s",
+                                (steps, retries), (current_steps, current_retries))
                     return False
 
             else:
 
                 # the lease is no longer owned by anyone
+                logger.warn("Cannot release redis lease: not owned by anyone")
                 return False
 
             # execute the transaction
@@ -1259,6 +1342,7 @@ def _release_lease_redis(cache_arn, correlation_id, steps, retries, fence_token)
             return True
 
         except redis.WatchError:
+            logger.warn("Cannot release redis lease: unexpectedly lost 'pipe.watch' race")
             return False
 
         except redis.exceptions.ConnectionError:
@@ -1339,6 +1423,7 @@ def _release_lease_dynamodb(table_arn, correlation_id, steps, retries, fence_tok
 
         # operating as expected for entity already existing
         if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            logger.warn("Cannot release dynamodb lease: unexpectedly lost 'ConditionExpression' race")
             return False
 
         logger.exception('')
