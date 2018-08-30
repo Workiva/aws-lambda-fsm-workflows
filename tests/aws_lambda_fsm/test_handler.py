@@ -168,7 +168,10 @@ class TestHandler(unittest.TestCase):
     def test_lambda_kinesis_handler(self,
                                     mock_process_payload):
         lambda_kinesis_handler(self.get_kinesis_record())
-        mock_process_payload.assert_called_with('{"machine_name": "barfoo"}', {'source': 'kinesis'})
+        mock_process_payload.assert_called_with(
+            '{"machine_name": "barfoo"}',
+            {'source': 'kinesis', 'lambda_record': self.get_kinesis_record()}
+        )
 
     @mock.patch('aws_lambda_fsm.handler.FSM')
     @mock.patch('aws_lambda_fsm.handler.logger')
@@ -202,7 +205,10 @@ class TestHandler(unittest.TestCase):
     def test_lambda_dynamodb_handler(self,
                                      mock_process_payload):
         lambda_dynamodb_handler(self.get_dynamodb_record())
-        mock_process_payload.assert_called_with('{"pay":"load"}', {'source': 'dynamodb_stream'})
+        mock_process_payload.assert_called_with(
+            '{"pay":"load"}',
+            {'source': 'dynamodb_stream', 'lambda_record': self.get_dynamodb_record()}
+        )
 
     @mock.patch('aws_lambda_fsm.handler.FSM')
     @mock.patch('aws_lambda_fsm.handler.logger')
@@ -259,7 +265,10 @@ class TestHandler(unittest.TestCase):
     def test_lambda_sns_handler(self,
                                 mock_process_payload):
         lambda_sns_handler(self.get_sns_record())
-        mock_process_payload.assert_called_with('{"mess": "age"}', {'source': 'sns'})
+        mock_process_payload.assert_called_with(
+            '{"mess": "age"}',
+            {'source': 'sns', 'lambda_record': self.get_sns_record()}
+        )
 
     @mock.patch('aws_lambda_fsm.handler.FSM')
     @mock.patch('aws_lambda_fsm.handler.logger')
@@ -287,7 +296,10 @@ class TestHandler(unittest.TestCase):
     def test_lambda_sqs_handler(self,
                                 mock_process_payload):
         lambda_sqs_handler(self.get_sqs_record())
-        mock_process_payload.assert_called_with('{"mess": "age"}', {'source': 'sqs'})
+        mock_process_payload.assert_called_with(
+            '{"mess": "age"}',
+            {'source': 'sqs', 'lambda_record': self.get_sqs_record()}
+        )
 
     @mock.patch('aws_lambda_fsm.handler.FSM')
     @mock.patch('aws_lambda_fsm.handler.logger')
