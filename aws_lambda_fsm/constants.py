@@ -57,6 +57,7 @@ class OBJ(object):
     SOURCE = 'source'
     DELAY = 'delay'
     FENCE_TOKEN = 'fence_token'
+    LAMBDA_RECORD = 'lambda_record'
 
 
 class ERRORS(object):
