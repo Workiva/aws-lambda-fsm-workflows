@@ -691,7 +691,7 @@ class Context(dict):
             # False
             # >>>
             #
-            if fence_token == 0:
+            if not isinstance(fence_token, bool) and fence_token == 0:
                 self._queue_error(ERRORS.CACHE, 'System error acquiring primary=%s lease.' % self.lease_primary)
                 self.lease_primary = not self.lease_primary
                 fence_token = acquire_lease(self.correlation_id, self.steps, self.retries,

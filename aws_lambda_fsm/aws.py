@@ -450,7 +450,8 @@ def _get_redis_connection(cache_arn, entry):
 
             if host and port:
                 import redis
-                connection = redis.StrictRedis(host=host, port=port, db=0, ssl=ssl, password=password)
+                connection = redis.StrictRedis(host=host, port=port, db=0, ssl=ssl, password=password,
+                                               decode_responses=True)
 
             if not connection:
                 log_once(logger.fatal, "Redis Cache ARN %s is not valid.", cache_arn)
@@ -1057,7 +1058,6 @@ def _acquire_lease_redis(cache_arn, correlation_id, steps, retries, timeout=LEAS
             pipe.multi()
 
             if current_lease_value:
-
                 # split the current lease apart
                 current_steps, current_retries, current_expires, current_fence_token = \
                     _deserialize_lease_value(current_lease_value)
@@ -1075,7 +1075,6 @@ def _acquire_lease_redis(cache_arn, correlation_id, steps, retries, timeout=LEAS
                     return False
 
             else:
-
                 # if there is no current lease, then get the lease
                 new_fence_token = 1
                 new_lease_value = _serialize_lease_value(steps, retries, new_expires, new_fence_token)

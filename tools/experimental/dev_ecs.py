@@ -85,11 +85,5 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write('{}')
 
-<<<<<<< HEAD:tools/dev_ecs.py
 httpd = socketserver.TCPServer(("", args.port), Handler)
-=======
-
-httpd = SocketServer.TCPServer(("", args.port), Handler)
->>>>>>> upstream/master:tools/experimental/dev_ecs.py
-
 httpd.serve_forever()
