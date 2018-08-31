@@ -124,7 +124,7 @@ def lambda_sqs_handler(record):
     """
 
     try:
-        obj = {OBJ.SOURCE: AWS.SQS}
+        obj = {OBJ.SOURCE: AWS.SQS, OBJ.LAMBDA_RECORD: record}
         payload = record[AWS_LAMBDA.SQS_RECORD.BODY]
         _process_payload(payload, obj)
 
@@ -143,7 +143,7 @@ def lambda_kinesis_handler(record):
     """
 
     try:
-        obj = {OBJ.SOURCE: AWS.KINESIS}
+        obj = {OBJ.SOURCE: AWS.KINESIS, OBJ.LAMBDA_RECORD: record}
         encoded = record[AWS_LAMBDA.KINESIS_RECORD.KINESIS][AWS_LAMBDA.KINESIS_RECORD.DATA]
         payload = base64.b64decode(encoded)
         _process_payload(payload, obj)
@@ -163,7 +163,7 @@ def lambda_dynamodb_handler(record):
     """
 
     try:
-        obj = {OBJ.SOURCE: AWS.DYNAMODB_STREAM}
+        obj = {OBJ.SOURCE: AWS.DYNAMODB_STREAM, OBJ.LAMBDA_RECORD: record}
         dynamodb = record[AWS_LAMBDA.DYNAMODB_RECORD.DYNAMODB]
         new_image = dynamodb[AWS_LAMBDA.DYNAMODB_RECORD.NewImage]
         payload = new_image[STREAM_DATA.PAYLOAD][AWS_DYNAMODB.STRING]
@@ -184,7 +184,7 @@ def lambda_sns_handler(record):
     """
 
     try:
-        obj = {OBJ.SOURCE: AWS.SNS}
+        obj = {OBJ.SOURCE: AWS.SNS, OBJ.LAMBDA_RECORD: record}
         sns = record[AWS_LAMBDA.SNS_RECORD.SNS]
         payload = sns[AWS_LAMBDA.SNS_RECORD.Message]
         _process_payload(payload, obj)
@@ -233,6 +233,10 @@ def lambda_timer_handler():
             logger.exception('Critical error handling entity: %s', entity)
 
 
+def _get_event_source(record):
+    return record.get(AWS_LAMBDA.EventSource, record.get(AWS_LAMBDA.EventSourceCaps))
+
+
 def lambda_handler(lambda_event, lambda_context):
     """
     AWS Lambda handler that handles all Kinesis/DynamoDB/Timer/SNS/SQS events.
@@ -259,7 +263,7 @@ def lambda_handler(lambda_event, lambda_context):
 
         records = lambda_event.get(AWS_LAMBDA.Records, [])
 
-        logger.info('Processing %s records...', Counter(record.get(AWS_LAMBDA.EVENT_SOURCE) for record in records))
+        logger.info('Processing %s records...', Counter(_get_event_source(record) for record in records))
 
         for record in records:
 

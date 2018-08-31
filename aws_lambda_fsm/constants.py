@@ -60,6 +60,7 @@ class OBJ(object):
     SOURCE = 'source'
     DELAY = 'delay'
     FENCE_TOKEN = 'fence_token'
+    LAMBDA_RECORD = 'lambda_record'
 
 
 class ERRORS(object):
@@ -310,6 +311,7 @@ class AWS_DYNAMODB(object):
 class AWS_LAMBDA(object):
     Records = 'Records'
     EventSource = 'eventSource'
+    EventSourceCaps = 'EventSource'
     Source = 'source'
 
     class EVENT_SOURCE(object):
