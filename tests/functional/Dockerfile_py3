@@ -2,6 +2,7 @@ FROM fsm
 
 # RUN rm /usr/bin/python
 # RUN ln -s /usr/bin/python3 /usr/bin/python
+RUN apt-get -y install python3-pip
 RUN pip3 install virtualenv
 RUN virtualenv -p python3 fsm_py3
 RUN /bin/bash -c "source /fsm_py3/bin/activate"
