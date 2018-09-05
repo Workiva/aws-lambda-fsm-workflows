@@ -101,6 +101,7 @@ def lambda_api_handler(lambda_event):
     # to retry. for that reason, we have opted to gobble all the errors here
     # and handle retries withing the fsm dispatch code.
     except Exception:
+        lambda_event = AWS_LAMBDA.REDACTED
         logger.exception('Critical error handling lambda: %s', lambda_event)
 
 
@@ -132,6 +133,7 @@ def lambda_sqs_handler(record):
     # to retry. for that reason, we have opted to gobble all the errors here
     # and handle retries withing the fsm dispatch code.
     except Exception:
+        record[AWS_LAMBDA.SQS_RECORD.BODY] = AWS_LAMBDA.REDACTED
         logger.exception('Critical error handling record: %s', record)
 
 
@@ -144,7 +146,8 @@ def lambda_kinesis_handler(record):
 
     try:
         obj = {OBJ.SOURCE: AWS.KINESIS, OBJ.LAMBDA_RECORD: record}
-        encoded = record[AWS_LAMBDA.KINESIS_RECORD.KINESIS][AWS_LAMBDA.KINESIS_RECORD.DATA]
+        kinesis = record[AWS_LAMBDA.KINESIS_RECORD.KINESIS]
+        encoded = kinesis[AWS_LAMBDA.KINESIS_RECORD.DATA]
         payload = base64.b64decode(encoded)
         _process_payload(payload, obj)
 
@@ -152,6 +155,7 @@ def lambda_kinesis_handler(record):
     # to retry. for that reason, we have opted to gobble all the errors here
     # and handle retries withing the fsm dispatch code.
     except Exception:
+        record.get(AWS_LAMBDA.KINESIS_RECORD.KINESIS, {})[AWS_LAMBDA.KINESIS_RECORD.DATA] = AWS_LAMBDA.REDACTED
         logger.exception('Critical error handling record: %s', record)
 
 
@@ -173,6 +177,9 @@ def lambda_dynamodb_handler(record):
     # to retry. for that reason, we have opted to gobble all the errors here
     # and handle retries withing the fsm dispatch code.
     except Exception:
+        record.get(AWS_LAMBDA.DYNAMODB_RECORD.DYNAMODB, {}) \
+            .get(AWS_LAMBDA.DYNAMODB_RECORD.NewImage, {}) \
+            .get(STREAM_DATA.PAYLOAD, {})[AWS_DYNAMODB.STRING] = AWS_LAMBDA.REDACTED
         logger.exception('Critical error handling record: %s', record)
 
 
@@ -193,6 +200,7 @@ def lambda_sns_handler(record):
     # to retry. for that reason, we have opted to gobble all the errors here
     # and handle retries withing the fsm dispatch code.
     except Exception:
+        record.get(AWS_LAMBDA.SNS_RECORD.SNS, {})[AWS_LAMBDA.SNS_RECORD.Message] = AWS_LAMBDA.REDACTED
         logger.exception('Critical error handling record: %s', record)
 
 

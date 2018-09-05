@@ -136,7 +136,7 @@ class TestHandler(unittest.TestCase):
         mock_FSM.return_value.create_FSM_instance.side_effect = Exception()
         lambda_api_handler(event)
         mock_logging.exception.assert_called_with(
-            'Critical error handling lambda: %s', {'foo': 'bar'}
+            'Critical error handling lambda: %s', '[REDACTED]'
         )
 
 ################################################################################
@@ -182,7 +182,7 @@ class TestHandler(unittest.TestCase):
         lambda_kinesis_handler(self.get_kinesis_record())
         mock_logging.exception.assert_called_with(
             'Critical error handling record: %s',
-            {'eventSource': 'aws:kinesis', 'kinesis': {'data': 'eyJtYWNoaW5lX25hbWUiOiAiYmFyZm9vIn0='}}
+            {'eventSource': 'aws:kinesis', 'kinesis': {'data': '[REDACTED]'}}
         )
 
 ################################################################################
@@ -219,7 +219,7 @@ class TestHandler(unittest.TestCase):
         lambda_dynamodb_handler(self.get_dynamodb_record())
         mock_logging.exception.assert_called_with(
             'Critical error handling record: %s',
-            {'eventSource': 'aws:dynamodb', 'dynamodb': {'NewImage': {'payload': {'S': '{"pay":"load"}'}}}}
+            {'eventSource': 'aws:dynamodb', 'dynamodb': {'NewImage': {'payload': {'S': '[REDACTED]'}}}}
         )
 
 ################################################################################
@@ -279,7 +279,7 @@ class TestHandler(unittest.TestCase):
         lambda_sns_handler(self.get_sns_record())
         mock_logging.exception.assert_called_with(
             'Critical error handling record: %s',
-            {'eventSource': 'aws:sns', 'Sns': {'Message': '{"mess": "age"}'}}
+            {'eventSource': 'aws:sns', 'Sns': {'Message': '[REDACTED]'}}
         )
 
 ################################################################################
@@ -310,7 +310,7 @@ class TestHandler(unittest.TestCase):
         lambda_sqs_handler(self.get_sqs_record())
         mock_logging.exception.assert_called_with(
             'Critical error handling record: %s',
-            {'eventSource': 'aws:sqs', 'body': '{"mess": "age"}'}
+            {'eventSource': 'aws:sqs', 'body': '[REDACTED]'}
         )
 
 
