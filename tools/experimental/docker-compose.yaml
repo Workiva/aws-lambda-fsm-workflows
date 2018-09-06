@@ -50,6 +50,7 @@ services:
     ports:
       - 8888:8888
     volumes:
+      - ./dev_ecs.py:/usr/local/bin/dev_ecs.py
       - ./settings.py.dev_ecs:/usr/local/bin/settings.py
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
