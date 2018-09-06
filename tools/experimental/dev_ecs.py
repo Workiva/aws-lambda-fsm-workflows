@@ -60,6 +60,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         length = int(self.headers['content-length'])
         data = json.loads(self.rfile.read(length))
 
+        subprocess.call(['docker', 'container', 'ls', '-a'])
+
         subprocess_args = ['docker', 'run', '-v', '/var/run/docker.sock:/var/run/docker.sock']
         if 'VOLUME' in os.environ:
             subprocess_args.extend(['-v', os.environ['VOLUME']])

@@ -41,6 +41,8 @@ AWS_CHAOS = {
     PRIMARY_CACHE_SOURCE: {0: 0.1, None: 0.1}
 }
 
+AWS_CHAOS = {}
+
 ELASTICACHE_ENDPOINTS = {
     PRIMARY_CACHE_SOURCE: {
         'CacheClusterId': 'memcached-cluster',
