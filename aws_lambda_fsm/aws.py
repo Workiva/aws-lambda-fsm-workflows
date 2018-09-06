@@ -2258,16 +2258,15 @@ ALLOWED_MAPPING = {
         SECONDARY: get_secondary_cache_source(),
     },
 
-    # required and do not support failover
+    # not required and do not support failover
     'CHECKPOINT': {
         ALLOWED: ALLOWED_CHECKPOINT_SERVICES,
-        REQUIRED: True,
+        REQUIRED: False,
         FAILOVER: False,
         PRIMARY: get_primary_checkpoint_source(),
         SECONDARY: get_secondary_checkpoint_source(),
     },
 
-    # not required and do not support failover
     'ENVIRONMENT': {
         ALLOWED: ALLOWED_ENVIRONMENT_SERVICES,
         REQUIRED: False,
