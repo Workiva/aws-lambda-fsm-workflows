@@ -29,7 +29,7 @@ $ make functional
 
 The `docker container rm fsm` above is necessary on a second run when including the '--name fsm' option
 below to avoid conflicts. Functional tests will run fine without naming the container, though there are some 
-(as yet untested) failures in the container# without a name
+(as yet untested) failures in the container without a name
 
 # Python 3.6
 
