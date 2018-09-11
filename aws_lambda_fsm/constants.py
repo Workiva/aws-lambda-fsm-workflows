@@ -313,6 +313,7 @@ class AWS_LAMBDA(object):
     EventSource = 'eventSource'
     EventSourceCaps = 'EventSource'
     Source = 'source'
+    REDACTED = '[REDACTED]'
 
     class EVENT_SOURCE(object):
         KINESIS = 'aws:kinesis'
