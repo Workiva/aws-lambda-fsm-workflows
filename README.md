@@ -16,8 +16,9 @@ limitations under the License.
 
 # Summary
 
-A Python 2.7 framework, maintained by an **SSAE 16 SOC 1 Type 2** compliant organization, for running 
-Finite State Machine (FSM) Workflows on:
+(This repo is maintained by an **SSAE 16 SOC 1 Type 2** compliant organization)
+
+A Python 2.7 and 3.6 compatible framework for running Finite State Machine (FSM) Workflows on 
 
 1. [AWS Lambda](https://aws.amazon.com/lambda/) for code execution,
 1. (Optionally/Experimental) [AWS ECS](https://aws.amazon.com/ecs/) for long-running code execution,

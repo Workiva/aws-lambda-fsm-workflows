@@ -10,4 +10,6 @@ RUN pip3 install -Ur requirements_dev.txt
 RUN pip3 list
 # RUN pip3 list
 
+ENV AWS_HOSTNAME=fsmpy3
+
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisor.conf", "-l", "/dev/null", "-y", "0"]
