@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 
-[<< Setup AWS Services](SETUP.md)
+[<< Setup AWS Services](SETUP.md) | [Architecture >>](ARCHITECTURE.md)
 
 # TODO:
 
@@ -27,4 +27,4 @@ limitations under the License.
     1. process to cleanup dynamodb after the kinesis stream has been aged out
     1. how to handle a task bomb filling the shards
 
-[<< Setup AWS Services](SETUP.md)
+[<< Setup AWS Services](SETUP.md) | [Architecture >>](ARCHITECTURE.md)
