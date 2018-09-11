@@ -14,7 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 
-[Overview >>](OVERVIEW.md)
+[<< TODO](TODO.md) | [Overview >>](OVERVIEW.md)
+
+The FSM implementation is inspired by the paper
+
+[1] J. van Gurp, J. Bosch, "On the Implementation of Finite State Machines", in Proceedings of the 3rd Annual IASTED
+    International Conference Software Engineering and Applications,IASTED/Acta Press, Anaheim, CA, pp. 172-178, 1999.
+    (www.jillesvangurp.com/static/fsm-sea99.pdf)
 
 # Architecture
 
@@ -88,4 +94,4 @@ metrics in:
 
 1. [AWS CloudWatch](https://aws.amazon.com/cloudwatch/)
 
-[Overview >>](OVERVIEW.md)
+[<< TODO](TODO.md) | [Overview >>](OVERVIEW.md)

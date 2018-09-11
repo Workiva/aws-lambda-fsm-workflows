@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 
-[<< Installing Dependencies](INSTALL.md) | [Chaos >>](CHAOS.md)
+[<< Justification](JUSTIFICATION.md) | [Chaos >>](CHAOS.md)
 
 # Settings
 
@@ -87,4 +87,4 @@ AWS ARN for [AWS CloudWatch](https://aws.amazon.com/cloudwatch/) is the preferre
 
 1. is a tightly integrated AWS custom metrics solution
 
-[<< Installing Dependencies](INSTALL.md) | [Chaos >>](CHAOS.md)
+[<< Justification](JUSTIFICATION.md) | [Chaos >>](CHAOS.md)
