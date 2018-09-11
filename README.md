@@ -14,11 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 
-# AWS Lambda Finite State Machine Workflows
+# Summary
 
-(This repo is maintained by an **SSAE 16 SOC 1 Type 2** compliant organization)
-
-A Python 2.7 framework for running Finite State Machine (FSM) Workflows on 
+A Python 2.7 framework, maintained by an **SSAE 16 SOC 1 Type 2** compliant organization, for running 
+Finite State Machine (FSM) Workflows on:
 
 1. [AWS Lambda](https://aws.amazon.com/lambda/) for code execution,
 1. (Optionally/Experimental) [AWS ECS](https://aws.amazon.com/ecs/) for long-running code execution,
@@ -28,8 +27,9 @@ A Python 2.7 framework for running Finite State Machine (FSM) Workflows on
 1. (Optionally) [AWS SQS](https://aws.amazon.com/sqs/), or [AWS DynamoDB](https://aws.amazon.com/dynamodb/) for retries with backoff
 1. (Optionally) [Redis](https://aws.amazon.com/elasticache/), [Memcache](https://aws.amazon.com/elasticache/), or [AWS DynamoDB](https://aws.amazon.com/dynamodb/) for idempotency
 1. (Optionally) [AWS CloudWatch](https://aws.amazon.com/cloudwatch/) for error and failure monitoring
+1. (Experimental) [AWS Step Functions](https://aws.amazon.com/step-functions/) for orchestration and retries
 
-or 
+# Links
 
-1. [AWS Lambda](https://aws.amazon.com/lambda/) for code execution
-1. (Experimental) [AWS Step Functions](https://aws.amazon.com/step-functions/) for orchestration and retries,
+1. [Documentation](docs/OVERVIEW.md)
+1. [PyPI Page](https://pypi.org/project/aws-lambda-fsm/)

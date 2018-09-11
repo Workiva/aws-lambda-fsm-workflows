@@ -45,7 +45,7 @@ an existing deployed FSM [AWS Lambda](https://aws.amazon.com/lambda/) function.
 The deployed `fsm.yaml` and the JSON document must match, otherwise the machines can get 
 out of sync. So changes to the `fsm.yaml` require corresponding changes the JSON document.
 
-<img src="docs/images/yaml_to_json.png" width="66%" height="66%"/>
+<img src="images/yaml_to_json.png" width="66%" height="66%"/>
 
 
 [Running on AWS >>](AWS.md) | [Setup AWS Services >>](SETUP.md)
