@@ -16,5 +16,5 @@
 from builtins import map
 
 
-version_info = (0, 20, 0)
+version_info = (0, 21, 0)
 version = '.'.join(map(str, version_info))
