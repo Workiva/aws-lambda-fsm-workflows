@@ -16,8 +16,6 @@ limitations under the License.
 
 # Summary
 
-(This repo is maintained by an **SSAE 16 SOC 1 Type 2** compliant organization)
-
 A Python 2.7 and 3.6 compatible framework for running Finite State Machine (FSM) Workflows on 
 
 1. [AWS Lambda](https://aws.amazon.com/lambda/) for code execution,
@@ -34,3 +32,6 @@ A Python 2.7 and 3.6 compatible framework for running Finite State Machine (FSM)
 
 1. [Documentation](docs/OVERVIEW.md)
 1. [PyPI Page](https://pypi.org/project/aws-lambda-fsm/)
+
+
+This repo is maintained by an **SSAE 16 SOC 1 Type 2** compliant organization.
