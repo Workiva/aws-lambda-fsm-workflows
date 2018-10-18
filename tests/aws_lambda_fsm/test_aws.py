@@ -484,7 +484,6 @@ class TestAws(unittest.TestCase):
             mock_get_connection_info.mock_calls
         )
 
-
     @mock.patch('aws_lambda_fsm.aws.settings')
     def test_get_connection_info_looks_up_by_arn(self,
                                                  mock_settings):
