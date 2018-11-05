@@ -352,6 +352,22 @@ def _get_elasticache_engine_and_connection(cache_arn):
     return getattr(_local, attr)
 
 
+def get_connection_info(service, region_name, resource_arn):
+    """
+    Returns the service, region_name and endpoint_url to use when creating
+    a boto3 connection. In settings.ENDPOINTS it is possible to override
+    the default boto3 endpoints to talk to local instances of kinesis,
+    dynamodb etc.
+
+    :param service: an AWS service like "kinesis", or "dynamodb"
+    :param region_name: an AWS region like "eu-west-1"
+    :param resource_arn: an AWS ARN like "arn:partition:elasticache:testing:account:cluster:aws-lambda-fsm"
+    :return: a tuple of service, region_name, and and possibly endpoint url
+      like "http://localhost:1234"
+    """
+    return _get_connection_info(service, region_name, resource_arn)
+
+
 def _get_connection_info(service, region_name, resource_arn):
     """
     Returns the service, region_name and endpoint_url to use when creating

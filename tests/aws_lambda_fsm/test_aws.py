@@ -46,6 +46,7 @@ from aws_lambda_fsm.aws import get_primary_checkpoint_source
 from aws_lambda_fsm.aws import get_secondary_checkpoint_source
 from aws_lambda_fsm.aws import _local
 from aws_lambda_fsm.aws import _get_service_connection
+from aws_lambda_fsm.aws import get_connection_info
 from aws_lambda_fsm.aws import _get_connection_info
 from aws_lambda_fsm.aws import _get_sqs_queue_url
 from aws_lambda_fsm.aws import ChaosConnection
@@ -474,6 +475,15 @@ class TestAws(unittest.TestCase):
         self.assertEqual(None, getattr(_local, 'cache_details_for_' + _get_test_arn(AWS.ELASTICACHE)))
 
     # _get_connection_info
+
+    @mock.patch('aws_lambda_fsm.aws._get_connection_info')
+    def test_public_get_connection_info_calls_protected_get_connection_info(self,
+                                                                            mock_get_connection_info):
+        get_connection_info('testservice', 'testregion', 'testarn')
+        self.assertEqual(
+            [mock.call('testservice', 'testregion', 'testarn')],
+            mock_get_connection_info.mock_calls
+        )
 
     @mock.patch('aws_lambda_fsm.aws.settings')
     def test_get_connection_info_looks_up_by_arn(self,
