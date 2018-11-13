@@ -93,6 +93,11 @@ STARTED_AT = str(int(time.time()))
 
 validate_config()
 
+
+def shellquote(s):
+    # https://stackoverflow.com/questions/35817/how-to-escape-os-system-calls
+    return "'" + s.replace("'", "'\\''") + "'"
+
 # setup connections to AWS
 if args.run_kinesis_lambda:
     kinesis_stream_arn = getattr(settings, args.kinesis_stream_arn)
@@ -213,7 +218,9 @@ while True:
 
             # and call the handler with the records
             if args.lambda_command:
-                subprocess.call(['/bin/bash', '-c', args.lambda_command + " '" + json.dumps(lambda_event) + "'"])
+                serialized = json.dumps(lambda_event)
+                quoted = shellquote(serialized)
+                subprocess.call(['/bin/bash', '-c', args.lambda_command + " " + quoted])
             else:
                 lambda_handler(lambda_event, lambda_context)
 
@@ -268,6 +275,7 @@ while True:
 
                 # and call the handler with the records
                 if args.lambda_command:
+                    # no need to escape here since the base64 string is OK
                     subprocess.call(['/bin/bash', '-c', args.lambda_command + " '" + json.dumps(lambda_event) + "'"])
                 else:
                     lambda_handler(lambda_event, lambda_context)
