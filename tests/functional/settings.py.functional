@@ -34,11 +34,11 @@ PRIMARY_ENVIRONMENT_SOURCE = 'arn:partition:dynamodb:testing:account:table/prima
 SECONDARY_ENVIRONMENT_SOURCE = None
 
 AWS_CHAOS = {
-    PRIMARY_STREAM_SOURCE: {ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.1},
-    SECONDARY_STREAM_SOURCE: {ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.1},
-    PRIMARY_RETRY_SOURCE: {ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.1},
-    SECONDARY_RETRY_SOURCE: {ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.1},
-    PRIMARY_CACHE_SOURCE: {0: 0.1, None: 0.1}
+    #PRIMARY_STREAM_SOURCE: {ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.1},
+    #SECONDARY_STREAM_SOURCE: {ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.1},
+    #PRIMARY_RETRY_SOURCE: {ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.1},
+    #SECONDARY_RETRY_SOURCE: {ClientError({'Error': {'Code': 404, 'Message': 'AWS Chaos'}}, 'service'): 0.1},
+    #PRIMARY_CACHE_SOURCE: {0: 0.1, None: 0.1}
 }
 
 ELASTICACHE_ENDPOINTS = {
