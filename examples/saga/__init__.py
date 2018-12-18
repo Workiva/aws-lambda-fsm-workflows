@@ -11,11 +11,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-machines:
-- import: examples/docs/fsm.yaml
-- import: examples/tracer/fsm.yaml
-- import: examples/ecs/fsm.yaml
-- import: examples/encrypt_s3/fsm.yaml
-- import: examples/saga/fsm.yaml
-
