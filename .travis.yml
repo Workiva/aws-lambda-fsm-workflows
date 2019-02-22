@@ -20,6 +20,8 @@ install:
   - pip install -r requirements_dev.txt
 script:
   - make coverage flake8
+env:
+  - BOTO_CONFIG=/dev/null
   
 deploy:
   provider: pypi
