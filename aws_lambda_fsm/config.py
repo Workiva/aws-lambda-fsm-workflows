@@ -81,5 +81,5 @@ def load_config_from_yaml(filename='fsm.yaml'):
     :return: a dict.
     """
     yaml_file = open(filename, 'r')
-    yaml_dict = yaml.load(yaml_file.read())
+    yaml_dict = yaml.safe_load(yaml_file.read())
     return yaml_dict
