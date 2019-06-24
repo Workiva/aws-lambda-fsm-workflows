@@ -238,8 +238,7 @@ class Context(dict):
                  initial_system_context=None,
                  initial_user_context=None,
                  initial_state=None,
-                 max_retries=None,
-                 additional_delay_seconds=0):
+                 max_retries=None):
         """
         Construct a state machine instance.
 
@@ -265,11 +264,9 @@ class Context(dict):
 
         # immutable
         self.__system_context[SYSTEM_CONTEXT.MACHINE_NAME] = \
-            self.__system_context.get(SYSTEM_CONTEXT.MACHINE_NAME, name)
+            self.__system_context.get(SYSTEM_CONTEXT.MACHINE_NAME, name)  # prefer value in initial_system_context
         self.__system_context[SYSTEM_CONTEXT.MAX_RETRIES] = \
-            self.__system_context.get(SYSTEM_CONTEXT.MAX_RETRIES, max_retries)
-        self.__system_context[SYSTEM_CONTEXT.ADDITIONAL_DELAY_SECONDS] = \
-            self.__system_context.get(SYSTEM_CONTEXT.ADDITIONAL_DELAY_SECONDS, additional_delay_seconds)
+            self.__system_context.get(SYSTEM_CONTEXT.MAX_RETRIES, max_retries)  # prefer value in initial_system_context
 
         self._errors = {}
 
@@ -287,7 +284,7 @@ class Context(dict):
 
     @property
     def additional_delay_seconds(self):
-        return self.__system_context[SYSTEM_CONTEXT.ADDITIONAL_DELAY_SECONDS]
+        return self.__system_context.get(SYSTEM_CONTEXT.ADDITIONAL_DELAY_SECONDS, 0)
 
     @property
     def max_retries(self):

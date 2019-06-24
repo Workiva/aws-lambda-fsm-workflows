@@ -161,8 +161,7 @@ class TestFSM(TestFsmBase):
                                        'correlation_id': 'foo',
                                        'retries': 'baz',
                                        'steps': 'bar',
-                                       'max_retries': 5,
-                                       'additional_delay_seconds': 0},
+                                       'max_retries': 5},
                     'user_context': {},
                     'version': '0.1'}
         self.assertEqual(expected, instance.to_payload_dict())
@@ -274,7 +273,8 @@ class TestDispatchAndRetry(TestFsmBase):
         instance = self._dispatch(mock_send_next_event_for_dispatch)
         mock_send_next_event_for_dispatch.assert_called_with(
             instance,
-            '{"system_context": {"additional_delay_seconds": 0, "correlation_id": "b", "current_event": "ok", "current_state": '
+            '{"system_context": {"additional_delay_seconds": 0, '
+            '"correlation_id": "b", "current_event": "ok", "current_state": '
             '"a", "machine_name": "foo", "max_retries": 5, "metrics": "m", "retries": 0, "steps": 1000, "stream": '
             '"s", "table": "t", "topic": "z"}, "user_context": {}, "version": "0.1"}',
             'b',
@@ -313,7 +313,8 @@ class TestDispatchAndRetry(TestFsmBase):
         instance = self._dispatch(mock_send_next_event_for_dispatch)
         mock_send_next_event_for_dispatch.assert_called_with(
             instance,
-            '{"system_context": {"additional_delay_seconds": 0, "correlation_id": "b", "current_event": "ok", "current_state": '
+            '{"system_context": {"additional_delay_seconds": 0, '
+            '"correlation_id": "b", "current_event": "ok", "current_state": '
             '"a", "machine_name": "foo", "max_retries": 5, "metrics": "m", "retries": 0, "steps": 1000, "stream": "s", '
             '"table": "t", "topic": "z"}, "user_context": {}, "version": "0.1"}',
             'b',
@@ -361,7 +362,8 @@ class TestDispatchAndRetry(TestFsmBase):
         instance = self._dispatch(mock_send_next_event_for_dispatch)
         mock_send_next_event_for_dispatch.assert_called_with(
             instance,
-            '{"system_context": {"additional_delay_seconds": 0, "correlation_id": "b", "current_event": "ok", "current_state": '
+            '{"system_context": {"additional_delay_seconds": 0, '
+            '"correlation_id": "b", "current_event": "ok", "current_state": '
             '"a", "machine_name": "foo", "max_retries": 5, "metrics": "m", "retries": 0, "steps": 1000, "stream": '
             '"s", "table": "t", "topic": "z"}, "user_context": {}, "version": "0.1"}',
             'b',
@@ -372,7 +374,8 @@ class TestDispatchAndRetry(TestFsmBase):
         mock_start_retries.assert_called_with(
             instance,
             2.0,
-            '{"system_context": {"additional_delay_seconds": 0, "correlation_id": "b", "current_event": "e", "current_state": '
+            '{"system_context": {"additional_delay_seconds": 0, '
+            '"correlation_id": "b", "current_event": "e", "current_state": '
             '"s", "machine_name": "foo", "metrics": "m", "retries": 1, "steps": 999, "stream": '
             '"s", "table": "t", "topic": "z"}, "user_context": {}, "version": "0.1"}',
             primary=True,
@@ -407,7 +410,8 @@ class TestDispatchAndRetry(TestFsmBase):
         )
         mock_send_next_event_for_dispatch.assert_called_with(
             instance,
-            '{"system_context": {"additional_delay_seconds": 0, "correlation_id": "b", "current_event": "ok", "current_state": '
+            '{"system_context": {"additional_delay_seconds": 0, '
+            '"correlation_id": "b", "current_event": "ok", "current_state": '
             '"a", "machine_name": "foo", "max_retries": 5, "metrics": "m", "retries": 0, "steps": 1000, "stream": '
             '"s", "table": "t", "topic": "z"}, "user_context": {}, "version": "0.1"}',
             'b',
@@ -454,7 +458,8 @@ class TestDispatchAndRetry(TestFsmBase):
         )
         mock_send_next_event_for_dispatch.assert_called_with(
             instance,
-            '{"system_context": {"additional_delay_seconds": 0, "correlation_id": "b", "current_event": "ok", "current_state": '
+            '{"system_context": {"additional_delay_seconds": 0, '
+            '"correlation_id": "b", "current_event": "ok", "current_state": '
             '"a", "machine_name": "foo", "max_retries": 5, "metrics": "m", "retries": 0, "steps": 1000, "stream": '
             '"s", "table": "t", "topic": "z"}, "user_context": {}, "version": "0.1"}',
             'b',
@@ -884,3 +889,15 @@ class TestProperties(TestFsmBase):
         fsm = FSM(config_dict=self.CONFIG_DICT)
         instance = fsm.create_FSM_instance('foo', initial_system_context={'correlation_id': 'barfoo'})
         self.assertEqual('barfoo', instance.correlation_id)
+
+    def test_additional_delay_seconds_defaults_to_0(self):
+        config._config = {'some/fsm.yaml': {'machines': []}}
+        fsm = FSM(config_dict=self.CONFIG_DICT)
+        instance = fsm.create_FSM_instance('foo', initial_system_context={})
+        self.assertEqual(0, instance.additional_delay_seconds)
+
+    def test_additional_delay_seconds(self):
+        config._config = {'some/fsm.yaml': {'machines': []}}
+        fsm = FSM(config_dict=self.CONFIG_DICT)
+        instance = fsm.create_FSM_instance('foo', initial_system_context={'additional_delay_seconds': 999})
+        self.assertEqual(999, instance.additional_delay_seconds)
