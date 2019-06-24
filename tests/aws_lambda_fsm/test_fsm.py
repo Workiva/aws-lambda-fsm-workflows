@@ -161,7 +161,8 @@ class TestFSM(TestFsmBase):
                                        'correlation_id': 'foo',
                                        'retries': 'baz',
                                        'steps': 'bar',
-                                       'max_retries': 5},
+                                       'max_retries': 5,
+                                       'additional_delay_seconds': 0},
                     'user_context': {},
                     'version': '0.1'}
         self.assertEqual(expected, instance.to_payload_dict())
@@ -182,6 +183,7 @@ class TestDispatchAndRetry(TestFsmBase):
                 "current_state": "s",
                 "current_event": "e",
                 "correlation_id": "b",
+                "additional_delay_seconds": 0,
                 "steps": 999,
                 "retries": 0,
                 "metrics": "m",
@@ -272,7 +274,7 @@ class TestDispatchAndRetry(TestFsmBase):
         instance = self._dispatch(mock_send_next_event_for_dispatch)
         mock_send_next_event_for_dispatch.assert_called_with(
             instance,
-            '{"system_context": {"correlation_id": "b", "current_event": "ok", "current_state": '
+            '{"system_context": {"additional_delay_seconds": 0, "correlation_id": "b", "current_event": "ok", "current_state": '
             '"a", "machine_name": "foo", "max_retries": 5, "metrics": "m", "retries": 0, "steps": 1000, "stream": '
             '"s", "table": "t", "topic": "z"}, "user_context": {}, "version": "0.1"}',
             'b',
@@ -311,7 +313,7 @@ class TestDispatchAndRetry(TestFsmBase):
         instance = self._dispatch(mock_send_next_event_for_dispatch)
         mock_send_next_event_for_dispatch.assert_called_with(
             instance,
-            '{"system_context": {"correlation_id": "b", "current_event": "ok", "current_state": '
+            '{"system_context": {"additional_delay_seconds": 0, "correlation_id": "b", "current_event": "ok", "current_state": '
             '"a", "machine_name": "foo", "max_retries": 5, "metrics": "m", "retries": 0, "steps": 1000, "stream": "s", '
             '"table": "t", "topic": "z"}, "user_context": {}, "version": "0.1"}',
             'b',
@@ -359,7 +361,7 @@ class TestDispatchAndRetry(TestFsmBase):
         instance = self._dispatch(mock_send_next_event_for_dispatch)
         mock_send_next_event_for_dispatch.assert_called_with(
             instance,
-            '{"system_context": {"correlation_id": "b", "current_event": "ok", "current_state": '
+            '{"system_context": {"additional_delay_seconds": 0, "correlation_id": "b", "current_event": "ok", "current_state": '
             '"a", "machine_name": "foo", "max_retries": 5, "metrics": "m", "retries": 0, "steps": 1000, "stream": '
             '"s", "table": "t", "topic": "z"}, "user_context": {}, "version": "0.1"}',
             'b',
@@ -370,7 +372,7 @@ class TestDispatchAndRetry(TestFsmBase):
         mock_start_retries.assert_called_with(
             instance,
             2.0,
-            '{"system_context": {"correlation_id": "b", "current_event": "e", "current_state": '
+            '{"system_context": {"additional_delay_seconds": 0, "correlation_id": "b", "current_event": "e", "current_state": '
             '"s", "machine_name": "foo", "metrics": "m", "retries": 1, "steps": 999, "stream": '
             '"s", "table": "t", "topic": "z"}, "user_context": {}, "version": "0.1"}',
             primary=True,
@@ -405,7 +407,7 @@ class TestDispatchAndRetry(TestFsmBase):
         )
         mock_send_next_event_for_dispatch.assert_called_with(
             instance,
-            '{"system_context": {"correlation_id": "b", "current_event": "ok", "current_state": '
+            '{"system_context": {"additional_delay_seconds": 0, "correlation_id": "b", "current_event": "ok", "current_state": '
             '"a", "machine_name": "foo", "max_retries": 5, "metrics": "m", "retries": 0, "steps": 1000, "stream": '
             '"s", "table": "t", "topic": "z"}, "user_context": {}, "version": "0.1"}',
             'b',
@@ -452,7 +454,7 @@ class TestDispatchAndRetry(TestFsmBase):
         )
         mock_send_next_event_for_dispatch.assert_called_with(
             instance,
-            '{"system_context": {"correlation_id": "b", "current_event": "ok", "current_state": '
+            '{"system_context": {"additional_delay_seconds": 0, "correlation_id": "b", "current_event": "ok", "current_state": '
             '"a", "machine_name": "foo", "max_retries": 5, "metrics": "m", "retries": 0, "steps": 1000, "stream": '
             '"s", "table": "t", "topic": "z"}, "user_context": {}, "version": "0.1"}',
             'b',

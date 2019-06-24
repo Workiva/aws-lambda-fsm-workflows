@@ -238,7 +238,8 @@ class Context(dict):
                  initial_system_context=None,
                  initial_user_context=None,
                  initial_state=None,
-                 max_retries=None):
+                 max_retries=None,
+                 additional_delay_seconds=0):
         """
         Construct a state machine instance.
 
@@ -267,6 +268,8 @@ class Context(dict):
             self.__system_context.get(SYSTEM_CONTEXT.MACHINE_NAME, name)
         self.__system_context[SYSTEM_CONTEXT.MAX_RETRIES] = \
             self.__system_context.get(SYSTEM_CONTEXT.MAX_RETRIES, max_retries)
+        self.__system_context[SYSTEM_CONTEXT.ADDITIONAL_DELAY_SECONDS] = \
+            self.__system_context.get(SYSTEM_CONTEXT.ADDITIONAL_DELAY_SECONDS, additional_delay_seconds)
 
         self._errors = {}
 
@@ -281,6 +284,10 @@ class Context(dict):
         if SYSTEM_CONTEXT.CORRELATION_ID not in self.__system_context:
             self.__system_context[SYSTEM_CONTEXT.CORRELATION_ID] = uuid.uuid4().hex
         return self.__system_context[SYSTEM_CONTEXT.CORRELATION_ID]
+
+    @property
+    def additional_delay_seconds(self):
+        return self.__system_context[SYSTEM_CONTEXT.ADDITIONAL_DELAY_SECONDS]
 
     @property
     def max_retries(self):
