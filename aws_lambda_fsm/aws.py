@@ -1649,7 +1649,7 @@ def send_next_event_for_dispatch(context, data, correlation_id, delay=0, primary
 
     service = get_arn_from_arn_string(source_arn).service
 
-    delay = delay + context.additional_delay_seconds
+    delay = delay + (context.additional_delay_seconds if context else 0)
 
     if not service:  # pragma: no cover
         log_once(logger.warning, "No stream source for primary=%s" % primary)
@@ -1800,7 +1800,7 @@ def send_next_events_for_dispatch(context, all_data, correlation_ids, delay=0, p
 
     service = get_arn_from_arn_string(source_arn).service
 
-    delay = delay + context.additional_delay_seconds
+    delay = delay + (context.additional_delay_seconds if context else 0)
 
     if not service:  # pragma: no cover
         log_once(logger.warning, "No stream source for primary=%s" % primary)
