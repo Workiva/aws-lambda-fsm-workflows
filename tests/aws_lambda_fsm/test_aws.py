@@ -1051,6 +1051,22 @@ class TestAws(unittest.TestCase):
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.get_primary_stream_source')
+    @mock.patch('aws_lambda_fsm.aws._get_sqs_queue_url')
+    def test_send_next_event_for_dispatch_sqs_handles_None_context(self,
+                                                                   mock_get_sqs_queue_url,
+                                                                   mock_get_primary_stream_source,
+                                                                   mock_get_connection):
+        mock_get_primary_stream_source.return_value = _get_test_arn(AWS.SQS)
+        mock_get_sqs_queue_url.return_value = 'https://sqs.testing.amazonaws.com/1234567890/queuename'
+        send_next_event_for_dispatch(None, 'c', 'd', delay=123)
+        mock_get_connection.return_value.send_message.assert_called_with(
+            QueueUrl='https://sqs.testing.amazonaws.com/1234567890/queuename',
+            DelaySeconds=123,
+            MessageBody='c'
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_primary_stream_source')
     def test_send_next_events_for_dispatch_kinesis(self,
                                                    mock_get_primary_stream_source,
                                                    mock_get_connection):
@@ -1132,6 +1148,22 @@ class TestAws(unittest.TestCase):
             QueueUrl='https://sqs.testing.amazonaws.com/1234567890/queuename',
             Entries=[{'DelaySeconds': 0, 'Id': 'd', 'MessageBody': 'c'},
                      {'DelaySeconds': 0, 'Id': 'dd', 'MessageBody': 'cc'}]
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_primary_stream_source')
+    @mock.patch('aws_lambda_fsm.aws._get_sqs_queue_url')
+    def test_send_next_events_for_dispatch_sqs_handles_None_context(self,
+                                                                    mock_get_sqs_queue_url,
+                                                                    mock_get_primary_stream_source,
+                                                                    mock_get_connection):
+        mock_get_primary_stream_source.return_value = _get_test_arn(AWS.SQS)
+        mock_get_sqs_queue_url.return_value = 'https://sqs.testing.amazonaws.com/1234567890/queuename'
+        send_next_events_for_dispatch(None, ['c', 'cc'], ['d', 'dd'], delay=123)
+        mock_get_connection.return_value.send_message_batch.assert_called_with(
+            QueueUrl='https://sqs.testing.amazonaws.com/1234567890/queuename',
+            Entries=[{'DelaySeconds': 123, 'Id': 'd', 'MessageBody': 'c'},
+                     {'DelaySeconds': 123, 'Id': 'dd', 'MessageBody': 'cc'}]
         )
 
     # retriable_entities
