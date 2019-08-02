@@ -264,9 +264,9 @@ class Context(dict):
 
         # immutable
         self.__system_context[SYSTEM_CONTEXT.MACHINE_NAME] = \
-            self.__system_context.get(SYSTEM_CONTEXT.MACHINE_NAME, name)
+            self.__system_context.get(SYSTEM_CONTEXT.MACHINE_NAME, name)  # prefer value in initial_system_context
         self.__system_context[SYSTEM_CONTEXT.MAX_RETRIES] = \
-            self.__system_context.get(SYSTEM_CONTEXT.MAX_RETRIES, max_retries)
+            self.__system_context.get(SYSTEM_CONTEXT.MAX_RETRIES, max_retries)  # prefer value in initial_system_context
 
         self._errors = {}
 
@@ -281,6 +281,10 @@ class Context(dict):
         if SYSTEM_CONTEXT.CORRELATION_ID not in self.__system_context:
             self.__system_context[SYSTEM_CONTEXT.CORRELATION_ID] = uuid.uuid4().hex
         return self.__system_context[SYSTEM_CONTEXT.CORRELATION_ID]
+
+    @property
+    def additional_delay_seconds(self):
+        return self.__system_context.get(SYSTEM_CONTEXT.ADDITIONAL_DELAY_SECONDS, 0)
 
     @property
     def max_retries(self):

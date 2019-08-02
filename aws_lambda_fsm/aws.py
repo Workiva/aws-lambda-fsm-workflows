@@ -1649,6 +1649,8 @@ def send_next_event_for_dispatch(context, data, correlation_id, delay=0, primary
 
     service = get_arn_from_arn_string(source_arn).service
 
+    delay = delay + context.additional_delay_seconds
+
     if not service:  # pragma: no cover
         log_once(logger.warning, "No stream source for primary=%s" % primary)
 
@@ -1797,6 +1799,8 @@ def send_next_events_for_dispatch(context, all_data, correlation_ids, delay=0, p
         source_arn = get_secondary_stream_source()
 
     service = get_arn_from_arn_string(source_arn).service
+
+    delay = delay + context.additional_delay_seconds
 
     if not service:  # pragma: no cover
         log_once(logger.warning, "No stream source for primary=%s" % primary)
@@ -2106,6 +2110,8 @@ def start_retries(context, run_at, payload, primary=True, recovering=False):
             source_arn = get_secondary_retry_source()
 
     service = get_arn_from_arn_string(source_arn).service
+
+    run_at = run_at + context.additional_delay_seconds
 
     if not service:  # pragma: no cover
         log_once(logger.warning, "No retry source for primary=%s" % primary)
