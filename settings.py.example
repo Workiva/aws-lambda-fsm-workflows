@@ -55,6 +55,7 @@ ELASTICACHE_PASSWORDS = {}
 
 AWS_CHAOS = {}
 ENDPOINTS = {}
+BOTO3_CLIENT_ADDITIONAL_KWARGS = {}
 
 try:
     import settingslocal

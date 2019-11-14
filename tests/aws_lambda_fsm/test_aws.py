@@ -84,6 +84,11 @@ class Connection(object):
         pass
 
 
+class AnyConfig():
+    def __eq__(self, other):
+        return True
+
+
 def _get_test_arn(service, resource='resourcetype/resourcename'):
     return ':'.join(
         ['arn', 'aws', service, 'testing', '1234567890', resource]
@@ -611,6 +616,42 @@ class TestAws(unittest.TestCase):
         conn = _get_service_connection(_get_test_arn(AWS.KINESIS))
         self.assertIsNotNone(conn)
         self.assertIsNotNone(getattr(_local, 'connection_to_' + _get_test_arn(AWS.KINESIS)))
+
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    @mock.patch('aws_lambda_fsm.aws.boto3')
+    def test_get_service_connection_passes_additional_args(self, mock_boto3, mock_settings):
+        mock_settings.ENDPOINTS = {}
+        mock_settings.BOTO3_CLIENT_ADDITIONAL_KWARGS = {'verify': True}
+        setattr(_local, 'connection_to_' + _get_test_arn(AWS.KINESIS), None)
+        _get_service_connection(_get_test_arn(AWS.KINESIS))
+
+        mock_boto3.client.assert_called_once_with(
+            'kinesis', config=AnyConfig(), endpoint_url=None, region_name='testing', verify=True
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    @mock.patch('aws_lambda_fsm.aws.boto3')
+    def test_get_service_connection_passes_no_additional_args(self, mock_boto3, mock_settings):
+        mock_settings.ENDPOINTS = {}
+        mock_settings.BOTO3_CLIENT_ADDITIONAL_KWARGS = {}
+        setattr(_local, 'connection_to_' + _get_test_arn(AWS.KINESIS), None)
+        _get_service_connection(_get_test_arn(AWS.KINESIS))
+
+        mock_boto3.client.assert_called_once_with(
+            'kinesis', config=AnyConfig(), endpoint_url=None, region_name='testing'
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    @mock.patch('aws_lambda_fsm.aws.boto3')
+    def test_get_service_connection_passes_no_additional_args(self, mock_boto3, mock_settings):
+        mock_settings.ENDPOINTS = {}
+        mock_settings.BOTO3_CLIENT_ADDITIONAL_KWARGS = None
+        setattr(_local, 'connection_to_' + _get_test_arn(AWS.KINESIS), None)
+        _get_service_connection(_get_test_arn(AWS.KINESIS))
+
+        mock_boto3.client.assert_called_once_with(
+            'kinesis', config=AnyConfig(), endpoint_url=None, region_name='testing'
+        )
 
     @mock.patch('aws_lambda_fsm.aws.settings')
     def test_get_service_connection_memcache_exists(self, mock_settings):
