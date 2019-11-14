@@ -643,7 +643,7 @@ class TestAws(unittest.TestCase):
 
     @mock.patch('aws_lambda_fsm.aws.settings')
     @mock.patch('aws_lambda_fsm.aws.boto3')
-    def test_get_service_connection_passes_no_additional_args(self, mock_boto3, mock_settings):
+    def test_get_service_connection_passes_None_additional_args(self, mock_boto3, mock_settings):
         mock_settings.ENDPOINTS = {}
         mock_settings.BOTO3_CLIENT_ADDITIONAL_KWARGS = None
         setattr(_local, 'connection_to_' + _get_test_arn(AWS.KINESIS), None)
