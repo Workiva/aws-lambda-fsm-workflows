@@ -585,7 +585,9 @@ def _get_service_connection(resource_arn,
                     boto3.client(service,
                                  region_name=region_name,
                                  endpoint_url=endpoint_url,
-                                 config=config)
+                                 config=config,
+                                 **(getattr(settings, 'BOTO3_CLIENT_ADDITIONAL_KWARGS', {}) or {})
+                                 )
 
             # wrapped in a chaos connection if applicable
             if getattr(settings, 'AWS_CHAOS', {}):

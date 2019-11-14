@@ -62,5 +62,6 @@ class TestSettings(object):
             'testing': 'invalid_endpoint'
         }
     }
+    BOTO3_CLIENT_ADDITIONAL_KWARGS = {}
 
 set_settings(TestSettings)
