@@ -28,6 +28,7 @@ import os
 # library imports
 
 # application imports
+from aws_lambda_fsm.serialization import json_loads_additional_kwargs
 
 # setup the command line args
 parser = argparse.ArgumentParser(description='Mock AWS ECS service.')
@@ -56,7 +57,7 @@ class Handler(BaseHTTPServer.BaseHTTPRequestHandler):
     def do_POST(self):
 
         length = int(self.headers['content-length'])
-        data = json.loads(self.rfile.read(length))
+        data = json.loads(self.rfile.read(length), **json_loads_additional_kwargs())
 
         subprocess_args = ['docker', 'run', '-v', '/var/run/docker.sock:/var/run/docker.sock']
         if 'VOLUME' in os.environ:

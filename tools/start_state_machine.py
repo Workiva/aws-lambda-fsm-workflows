@@ -37,6 +37,7 @@ from aws_lambda_fsm.constants import STATE
 from aws_lambda_fsm.constants import SYSTEM_CONTEXT
 from aws_lambda_fsm.constants import AWS_KINESIS
 from aws_lambda_fsm.constants import AWS
+from aws_lambda_fsm.serialization import json_loads_additional_kwargs
 
 import settings
 
@@ -65,7 +66,7 @@ validate_config()
 
 if args.num_machines > 1:
     # start things off
-    context = json.loads(args.initial_context or "{}")
+    context = json.loads(args.initial_context or "{}", **json_loads_additional_kwargs())
     current_state = current_event = STATE.PSEUDO_INIT
     start_state_machines(args.machine_name,
                          [context] * args.num_machines,
@@ -101,7 +102,8 @@ if args.checkpoint_shard_id and args.checkpoint_sequence_number:
         Limit=1
     )
     if records:
-        context = json.loads(records[AWS_KINESIS.Records][0][AWS_KINESIS.DATA])
+        context = json.loads(records[AWS_KINESIS.Records][0][AWS_KINESIS.DATA],
+                             **json_loads_additional_kwargs())
         current_state = context.get(SYSTEM_CONTEXT.CURRENT_STATE)
         current_event = context.get(SYSTEM_CONTEXT.CURRENT_EVENT)
     else:
@@ -109,7 +111,7 @@ if args.checkpoint_shard_id and args.checkpoint_sequence_number:
 
 # no checkpoint specified, so start with an empty context
 else:
-    context = json.loads(args.initial_context or "{}")
+    context = json.loads(args.initial_context or "{}", **json_loads_additional_kwargs())
     current_state = current_event = STATE.PSEUDO_INIT
 
 # start things off

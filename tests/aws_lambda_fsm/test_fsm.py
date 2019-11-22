@@ -27,7 +27,7 @@ from aws_lambda_fsm.action import Action
 from aws_lambda_fsm.fsm import FSM
 from aws_lambda_fsm import config
 from aws_lambda_fsm.fsm import Context
-from aws_lambda_fsm.fsm import json_dumps_default
+from aws_lambda_fsm.fsm import json_dumps_additional_kwargs
 
 
 class TestAction(Action):
@@ -172,17 +172,6 @@ class TestFSM(TestFsmBase):
         )
 
 
-class TestJsonSerialization(TestFsmBase):
-
-    def test_json_dumps_default_using_system_default(self):
-        self.assertEquals("<not_serializable>", json_dumps_default()("value"))
-
-    @mock.patch('aws_lambda_fsm.fsm.settings')
-    def test_json_dumps_default_using_settings(self, mock_settings):
-        mock_settings.JSON_DUMPS_DEFAULT = lambda x: "foobar"
-        self.assertEquals("foobar", json_dumps_default()("value"))
-
-
 class TestDispatchAndRetry(TestFsmBase):
     def _dispatch(self,
                   mock_send_next_event_for_dispatch):
@@ -215,7 +204,7 @@ class TestDispatchAndRetry(TestFsmBase):
         instance._dispatch_and_retry(
             'pseudo_init',
             {
-                'payload': json.dumps(payload),
+                'payload': json.dumps(payload, **json_dumps_additional_kwargs()),
                 'source': 'dynamodb_retry'
             }
         )
@@ -775,7 +764,7 @@ class TestRetry(TestFsmBase):
         )
         instance._dispatch_and_retry(
             'pseudo_init',
-            {'payload': json.dumps(payload), 'source': 'dynamodb_retry'}
+            {'payload': json.dumps(payload, **json_dumps_additional_kwargs()), 'source': 'dynamodb_retry'}
         )
         self.assertEqual(instance.retries, retries)
         return instance
