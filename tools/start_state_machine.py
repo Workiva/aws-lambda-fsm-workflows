@@ -102,8 +102,7 @@ if args.checkpoint_shard_id and args.checkpoint_sequence_number:
         Limit=1
     )
     if records:
-        context = json.loads(records[AWS_KINESIS.Records][0][AWS_KINESIS.DATA],
-                             **json_loads_additional_kwargs())
+        context = json.loads(records[AWS_KINESIS.Records][0][AWS_KINESIS.DATA], **json_loads_additional_kwargs())
         current_state = context.get(SYSTEM_CONTEXT.CURRENT_STATE)
         current_event = context.get(SYSTEM_CONTEXT.CURRENT_EVENT)
     else:
