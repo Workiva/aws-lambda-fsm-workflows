@@ -28,3 +28,9 @@ class IncrementCounter(Action):
             raise Exception()
         context['counter'] = context.get('counter', 0) + 1
         return 'ok' if (context['counter'] < context['loops']) else 'done'
+
+
+class SerializationProblem(Action):
+    def execute(self, context, obj):
+        context['error'] = Exception()
+        return 'ok'

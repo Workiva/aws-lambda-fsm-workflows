@@ -27,6 +27,7 @@ from aws_lambda_fsm.action import Action
 from aws_lambda_fsm.fsm import FSM
 from aws_lambda_fsm import config
 from aws_lambda_fsm.fsm import Context
+from aws_lambda_fsm.fsm import json_dumps_default
 
 
 class TestAction(Action):
@@ -169,6 +170,17 @@ class TestFSM(TestFsmBase):
             expected,
             instance.from_payload_dict(instance.to_payload_dict()).to_payload_dict()
         )
+
+
+class TestJsonSerialization(TestFsmBase):
+
+    def test_json_dumps_default_using_system_default(self):
+        self.assertEquals("<not_serializable>", json_dumps_default()("value"))
+
+    @mock.patch('aws_lambda_fsm.fsm.settings')
+    def test_json_dumps_default_using_settings(self, mock_settings):
+        mock_settings.JSON_DUMPS_DEFAULT = lambda x: "foobar"
+        self.assertEquals("foobar", json_dumps_default()("value"))
 
 
 class TestDispatchAndRetry(TestFsmBase):

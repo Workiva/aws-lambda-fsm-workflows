@@ -385,6 +385,21 @@ class Test(BaseFunctionalTest):
         ]
         self.assertEqual(expected, AWS.errors.trace(raw=True))
 
+    ################################################################################
+    # START: machine_name="serialization"
+    ################################################################################
+
+    def test_serialization(self, *args):
+        self._execute(AWS, "serialization", {})
+
+        # check messages
+        expected = [
+            (0, ('pseudo_init', 'pseudo_init', 0, 0), (None,)),
+            (1, ('start', 'ok', 1, 0), ('<not_serializable>',)),
+            (2, ('middle', 'ok', 2, 0), ('<not_serializable>',))
+        ]
+        self.assertEqual(expected, AWS.all_sources.trace(uvars={"error"}))
+
 
 class TestSqs(Test):
 
