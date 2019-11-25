@@ -25,7 +25,7 @@ settings = get_settings()
 
 def json_dumps_additional_kwargs():
     return getattr(settings, 'JSON_DUMPS_ADDITIONAL_KWARGS', {}) or \
-           {'sort_keys': True, 'default': lambda x: '<not_serializable>'}
+        {'sort_keys': True, 'default': lambda x: '<not_serializable>'}
 
 
 def json_loads_additional_kwargs():
