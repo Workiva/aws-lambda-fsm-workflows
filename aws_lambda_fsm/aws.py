@@ -45,6 +45,8 @@ from aws_lambda_fsm.constants import AWS_SQS
 from aws_lambda_fsm.constants import AWS
 from aws_lambda_fsm.constants import ENVIRONMENT
 from aws_lambda_fsm.config import get_settings
+from aws_lambda_fsm.serialization import json_dumps_additional_kwargs
+from aws_lambda_fsm.serialization import json_loads_additional_kwargs
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -1886,7 +1888,7 @@ def _store_environment_dynamodb(table_arn, environment):
     if not dynamodb_conn:
         return None, None  # pragma: no cover
 
-    serialized = json.dumps(environment)
+    serialized = json.dumps(environment, **json_dumps_additional_kwargs())
     guid = uuid.uuid4().hex
     item = {
         ENVIRONMENT_DATA.GUID: {AWS_DYNAMODB.STRING: guid},
@@ -1962,7 +1964,7 @@ def _load_environment_dynamodb(table_arn, guid):
 
     if item:
         serialized = item[AWS_DYNAMODB.Item][ENVIRONMENT_DATA.ENVIRONMENT][AWS_DYNAMODB.STRING]
-        environment = json.loads(serialized)
+        environment = json.loads(serialized, **json_loads_additional_kwargs())
         return environment
 
 

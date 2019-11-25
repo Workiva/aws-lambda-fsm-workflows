@@ -27,6 +27,7 @@ from aws_lambda_fsm.aws import get_secondary_stream_source
 from aws_lambda_fsm.fsm import Context
 from aws_lambda_fsm.constants import ENVIRONMENT
 from aws_lambda_fsm.constants import AWS_ECS
+from aws_lambda_fsm.serialization import json_dumps_additional_kwargs
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +104,7 @@ class ECSTaskEntryAction(Action):
         ctx = Context.from_payload_dict(context.to_payload_dict())
         ctx.current_state = context.current_transition.target
         ctx.steps += 1
-        fsm_context = base64.b64encode(json.dumps(ctx.to_payload_dict()))
+        fsm_context = base64.b64encode(json.dumps(ctx.to_payload_dict(), **json_dumps_additional_kwargs()))
 
         # now finally launch the ECS task using all the data from above
         # as well as tasks etc. specified when the state machine was run.

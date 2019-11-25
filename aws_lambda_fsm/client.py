@@ -26,6 +26,7 @@ from aws_lambda_fsm.aws import send_next_events_for_dispatch
 from aws_lambda_fsm.constants import SYSTEM_CONTEXT
 from aws_lambda_fsm.constants import STATE
 from aws_lambda_fsm.constants import PAYLOAD
+from aws_lambda_fsm.serialization import json_dumps_additional_kwargs
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ def start_state_machine(machine_name,
         PAYLOAD.USER_CONTEXT: initial_context
     }
     send_next_event_for_dispatch(None,
-                                 json.dumps(payload, sort_keys=True),
+                                 json.dumps(payload, **json_dumps_additional_kwargs()),
                                  correlation_id)
 
 
@@ -100,7 +101,7 @@ def start_state_machines(machine_name,
             PAYLOAD.SYSTEM_CONTEXT: system_context,
             PAYLOAD.USER_CONTEXT: user_context
         }
-        all_data.append(json.dumps(payload, sort_keys=True))
+        all_data.append(json.dumps(payload, **json_dumps_additional_kwargs()))
     send_next_events_for_dispatch(None,
                                   all_data,
                                   correlation_ids)

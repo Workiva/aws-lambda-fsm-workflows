@@ -25,6 +25,8 @@ from botocore.exceptions import ClientError
 from aws_lambda_fsm.client import start_state_machine
 from aws_lambda_fsm import handler
 from aws_lambda_fsm.constants import AWS as AWS_CONSTANTS
+from aws_lambda_fsm.serialization import json_dumps_additional_kwargs
+from aws_lambda_fsm.serialization import json_loads_additional_kwargs
 
 
 class Messages(object):
@@ -48,7 +50,7 @@ class Messages(object):
         s = 'system_context'
         u = 'user_context'
         svars = ('current_state', 'current_event', 'steps', 'retries')
-        serialized = map(lambda x: json.loads(x), self.all_messages)
+        serialized = map(lambda x: json.loads(x, **json_loads_additional_kwargs()), self.all_messages)
         if raw:
             return serialized
         data = enumerate(serialized)
@@ -180,7 +182,7 @@ class AWSStub(object):
                 return False
 
     def increment_error_counters(self, data, dimensions):
-        self.errors.send(json.dumps((data, dimensions)))
+        self.errors.send(json.dumps((data, dimensions), **json_dumps_additional_kwargs()))
         return {'test': 'stub'}
 
     def store_checkpoint(self, context, sent, primary=True):

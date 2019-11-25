@@ -34,6 +34,9 @@ from aws_lambda_fsm.constants import AWS
 from aws_lambda_fsm.constants import STREAM_DATA
 from aws_lambda_fsm.constants import AWS_DYNAMODB
 from aws_lambda_fsm.config import get_settings
+from aws_lambda_fsm.serialization import json_dumps_additional_kwargs
+from aws_lambda_fsm.serialization import json_loads_additional_kwargs
+
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -49,7 +52,7 @@ def _process_payload(payload_str, obj):
     :param payload_str: a json string like '{"serialized": "data"}'
     :param obj: a dict to pass to fsm Context.dispatch(...)
     """
-    payload = json.loads(payload_str)
+    payload = json.loads(payload_str, **json_loads_additional_kwargs())
     obj[OBJ.PAYLOAD] = payload_str
     fsm = Context.from_payload_dict(payload)
     logger.info('system_context=%s', fsm.system_context())
@@ -68,7 +71,7 @@ def _process_payload_step(payload_str, obj):
     :param payload_str: a json string like '{"serialized": "data"}'
     :param obj: a dict to pass to fsm Context.dispatch(...)
     """
-    payload = json.loads(payload_str)
+    payload = json.loads(payload_str, **json_loads_additional_kwargs())
     obj[OBJ.PAYLOAD] = payload_str
     fsm = Context.from_payload_dict(payload)
     logger.info('system_context=%s', fsm.system_context())
@@ -94,7 +97,7 @@ def lambda_api_handler(lambda_event):
     """
     try:
         obj = {OBJ.SOURCE: AWS.GATEWAY}
-        payload = json.dumps(lambda_event)  # API Gateway just passes straight though
+        payload = json.dumps(lambda_event, **json_dumps_additional_kwargs())  # API Gateway just passes straight though
         _process_payload(payload, obj)
 
     # in batch mode, we don't want a single error to cause the the entire batch
@@ -113,7 +116,7 @@ def lambda_step_handler(lambda_event):
     :return: a dict event to pass along to AWS Step Functions orchestration
     """
     obj = {OBJ.SOURCE: AWS.STEP_FUNCTION}
-    payload = json.dumps(lambda_event)  # Step Function just passes straight though
+    payload = json.dumps(lambda_event, **json_dumps_additional_kwargs())  # Step Function just passes straight though
     return _process_payload_step(payload, obj)
 
 

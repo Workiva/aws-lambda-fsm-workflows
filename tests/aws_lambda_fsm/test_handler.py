@@ -32,6 +32,7 @@ from aws_lambda_fsm.handler import lambda_sqs_handler
 from aws_lambda_fsm.handler import lambda_handler
 from aws_lambda_fsm.handler import lambda_api_handler
 from aws_lambda_fsm.handler import lambda_step_handler
+from aws_lambda_fsm.serialization import json_dumps_additional_kwargs
 
 
 class TestHandler(unittest.TestCase):
@@ -54,7 +55,8 @@ class TestHandler(unittest.TestCase):
                                                  'table': 't',
                                                  'topic': 'z',
                                                  'metrics': 'm'},
-                              'user_context': {}}, sort_keys=True)
+                              'user_context': {}},
+                             **json_dumps_additional_kwargs())
         obj = {}
         mock_FSM.return_value.create_FSM_instance.return_value\
             .system_context.return_value.get.return_value = 'pseudo-init'
@@ -87,7 +89,8 @@ class TestHandler(unittest.TestCase):
                                                  'table': 't',
                                                  'topic': 'z',
                                                  'metrics': 'm'},
-                              'user_context': {}}, sort_keys=True)
+                              'user_context': {}},
+                             **json_dumps_additional_kwargs())
         obj = {}
         mock_FSM.return_value.create_FSM_instance.return_value\
             .system_context.return_value.get.return_value = 'pseudo-init'
@@ -160,7 +163,7 @@ class TestHandler(unittest.TestCase):
         return {
             'eventSource': 'aws:kinesis',
             'kinesis': {
-                'data': base64.b64encode(json.dumps({'machine_name': 'barfoo'}, sort_keys=True))
+                'data': base64.b64encode(json.dumps({'machine_name': 'barfoo'}, **json_dumps_additional_kwargs()))
             }
         }
 
@@ -257,7 +260,7 @@ class TestHandler(unittest.TestCase):
         return {
             'eventSource': 'aws:sns',
             'Sns': {
-                'Message': json.dumps({"mess": "age"})
+                'Message': json.dumps({"mess": "age"}, **json_dumps_additional_kwargs())
             }
         }
 
@@ -289,7 +292,7 @@ class TestHandler(unittest.TestCase):
     def get_sqs_record(self):
         return {
             'eventSource': 'aws:sqs',
-            'body': json.dumps({"mess": "age"})
+            'body': json.dumps({"mess": "age"}, **json_dumps_additional_kwargs())
         }
 
     @mock.patch('aws_lambda_fsm.handler._process_payload')
