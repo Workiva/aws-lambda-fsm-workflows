@@ -47,6 +47,8 @@ from aws_lambda_fsm.constants import SYSTEM_CONTEXT
 from aws_lambda_fsm.constants import PAYLOAD
 from aws_lambda_fsm.constants import AWS
 from aws_lambda_fsm.constants import ERRORS
+from aws_lambda_fsm.serialization import json_dumps_additional_kwargs
+from aws_lambda_fsm.serialization import json_loads_additional_kwargs
 
 
 class Object(object):
@@ -266,9 +268,9 @@ class Context(dict):
 
         # immutable
         self.__system_context[SYSTEM_CONTEXT.MACHINE_NAME] = \
-            self.__system_context.get(SYSTEM_CONTEXT.MACHINE_NAME, name)
+            self.__system_context.get(SYSTEM_CONTEXT.MACHINE_NAME, name)  # prefer value in initial_system_context
         self.__system_context[SYSTEM_CONTEXT.MAX_RETRIES] = \
-            self.__system_context.get(SYSTEM_CONTEXT.MAX_RETRIES, max_retries)
+            self.__system_context.get(SYSTEM_CONTEXT.MAX_RETRIES, max_retries)  # prefer value in initial_system_context
 
         self._errors = {}
 
@@ -283,6 +285,10 @@ class Context(dict):
         if SYSTEM_CONTEXT.CORRELATION_ID not in self.__system_context:
             self.__system_context[SYSTEM_CONTEXT.CORRELATION_ID] = uuid.uuid4().hex
         return self.__system_context[SYSTEM_CONTEXT.CORRELATION_ID]
+
+    @property
+    def additional_delay_seconds(self):
+        return self.__system_context.get(SYSTEM_CONTEXT.ADDITIONAL_DELAY_SECONDS, 0)
 
     @property
     def max_retries(self):
@@ -374,7 +380,7 @@ class Context(dict):
         :param obj: a dict
         """
         retry_system_context = retry_data[PAYLOAD.SYSTEM_CONTEXT]
-        serialized = json.dumps(retry_data, sort_keys=True)
+        serialized = json.dumps(retry_data, **json_dumps_additional_kwargs())
 
         for primary in [True, False]:
             try:
@@ -441,8 +447,7 @@ class Context(dict):
                 try:
                     return store_checkpoint(
                         self,
-                        json.dumps(obj[OBJ.SENT], sort_keys=True,
-                                   default=lambda x: '<skipped>'),
+                        json.dumps(obj[OBJ.SENT], **json_dumps_additional_kwargs()),
                         primary=primary
                     )
                 except ClientError:
@@ -533,7 +538,7 @@ class Context(dict):
             ctx.steps += 1
             ctx.retries = 0
             ctx.current_event = next_event
-            serialized = json.dumps(ctx.to_payload_dict(), sort_keys=True)
+            serialized = json.dumps(ctx.to_payload_dict(), **json_dumps_additional_kwargs())
 
             # dispatch the next event to aws kinesis/dynamodb
             sent = self._send_next_event_for_dispatch(
@@ -576,7 +581,7 @@ class Context(dict):
         # payload rather than the current context to avoid passing any vars that were
         # potentially mutated up to this point.
         payload = obj[OBJ.PAYLOAD]
-        retry_data = json.loads(payload)
+        retry_data = json.loads(payload, **json_loads_additional_kwargs())
         retry_system_context = retry_data[PAYLOAD.SYSTEM_CONTEXT]
         retry_system_context[SYSTEM_CONTEXT.RETRIES] += 1
 

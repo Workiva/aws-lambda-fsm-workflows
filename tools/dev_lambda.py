@@ -89,6 +89,8 @@ from aws_lambda_fsm.constants import AWS_SNS             # noqa: E402
 from aws_lambda_fsm.constants import AWS_SQS             # noqa: E402
 from aws_lambda_fsm.constants import STREAM_DATA         # noqa: E402
 from aws_lambda_fsm.constants import AWS                 # noqa: E402
+from aws_lambda_fsm.serialization import json_dumps_additional_kwargs  # noqa: E402
+from aws_lambda_fsm.serialization import json_loads_additional_kwargs  # noqa: E402
 
 import settings                                          # noqa: E402
 
@@ -96,6 +98,11 @@ random.seed(args.random_seed)
 STARTED_AT = str(int(time.time()))
 
 validate_config()
+
+
+def shellquote(s):
+    # https://stackoverflow.com/questions/35817/how-to-escape-os-system-calls
+    return "'" + s.replace("'", "'\\''") + "'"
 
 # setup connections to AWS
 if args.run_kinesis_lambda:
@@ -136,7 +143,7 @@ if args.run_sns_lambda:
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_POST(self):
             data_str = self.rfile.read(int(self.headers['Content-Length']))
-            data = json.loads(data_str)
+            data = json.loads(data_str, **json_loads_additional_kwargs())
             self.server.message = data[AWS_SNS.Message]
             self.send_response(200)
             self.wfile.write("")
@@ -217,7 +224,9 @@ while True:
 
             # and call the handler with the records
             if args.lambda_command:
-                subprocess.call(['/bin/bash', '-c', args.lambda_command + " '" + json.dumps(lambda_event) + "'"])
+                serialized = json.dumps(lambda_event, **json_dumps_additional_kwargs())
+                quoted = shellquote(serialized)
+                subprocess.call(['/bin/bash', '-c', args.lambda_command + " " + quoted])
             else:
                 lambda_handler(lambda_event, lambda_context)
 
@@ -272,7 +281,9 @@ while True:
 
                 # and call the handler with the records
                 if args.lambda_command:
-                    subprocess.call(['/bin/bash', '-c', args.lambda_command + " '" + json.dumps(lambda_event) + "'"])
+                    # no need to escape here since the base64 string is OK
+                    subprocess.call(['/bin/bash', '-c', args.lambda_command + " '" +
+                                     json.dumps(lambda_event, **json_dumps_additional_kwargs()) + "'"])
                 else:
                     lambda_handler(lambda_event, lambda_context)
 
@@ -293,7 +304,8 @@ while True:
             }
 
             if args.lambda_command:
-                subprocess.call(['/bin/bash', '-c', args.lambda_command + " '" + json.dumps(lambda_event) + "'"])
+                subprocess.call(['/bin/bash', '-c', args.lambda_command + " '" +
+                                 json.dumps(lambda_event, **json_dumps_additional_kwargs()) + "'"])
             else:
                 lambda_handler(lambda_event, lambda_context)
 
@@ -344,7 +356,8 @@ while True:
             if lambda_event[AWS_LAMBDA.Records]:
 
                 if args.lambda_command:
-                    subprocess.call(['/bin/bash', '-c', args.lambda_command + " '" + json.dumps(lambda_event) + "'"])
+                    subprocess.call(['/bin/bash', '-c', args.lambda_command + " '" +
+                                     json.dumps(lambda_event, **json_dumps_additional_kwargs()) + "'"])
                 else:
                     lambda_handler(lambda_event, lambda_context)
 

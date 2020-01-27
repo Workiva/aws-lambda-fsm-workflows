@@ -35,6 +35,8 @@ from aws_lambda_fsm.aws import load_environment
 from aws_lambda_fsm.constants import PAYLOAD
 from aws_lambda_fsm.constants import SYSTEM_CONTEXT
 from aws_lambda_fsm.constants import ENVIRONMENT
+from aws_lambda_fsm.serialization import json_dumps_additional_kwargs
+from aws_lambda_fsm.serialization import json_loads_additional_kwargs
 
 return_code = None
 environment = None
@@ -81,9 +83,9 @@ finally:
     # FSM_CONTEXT is the environment variable used by aws_lambda_fsm.utils.ECSTaskEntryAction
     event = DONE_EVENT if return_code == 0 else FAIL_EVENT
     payload_encoded = environment[ENVIRONMENT.FSM_CONTEXT]
-    payload = json.loads(base64.b64decode(payload_encoded))
+    payload = json.loads(base64.b64decode(payload_encoded), **json_loads_additional_kwargs())
     payload[PAYLOAD.SYSTEM_CONTEXT][SYSTEM_CONTEXT.CURRENT_EVENT] = event
-    serialized = json.dumps(payload)
+    serialized = json.dumps(payload, **json_dumps_additional_kwargs())
     send_next_event_for_dispatch(
         None,
         serialized,

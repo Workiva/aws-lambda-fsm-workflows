@@ -85,6 +85,11 @@ class Connection(object):
         pass
 
 
+class AnyConfig():
+    def __eq__(self, other):
+        return True
+
+
 def _get_test_arn(service, resource='resourcetype/resourcename'):
     return ':'.join(
         ['arn', 'aws', service, 'testing', '1234567890', resource]
@@ -614,6 +619,42 @@ class TestAws(unittest.TestCase):
         self.assertIsNotNone(getattr(_local, 'connection_to_' + _get_test_arn(AWS.KINESIS)))
 
     @mock.patch('aws_lambda_fsm.aws.settings')
+    @mock.patch('aws_lambda_fsm.aws.boto3')
+    def test_get_service_connection_passes_additional_args(self, mock_boto3, mock_settings):
+        mock_settings.ENDPOINTS = {}
+        mock_settings.BOTO3_CLIENT_ADDITIONAL_KWARGS = {'verify': True}
+        setattr(_local, 'connection_to_' + _get_test_arn(AWS.KINESIS), None)
+        _get_service_connection(_get_test_arn(AWS.KINESIS))
+
+        mock_boto3.client.assert_called_once_with(
+            'kinesis', config=AnyConfig(), endpoint_url=None, region_name='testing', verify=True
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    @mock.patch('aws_lambda_fsm.aws.boto3')
+    def test_get_service_connection_passes_no_additional_args(self, mock_boto3, mock_settings):
+        mock_settings.ENDPOINTS = {}
+        mock_settings.BOTO3_CLIENT_ADDITIONAL_KWARGS = {}
+        setattr(_local, 'connection_to_' + _get_test_arn(AWS.KINESIS), None)
+        _get_service_connection(_get_test_arn(AWS.KINESIS))
+
+        mock_boto3.client.assert_called_once_with(
+            'kinesis', config=AnyConfig(), endpoint_url=None, region_name='testing'
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    @mock.patch('aws_lambda_fsm.aws.boto3')
+    def test_get_service_connection_passes_None_additional_args(self, mock_boto3, mock_settings):
+        mock_settings.ENDPOINTS = {}
+        mock_settings.BOTO3_CLIENT_ADDITIONAL_KWARGS = None
+        setattr(_local, 'connection_to_' + _get_test_arn(AWS.KINESIS), None)
+        _get_service_connection(_get_test_arn(AWS.KINESIS))
+
+        mock_boto3.client.assert_called_once_with(
+            'kinesis', config=AnyConfig(), endpoint_url=None, region_name='testing'
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.settings')
     def test_get_service_connection_memcache_exists(self, mock_settings):
         mock_settings.ENDPOINTS = ENDPOINTS_MEMCACHE
         setattr(_local, 'connection_to_' + _get_test_arn(AWS.ELASTICACHE), None)
@@ -947,6 +988,7 @@ class TestAws(unittest.TestCase):
                                                   mock_get_primary_stream_source,
                                                   mock_get_connection):
         mock_context = mock.Mock()
+        mock_context.additional_delay_seconds = 0
         mock_get_primary_stream_source.return_value = _get_test_arn(AWS.KINESIS)
         send_next_event_for_dispatch(mock_context, 'c', 'd')
         mock_get_connection.return_value.put_record.assert_called_with(
@@ -961,6 +1003,7 @@ class TestAws(unittest.TestCase):
                                                              mock_get_primary_retry_source,
                                                              mock_get_connection):
         mock_context = mock.Mock()
+        mock_context.additional_delay_seconds = 0
         mock_get_primary_retry_source.return_value = _get_test_arn(AWS.KINESIS)
         send_next_event_for_dispatch(mock_context, 'c', 'd', recovering=True)
         mock_get_connection.return_value.put_record.assert_called_with(
@@ -975,6 +1018,7 @@ class TestAws(unittest.TestCase):
                                                             mock_get_secondary_stream_source,
                                                             mock_get_connection):
         mock_context = mock.Mock()
+        mock_context.additional_delay_seconds = 0
         mock_get_secondary_stream_source.return_value = _get_test_arn(AWS.KINESIS)
         send_next_event_for_dispatch(mock_context, 'c', 'd', primary=False)
         mock_get_connection.return_value.put_record.assert_called_with(
@@ -989,6 +1033,7 @@ class TestAws(unittest.TestCase):
                                                                        mock_get_secondary_retry_source,
                                                                        mock_get_connection):
         mock_context = mock.Mock()
+        mock_context.additional_delay_seconds = 0
         mock_get_secondary_retry_source.return_value = _get_test_arn(AWS.KINESIS)
         send_next_event_for_dispatch(mock_context, 'c', 'd', primary=False, recovering=True)
         mock_get_connection.return_value.put_record.assert_called_with(
@@ -1005,6 +1050,7 @@ class TestAws(unittest.TestCase):
                                                    mock_get_primary_stream_source,
                                                    mock_get_connection):
         mock_context = mock.Mock()
+        mock_context.additional_delay_seconds = 0
         mock_time.time.return_value = 1234.0
         mock_get_primary_stream_source.return_value = _get_test_arn(AWS.DYNAMODB)
         send_next_event_for_dispatch(mock_context, 'c', 'd')
@@ -1019,6 +1065,7 @@ class TestAws(unittest.TestCase):
                                               mock_get_primary_stream_source,
                                               mock_get_connection):
         mock_context = mock.Mock()
+        mock_context.additional_delay_seconds = 0
         mock_get_primary_stream_source.return_value = _get_test_arn(AWS.SNS)
         send_next_event_for_dispatch(mock_context, 'c', 'd')
         mock_get_connection.return_value.publish.assert_called_with(
@@ -1034,6 +1081,7 @@ class TestAws(unittest.TestCase):
                                               mock_get_primary_stream_source,
                                               mock_get_connection):
         mock_context = mock.Mock()
+        mock_context.additional_delay_seconds = 0
         mock_get_primary_stream_source.return_value = _get_test_arn(AWS.SQS)
         mock_get_sqs_queue_url.return_value = 'https://sqs.testing.amazonaws.com/1234567890/queuename'
         send_next_event_for_dispatch(mock_context, 'c', 'd')
@@ -1045,10 +1093,27 @@ class TestAws(unittest.TestCase):
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.get_primary_stream_source')
+    @mock.patch('aws_lambda_fsm.aws._get_sqs_queue_url')
+    def test_send_next_event_for_dispatch_sqs_handles_None_context(self,
+                                                                   mock_get_sqs_queue_url,
+                                                                   mock_get_primary_stream_source,
+                                                                   mock_get_connection):
+        mock_get_primary_stream_source.return_value = _get_test_arn(AWS.SQS)
+        mock_get_sqs_queue_url.return_value = 'https://sqs.testing.amazonaws.com/1234567890/queuename'
+        send_next_event_for_dispatch(None, 'c', 'd', delay=123)
+        mock_get_connection.return_value.send_message.assert_called_with(
+            QueueUrl='https://sqs.testing.amazonaws.com/1234567890/queuename',
+            DelaySeconds=123,
+            MessageBody='c'
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_primary_stream_source')
     def test_send_next_events_for_dispatch_kinesis(self,
                                                    mock_get_primary_stream_source,
                                                    mock_get_connection):
         mock_context = mock.Mock()
+        mock_context.additional_delay_seconds = 0
         mock_get_primary_stream_source.return_value = _get_test_arn(AWS.KINESIS)
         send_next_events_for_dispatch(mock_context, ['c', 'cc'], ['d', 'dd'])
         mock_get_connection.return_value.put_records.assert_called_with(
@@ -1062,6 +1127,7 @@ class TestAws(unittest.TestCase):
                                                              mock_get_secondary_stream_source,
                                                              mock_get_connection):
         mock_context = mock.Mock()
+        mock_context.additional_delay_seconds = 0
         mock_get_secondary_stream_source.return_value = _get_test_arn(AWS.KINESIS)
         send_next_events_for_dispatch(mock_context, ['c', 'cc'], ['d', 'dd'], primary=False)
         mock_get_connection.return_value.put_records.assert_called_with(
@@ -1077,6 +1143,7 @@ class TestAws(unittest.TestCase):
                                                     mock_get_primary_stream_source,
                                                     mock_get_connection):
         mock_context = mock.Mock()
+        mock_context.additional_delay_seconds = 0
         mock_time.time.return_value = 1234.0
         mock_get_primary_stream_source.return_value = _get_test_arn(AWS.DYNAMODB)
         send_next_events_for_dispatch(mock_context, ['c', 'cc'], ['d', 'dd'])
@@ -1097,6 +1164,7 @@ class TestAws(unittest.TestCase):
                                                mock_get_primary_stream_source,
                                                mock_get_connection):
         mock_context = mock.Mock()
+        mock_context.additional_delay_seconds = 0
         mock_get_primary_stream_source.return_value = _get_test_arn(AWS.SNS)
         send_next_events_for_dispatch(mock_context, ['c', 'cc'], ['d', 'dd'])
         mock_get_connection.return_value.publish.assert_has_calls(
@@ -1114,6 +1182,7 @@ class TestAws(unittest.TestCase):
                                                mock_get_primary_stream_source,
                                                mock_get_connection):
         mock_context = mock.Mock()
+        mock_context.additional_delay_seconds = 0
         mock_get_primary_stream_source.return_value = _get_test_arn(AWS.SQS)
         mock_get_sqs_queue_url.return_value = 'https://sqs.testing.amazonaws.com/1234567890/queuename'
         send_next_events_for_dispatch(mock_context, ['c', 'cc'], ['d', 'dd'])
@@ -1121,6 +1190,22 @@ class TestAws(unittest.TestCase):
             QueueUrl='https://sqs.testing.amazonaws.com/1234567890/queuename',
             Entries=[{'DelaySeconds': 0, 'Id': 'd', 'MessageBody': 'c'},
                      {'DelaySeconds': 0, 'Id': 'dd', 'MessageBody': 'cc'}]
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.get_primary_stream_source')
+    @mock.patch('aws_lambda_fsm.aws._get_sqs_queue_url')
+    def test_send_next_events_for_dispatch_sqs_handles_None_context(self,
+                                                                    mock_get_sqs_queue_url,
+                                                                    mock_get_primary_stream_source,
+                                                                    mock_get_connection):
+        mock_get_primary_stream_source.return_value = _get_test_arn(AWS.SQS)
+        mock_get_sqs_queue_url.return_value = 'https://sqs.testing.amazonaws.com/1234567890/queuename'
+        send_next_events_for_dispatch(None, ['c', 'cc'], ['d', 'dd'], delay=123)
+        mock_get_connection.return_value.send_message_batch.assert_called_with(
+            QueueUrl='https://sqs.testing.amazonaws.com/1234567890/queuename',
+            Entries=[{'DelaySeconds': 123, 'Id': 'd', 'MessageBody': 'c'},
+                     {'DelaySeconds': 123, 'Id': 'dd', 'MessageBody': 'cc'}]
         )
 
     # retriable_entities
@@ -1159,15 +1244,16 @@ class TestAws(unittest.TestCase):
                                    mock_settings,
                                    mock_get_connection):
         mock_context = mock.Mock()
+        mock_context.additional_delay_seconds = 0
         mock_context.correlation_id = 'b'
         mock_context.steps = 'z'
         mock_settings.PRIMARY_RETRY_SOURCE = _get_test_arn(AWS.DYNAMODB)
-        start_retries(mock_context, 'c', 'd', primary=True)
+        start_retries(mock_context, 999, 'd', primary=True)
         mock_get_connection.return_value.put_item.assert_called_with(
             Item={'partition': {'N': '15'},
                   'payload': {'S': 'd'},
                   'correlation_id_steps': {'S': 'b-z'},
-                  'run_at': {'N': 'c'}},
+                  'run_at': {'N': '999'}},
             TableName='resourcename'
         )
 
@@ -1177,15 +1263,16 @@ class TestAws(unittest.TestCase):
                                               mock_settings,
                                               mock_get_connection):
         mock_context = mock.Mock()
+        mock_context.additional_delay_seconds = 0
         mock_context.correlation_id = 'b'
         mock_context.steps = 'z'
         mock_settings.PRIMARY_STREAM_SOURCE = _get_test_arn(AWS.DYNAMODB)
-        start_retries(mock_context, 'c', 'd', primary=True, recovering=True)
+        start_retries(mock_context, 999, 'd', primary=True, recovering=True)
         mock_get_connection.return_value.put_item.assert_called_with(
             Item={'partition': {'N': '15'},
                   'payload': {'S': 'd'},
                   'correlation_id_steps': {'S': 'b-z'},
-                  'run_at': {'N': 'c'}},
+                  'run_at': {'N': '999'}},
             TableName='resourcename'
         )
 
@@ -1195,9 +1282,10 @@ class TestAws(unittest.TestCase):
                                      mock_settings,
                                      mock_get_connection):
         mock_context = mock.Mock()
+        mock_context.additional_delay_seconds = 0
         mock_context.correlation_id = 'b'
         mock_settings.SECONDARY_RETRY_SOURCE = _get_test_arn(AWS.KINESIS)
-        start_retries(mock_context, 'c', 'd', primary=False)
+        start_retries(mock_context, 999, 'd', primary=False)
         mock_get_connection.return_value.put_record.assert_called_with(
             PartitionKey='b',
             Data='d',
@@ -1210,9 +1298,10 @@ class TestAws(unittest.TestCase):
                                                 mock_settings,
                                                 mock_get_connection):
         mock_context = mock.Mock()
+        mock_context.additional_delay_seconds = 0
         mock_context.correlation_id = 'b'
         mock_settings.SECONDARY_STREAM_SOURCE = _get_test_arn(AWS.KINESIS)
-        start_retries(mock_context, 'c', 'd', primary=False, recovering=True)
+        start_retries(mock_context, 999, 'd', primary=False, recovering=True)
         mock_get_connection.return_value.put_record.assert_called_with(
             PartitionKey='b',
             Data='d',
@@ -1225,29 +1314,56 @@ class TestAws(unittest.TestCase):
                                mock_settings,
                                mock_get_connection):
         mock_context = mock.Mock()
+        mock_context.additional_delay_seconds = 0
         mock_context.correlation_id = 'b'
         mock_settings.PRIMARY_RETRY_SOURCE = _get_test_arn(AWS.SNS)
-        start_retries(mock_context, 'c', 'd', primary=True)
+        start_retries(mock_context, 999, 'd', primary=True)
         mock_get_connection.return_value.publish.assert_called_with(
             Message='d',
             TopicArn=_get_test_arn(AWS.SNS)
         )
 
+    @mock.patch('aws_lambda_fsm.aws.time')
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.settings')
     @mock.patch('aws_lambda_fsm.aws._get_sqs_queue_url')
     def test_start_retries_sqs(self,
                                mock_get_sqs_queue_url,
                                mock_settings,
-                               mock_get_connection):
+                               mock_get_connection,
+                               mock_time):
         mock_context = mock.Mock()
+        mock_context.additional_delay_seconds = 0
         mock_context.correlation_id = 'b'
         mock_settings.PRIMARY_RETRY_SOURCE = _get_test_arn(AWS.SQS)
         mock_get_sqs_queue_url.return_value = 'https://sqs.testing.amazonaws.com/1234567890/queuename'
+        mock_time.time.return_value = 0.0
         start_retries(mock_context, 123, 'd', primary=True)
         mock_get_connection.return_value.send_message.assert_called_with(
             QueueUrl='https://sqs.testing.amazonaws.com/1234567890/queuename',
-            DelaySeconds=0,
+            DelaySeconds=123,
+            MessageBody='d'
+        )
+
+    @mock.patch('aws_lambda_fsm.aws.time')
+    @mock.patch('aws_lambda_fsm.aws.get_connection')
+    @mock.patch('aws_lambda_fsm.aws.settings')
+    @mock.patch('aws_lambda_fsm.aws._get_sqs_queue_url')
+    def test_start_retries_sqs_with_additional_delay(self,
+                                                     mock_get_sqs_queue_url,
+                                                     mock_settings,
+                                                     mock_get_connection,
+                                                     mock_time):
+        mock_context = mock.Mock()
+        mock_context.additional_delay_seconds = 123
+        mock_context.correlation_id = 'b'
+        mock_settings.PRIMARY_RETRY_SOURCE = _get_test_arn(AWS.SQS)
+        mock_get_sqs_queue_url.return_value = 'https://sqs.testing.amazonaws.com/1234567890/queuename'
+        mock_time.time.return_value = 0.0
+        start_retries(mock_context, 123, 'd', primary=True)
+        mock_get_connection.return_value.send_message.assert_called_with(
+            QueueUrl='https://sqs.testing.amazonaws.com/1234567890/queuename',
+            DelaySeconds=246,
             MessageBody='d'
         )
 
@@ -1255,8 +1371,9 @@ class TestAws(unittest.TestCase):
     def test_start_retries_no_connection(self,
                                          mock_get_connection):
         mock_context = mock.Mock()
+        mock_context.additional_delay_seconds = 0
         mock_get_connection.return_value = None
-        ret = start_retries(mock_context, 'c', 'd')
+        ret = start_retries(mock_context, 999, 'd')
         self.assertIsNone(ret)
 
     # stop_retries

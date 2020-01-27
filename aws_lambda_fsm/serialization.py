@@ -12,5 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-version_info = (0, 28, 0)
-version = '.'.join(map(str, version_info))
+# system imports
+
+# library imports
+
+# application imports
+from aws_lambda_fsm.config import get_settings
+
+
+settings = get_settings()
+
+
+def json_dumps_additional_kwargs():
+    return getattr(settings, 'JSON_DUMPS_ADDITIONAL_KWARGS', {}) or \
+        {'sort_keys': True, 'default': lambda x: '<not_serializable>'}
+
+
+def json_loads_additional_kwargs():
+    return getattr(settings, 'JSON_LOADS_ADDITIONAL_KWARGS', {}) or {}

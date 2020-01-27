@@ -50,6 +50,8 @@ from aws_lambda_fsm.constants import AWS_SQS
 from aws_lambda_fsm.constants import AWS
 from aws_lambda_fsm.constants import ENVIRONMENT
 from aws_lambda_fsm.config import get_settings
+from aws_lambda_fsm.serialization import json_dumps_additional_kwargs
+from aws_lambda_fsm.serialization import json_loads_additional_kwargs
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -591,7 +593,9 @@ def _get_service_connection(resource_arn,
                     boto3.client(service,
                                  region_name=region_name,
                                  endpoint_url=endpoint_url,
-                                 config=config)
+                                 config=config,
+                                 **(getattr(settings, 'BOTO3_CLIENT_ADDITIONAL_KWARGS', {}) or {})
+                                 )
 
             # wrapped in a chaos connection if applicable
             if getattr(settings, 'AWS_CHAOS', {}):
@@ -1653,6 +1657,8 @@ def send_next_event_for_dispatch(context, data, correlation_id, delay=0, primary
 
     service = get_arn_from_arn_string(source_arn).service
 
+    delay = delay + (context.additional_delay_seconds if context else 0)
+
     if not service:  # pragma: no cover
         log_once(logger.warning, "No stream source for primary=%s" % primary)
 
@@ -1802,6 +1808,8 @@ def send_next_events_for_dispatch(context, all_data, correlation_ids, delay=0, p
 
     service = get_arn_from_arn_string(source_arn).service
 
+    delay = delay + (context.additional_delay_seconds if context else 0)
+
     if not service:  # pragma: no cover
         log_once(logger.warning, "No stream source for primary=%s" % primary)
 
@@ -1884,7 +1892,7 @@ def _store_environment_dynamodb(table_arn, environment):
     if not dynamodb_conn:
         return None, None  # pragma: no cover
 
-    serialized = json.dumps(environment)
+    serialized = json.dumps(environment, **json_dumps_additional_kwargs())
     guid = uuid.uuid4().hex
     item = {
         ENVIRONMENT_DATA.GUID: {AWS_DYNAMODB.STRING: guid},
@@ -1960,7 +1968,7 @@ def _load_environment_dynamodb(table_arn, guid):
 
     if item:
         serialized = item[AWS_DYNAMODB.Item][ENVIRONMENT_DATA.ENVIRONMENT][AWS_DYNAMODB.STRING]
-        environment = json.loads(serialized)
+        environment = json.loads(serialized, **json_loads_additional_kwargs())
         return environment
 
 
@@ -2110,6 +2118,8 @@ def start_retries(context, run_at, payload, primary=True, recovering=False):
             source_arn = get_secondary_retry_source()
 
     service = get_arn_from_arn_string(source_arn).service
+
+    run_at = run_at + context.additional_delay_seconds
 
     if not service:  # pragma: no cover
         log_once(logger.warning, "No retry source for primary=%s" % primary)

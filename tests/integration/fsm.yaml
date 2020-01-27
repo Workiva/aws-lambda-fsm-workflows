@@ -43,3 +43,25 @@ machines:
 
   - name: end
     final: true
+
+- name: serialization
+
+  states:
+
+    - name: start
+      initial: true
+      do_action: tests.integration.actions.SerializationProblem
+      transitions:
+        - target: middle
+          event: ok
+
+    - name: middle
+      do_action: tests.integration.actions.ReturnOK
+      transitions:
+        - target: end
+          event: ok
+
+    - name: end
+      final: true
+
+
