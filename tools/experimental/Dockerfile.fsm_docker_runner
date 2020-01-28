@@ -12,10 +12,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM python:2.7-alpine
+FROM ubuntu:bionic
+
+# apt stuff
+RUN apt-get update
+RUN apt-get -y install apt-transport-https ca-certificates curl software-properties-common python2.7 python3.6 python-pip python3-pip
+RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+RUN add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+RUN apt-get update
+RUN apt-get -y install docker-ce
+
+# copy and build
+COPY aws_lambda_fsm aws_lambda_fsm
+COPY tools tools
+COPY requirements.txt requirements.txt
+COPY requirements_dev.txt requirements_dev.txt
+COPY setup.py setup.py
+COPY tests/functional/settings.py.functional settings.py
+COPY tools/experimental/fsm_docker_runner.py fsm_docker_runner.py
 
 # install python stuff
-RUN pip install aws-lambda-fsm==0.16.0 docker-py==1.8.1 boto3==1.4.8
+RUN pip install -Ur requirements_dev.txt
+RUN pip install docker-py==1.8.1
+RUN python setup.py install
+RUN pip3 install -Ur requirements_dev.txt
+RUN pip3 install docker-py==1.8.1
+RUN python3 setup.py install
 
 # set the cmd
-CMD ["fsm_docker_runner.py"]
+CMD ["/bin/bash", "-c", "${PYTHON_BIN} fsm_docker_runner.py"]

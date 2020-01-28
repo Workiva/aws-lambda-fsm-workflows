@@ -74,6 +74,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             for env in co[0].get('environment', []):
                 environ[env['name']] = env['value']
                 subprocess_args.extend(['-e', '%(name)s=%(value)s' % env])
+        subprocess_args.extend(['-e', 'PYTHON_BIN=%s' % os.environ['PYTHON_BIN']])
         subprocess_args.append(args.image)
         subprocess.call(subprocess_args)
 

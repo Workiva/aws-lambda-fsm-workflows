@@ -20,7 +20,7 @@ python:
 install: 
   - pip install -r requirements_dev.txt
 script:
-  - make coverage flake8
+  - make clean coverage flake8
 env:
   - BOTO_CONFIG=/dev/null
   

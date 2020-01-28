@@ -13,7 +13,11 @@
 # limitations under the License.
 
 import os
+import logging
 from botocore.exceptions import ClientError
+import botocore.vendored.requests.packages.urllib3 as urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+logging.getLogger("botocore.vendored.requests.packages.urllib3").setLevel(logging.WARNING)
 
 PRIMARY_METRICS_SOURCE = None
 SECONDARY_METRICS_SOURCE = None
@@ -46,7 +50,7 @@ ELASTICACHE_ENDPOINTS = {
         'CacheClusterId': 'memcached-cluster',
         'Engine': 'memcached',
         'ConfigurationEndpoint': {
-            'Address': os.environ.get('AWS_HOSTNAME', 'localhost'),
+            'Address': os.environ.get('AWS_HOSTNAME', 'memcached'),
             'Port': 11211
         }
     },
@@ -56,7 +60,7 @@ ELASTICACHE_ENDPOINTS = {
         'CacheNodes': [
             {
                 'Endpoint': {
-                    'Address': os.environ.get('AWS_HOSTNAME', 'localhost'),
+                    'Address': os.environ.get('AWS_HOSTNAME', 'redis'),
                     'Port': 6379
                 }
             }
@@ -65,11 +69,13 @@ ELASTICACHE_ENDPOINTS = {
 }
 
 ENDPOINTS = {
-    PRIMARY_CHECKPOINT_SOURCE: 'http://%s:4568' % os.environ.get('AWS_HOSTNAME', 'localhost'),
-    PRIMARY_ENVIRONMENT_SOURCE: 'http://%s:4568' % os.environ.get('AWS_HOSTNAME', 'localhost'),
-    PRIMARY_STREAM_SOURCE: 'http://%s:1111' % os.environ.get('AWS_HOSTNAME', 'localhost'),
-    SECONDARY_STREAM_SOURCE: 'http://%s:2222' % os.environ.get('AWS_HOSTNAME', 'localhost'),
-    PRIMARY_RETRY_SOURCE: 'http://%s:3333' % os.environ.get('AWS_HOSTNAME', 'localhost'),
-    SECONDARY_RETRY_SOURCE: 'http://%s:4444' % os.environ.get('AWS_HOSTNAME', 'localhost'),
-    'arn:aws:ecs:testing:account:cluster/aws-lambda-fsm': 'http://%s:8888' % os.environ.get('AWS_HOSTNAME', 'localhost')
+    PRIMARY_CHECKPOINT_SOURCE: 'https://%s:4569' % os.environ.get('AWS_HOSTNAME', 'localstack-primary'),
+    PRIMARY_ENVIRONMENT_SOURCE: 'https://%s:4569' % os.environ.get('AWS_HOSTNAME', 'localstack-primary'),
+    PRIMARY_STREAM_SOURCE: 'https://%s:4576' % os.environ.get('AWS_HOSTNAME', 'localstack-primary'),
+    SECONDARY_STREAM_SOURCE: 'https://%s:4568' % os.environ.get('AWS_HOSTNAME', 'localstack-secondary'),
+    PRIMARY_RETRY_SOURCE: 'https://%s:4576' % os.environ.get('AWS_HOSTNAME', 'localstack-primary'),
+    SECONDARY_RETRY_SOURCE: 'https://%s:4568' % os.environ.get('AWS_HOSTNAME', 'localstack-secondary'),
+    'arn:aws:ecs:testing:account:cluster/aws-lambda-fsm': 'http://%s:8888' % os.environ.get('AWS_HOSTNAME', 'devecs')
 }
+
+BOTO3_CLIENT_ADDITIONAL_KWARGS = {'use_ssl': True, 'verify': False}

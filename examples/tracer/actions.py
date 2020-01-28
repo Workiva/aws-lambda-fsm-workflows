@@ -17,6 +17,7 @@ from builtins import str
 import logging
 import random
 import time
+import sys
 
 # library imports
 
@@ -33,6 +34,7 @@ class IncrementAction(Action):
     """
 
     def execute(self, context, obj):
+        logging.info('python: %s', sys.version_info)
         logging.info('context: %s', context)
 
         # randomly raise an exception

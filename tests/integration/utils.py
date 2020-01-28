@@ -51,7 +51,7 @@ class Messages(object):
         s = 'system_context'
         u = 'user_context'
         svars = ('current_state', 'current_event', 'steps', 'retries')
-        serialized = [json.loads(x**json_dumps_additional_kwargs()) for x in self.all_messages]
+        serialized = [json.loads(x, **json_loads_additional_kwargs()) for x in self.all_messages]
         if raw:
             return serialized
         data = enumerate(serialized)

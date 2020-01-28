@@ -27,13 +27,11 @@ from aws_lambda_fsm.serialization import json_loads_additional_kwargs
 class Encoder(json.JSONEncoder):
 
     def default(self, obj):
-        print 'default', obj
         if 'A' == obj:
             return 'B'
         return json.JSONEncoder.default(self, obj)
 
     def encode(self, obj):
-        print 'encode', obj
         if 'A' == obj:
             return 'B'
         return json.JSONEncoder.encode(self, obj)

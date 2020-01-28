@@ -163,7 +163,8 @@ class TestHandler(unittest.TestCase):
         return {
             'eventSource': 'aws:kinesis',
             'kinesis': {
-                'data': base64.b64encode(json.dumps({'machine_name': 'barfoo'}, **json_dumps_additional_kwargs()).encode('utf-8'))
+                'data': base64.b64encode(
+                    json.dumps({'machine_name': 'barfoo'}, **json_dumps_additional_kwargs()).encode('utf-8'))
             }
         }
 

@@ -16,22 +16,17 @@ FROM ubuntu:bionic
 
 # apt stuff
 RUN apt-get update
-RUN apt-get -y install apt-transport-https ca-certificates curl \
-    software-properties-common python2.7 python-pip \
-    nodejs npm ruby supervisor memcached redis-server
-
+RUN apt-get -y install apt-transport-https ca-certificates curl software-properties-common python2.7 python3.6 python-pip python3-pip supervisor
 RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
 RUN add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
 RUN apt-get update
 RUN apt-get -y install docker-ce
 
-# aws fakes
-RUN gem install fake_sqs -v 0.4.3
-RUN npm install -g kinesalite@1.14.0 dynalite@2.0
-
+# install python dependencies
 COPY requirements.txt requirements.txt
 COPY requirements_dev.txt requirements_dev.txt
 RUN pip install -Ur requirements_dev.txt
+RUN pip3 install -Ur requirements_dev.txt
 
 # copy in the library
 COPY aws_lambda_fsm aws_lambda_fsm
@@ -46,7 +41,6 @@ COPY tests/functional/supervisor.conf /etc/supervisor/conf.d/supervisor.conf
 ENV AWS_DEFAULT_REGION=testing
 ENV AWS_ACCESS_KEY_ID=abc123
 ENV AWS_SECRET_ACCESS_KEY=abc123
-ENV AWS_HOSTNAME=fsm
 
 RUN mkdir -p ~/.aws
 RUN echo "[default]" > ~/.aws/credentials
@@ -55,4 +49,3 @@ RUN echo "aws_secret_access_key = abc123" >> ~/.aws/credentials
 
 # use supervisor
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisor.conf", "-l", "/dev/null", "-y", "0"]
-

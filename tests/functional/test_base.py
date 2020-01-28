@@ -33,7 +33,7 @@ MEMCACHED_CACHE_SOURCE = 'arn:partition:elasticache:testing:account:primary_cach
 REDIS_CACHE_SOURCE = 'arn:partition:elasticache:testing:account:secondary_cache_source'
 DYNAMODB_CACHE_SOURCE = 'arn:partition:dynamodb:testing:account:table/cache_source'
 ENDPOINTS = {
-    DYNAMODB_CACHE_SOURCE: 'http://localhost:4568'
+    DYNAMODB_CACHE_SOURCE: 'http://localhost:4569'
 }
 ELASTICACHE_ENDPOINTS = {
     MEMCACHED_CACHE_SOURCE: {
