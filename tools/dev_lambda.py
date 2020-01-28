@@ -20,12 +20,16 @@
 # Script that pretends to be AWS Lambda attached to a AWS Kinesis Stream.
 
 # system imports
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import range
 import time
 import base64
 import logging
 import argparse
 import random
-import BaseHTTPServer
+import http.server
 import json
 import sys
 import subprocess
@@ -136,14 +140,14 @@ if args.run_dynamodb_lambda:
     logging.info('DynamoDB table: %s', dynamodb_table)
 
 if args.run_sns_lambda:
-    class Handler(BaseHTTPServer.BaseHTTPRequestHandler):
+    class Handler(http.server.BaseHTTPRequestHandler):
         def do_POST(self):
             data_str = self.rfile.read(int(self.headers['Content-Length']))
             data = json.loads(data_str, **json_loads_additional_kwargs())
             self.server.message = data[AWS_SNS.Message]
             self.send_response(200)
             self.wfile.write("")
-    sns_server = BaseHTTPServer.HTTPServer(('', 8000), Handler)
+    sns_server = http.server.HTTPServer(('', 8000), Handler)
     sns_server.message = None
     sns_topic_arn = getattr(settings, args.sns_topic_arn)
     logging.info('SNS topic ARN: %s', sns_topic_arn)

@@ -16,10 +16,11 @@ language: python
 sudo: false
 python:
   - "2.7"
+  - "3.6"
 install: 
   - pip install -r requirements_dev.txt
 script:
-  - make coverage flake8
+  - make clean coverage flake8
 env:
   - BOTO_CONFIG=/dev/null
   

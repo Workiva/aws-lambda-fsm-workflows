@@ -1,0 +1,98 @@
+version: '3.3'
+
+networks:
+  fsm-network:
+
+services:
+
+  localstack-primary:
+    image: localstack/localstack:0.10.7
+    ports:
+      - 4569:4569
+      - 4568:4568
+      - 4576:4576
+    environment:
+      SERVICES: sqs,kinesis,dynamodb
+      HOSTNAME: localstack-primary
+      DOCKER_HOST: unix:///var/run/docker.sock
+      USE_SSL: 'true'
+      DEFAULT_REGION: testing
+      LAMBDA_EXECUTOR: local
+      LAMBDA_JAVA_OPTS: -Xmx512M
+    networks:
+      fsm-network:
+        aliases:
+          - localstack-primary
+
+  localstack-secondary:
+    image: localstack/localstack:0.10.7
+    environment:
+      SERVICES: sqs,kinesis,dynamodb
+      HOSTNAME: localstack-secondary
+      DOCKER_HOST: unix:///var/run/docker.sock
+      USE_SSL: 'true'
+      DEFAULT_REGION: testing
+      LAMBDA_EXECUTOR: local
+      LAMBDA_JAVA_OPTS: -Xmx512M
+    networks:
+      fsm-network:
+        aliases:
+          - localstack-secondary
+
+  memcached:
+    image: memcached:1-alpine
+    ports:
+      - 11211:11211
+    networks:
+      fsm-network:
+        aliases:
+          - memcached
+
+  redis:
+    image: redis:5-alpine
+    ports:
+      - 6379:6379
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      fsm-network:
+        aliases:
+          - redis
+
+  dev_ecs:
+    image: dev_ecs
+    ports:
+      - 8888:8888
+    depends_on:
+      - localstack-primary
+      - localstack-secondary
+      - memcached
+      - redis
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      PYTHON_BIN: ${PYTHON_BIN:-/usr/bin/python}
+      NETWORK: functional_fsm-network
+    networks:
+      fsm-network:
+        aliases:
+          - devecs # botocore has hostname regex that fails with underscore
+
+  fsm:
+    image: fsm
+    depends_on:
+      - localstack-primary
+      - localstack-secondary
+      - memcached
+      - redis
+      - dev_ecs
+    environment:
+      PYTHON_BIN: ${PYTHON_BIN:-/usr/bin/python}
+      DISABLE_AWS_CHAOS: ${DISABLE_AWS_CHAOS:-}
+    networks:
+      fsm-network:
+        aliases:
+          - fsm

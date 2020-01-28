@@ -13,6 +13,7 @@
 # limitations under the License.
 
 # system imports
+from builtins import object
 import base64
 import json
 import unittest
@@ -50,18 +51,15 @@ class Messages(object):
         s = 'system_context'
         u = 'user_context'
         svars = ('current_state', 'current_event', 'steps', 'retries')
-        serialized = map(lambda x: json.loads(x, **json_loads_additional_kwargs()), self.all_messages)
+        serialized = [json.loads(x, **json_loads_additional_kwargs()) for x in self.all_messages]
         if raw:
             return serialized
         data = enumerate(serialized)
-        return map(
-            lambda x: (
-                x[0],
-                tuple(x[1][s][v] for v in svars),
-                tuple(x[1][u].get(v) for v in uvars)
-            ),
-            data
-        )
+        return [(
+            x[0],
+            tuple(x[1][s][v] for v in svars),
+            tuple(x[1][u].get(v) for v in uvars)
+        ) for x in data]
 
 
 # not threadsafe, yada yada
@@ -212,7 +210,7 @@ def to_kinesis_message(data):
     return {
         "eventSource": "aws:kinesis",
         "kinesis": {
-            "data": base64.b64encode(data)
+            "data": base64.b64encode(data.encode('utf-8'))
         }
     }
 

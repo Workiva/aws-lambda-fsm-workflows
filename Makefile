@@ -15,7 +15,7 @@
 COVER_PACKAGE := `find aws_lambda_fsm -name "*.py" | grep -vE "vendor|tests|__init__|_pkg_meta|aws_lambda_fsm/utils.py" | sed s/[.]py// | sed s/[/]/./g | sed "s/aws_lambda_fsm/--cover-package aws_lambda_fsm/"`
 
 clean:
-	echo Y | pycleaner
+	find . -name '*.pyc' -delete
 	rm -f aws-lambda-fsm.zip
 	rm -f .coverage
 	ln -sf settings.py.example settings.py
@@ -41,7 +41,7 @@ functional: clean check-config
 	nosetests -a 'functional' --logging-level=ERROR --with-xunit --xunit-file=unit.xml
 
 flake8:
-	flake8 --max-line-length=120 --ignore=E000 --exclude=settingslocal.py .
+	flake8 --max-line-length=120 --ignore=E000,E402 --exclude=settingslocal.py .
 
 all: test flake8 coverage
 

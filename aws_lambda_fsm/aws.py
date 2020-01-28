@@ -13,6 +13,11 @@
 # limitations under the License.
 
 # system imports
+from builtins import map
+from builtins import zip
+from builtins import str
+from builtins import range
+from builtins import object
 from threading import RLock
 import logging
 import time
@@ -124,7 +129,7 @@ class ChaosConnection(object):
             if attr == 'pipeline':
                 return ChaosConnection(self.resource_arn, original_attr, self.original_chaos)
             if callable(original_attr):
-                for exception_or_return, percentage in self.chaos.iteritems():
+                for exception_or_return, percentage in self.chaos.items():
                     if random.uniform(0.0, 1.0) < percentage:
                         return ChaosFunction(exception_or_return, original_attr)
         return original_attr
@@ -463,7 +468,8 @@ def _get_redis_connection(cache_arn, entry):
 
             if host and port:
                 import redis
-                connection = redis.StrictRedis(host=host, port=port, db=0, ssl=ssl, password=password)
+                connection = redis.StrictRedis(host=host, port=port, db=0, ssl=ssl, password=password,
+                                               decode_responses=True)
 
             if not connection:
                 log_once(logger.fatal, "Redis Cache ARN %s is not valid.", cache_arn)
@@ -717,7 +723,7 @@ def increment_error_counters(data, dimensions):
             {
                 AWS_CLOUDWATCH.MetricName: name,
                 AWS_CLOUDWATCH.Dimensions: [
-                    {AWS_CLOUDWATCH.Name: key, AWS_CLOUDWATCH.Value: val} for key, val in dimensions.iteritems()
+                    {AWS_CLOUDWATCH.Name: key, AWS_CLOUDWATCH.Value: val} for key, val in dimensions.items()
                 ],
                 AWS_CLOUDWATCH.Timestamp: utcnow,
                 AWS_CLOUDWATCH.Value: value
@@ -1072,7 +1078,6 @@ def _acquire_lease_redis(cache_arn, correlation_id, steps, retries, timeout=LEAS
             pipe.multi()
 
             if current_lease_value:
-
                 # split the current lease apart
                 current_steps, current_retries, current_expires, current_fence_token = \
                     _deserialize_lease_value(current_lease_value)
@@ -1090,7 +1095,6 @@ def _acquire_lease_redis(cache_arn, correlation_id, steps, retries, timeout=LEAS
                     return False
 
             else:
-
                 # if there is no current lease, then get the lease
                 new_fence_token = 1
                 new_lease_value = _serialize_lease_value(steps, retries, new_expires, new_fence_token)
@@ -1186,7 +1190,7 @@ def _acquire_lease_dynamodb(table_arn, correlation_id, steps, retries, timeout=L
         fence_token_str = return_value[AWS_DYNAMODB.Attributes][LEASE_DATA.FENCE][AWS_DYNAMODB.NUMBER]
         return int(fence_token_str)
 
-    except ClientError, e:
+    except ClientError as e:
 
         # operating as expected for entity already existing
         if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
@@ -1434,7 +1438,7 @@ def _release_lease_dynamodb(table_arn, correlation_id, steps, retries, fence_tok
         # the conditional update and atomic increment worked
         return True
 
-    except ClientError, e:
+    except ClientError as e:
 
         # operating as expected for entity already existing
         if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
@@ -2005,7 +2009,7 @@ def _start_retries_dynamodb(table_arn, correlation_id, steps, run_at, payload):
     if not dynamodb_conn:
         return  # pragma: no cover
 
-    partition = int(hashlib.md5(correlation_id).hexdigest(), 16) % 16
+    partition = int(hashlib.md5(correlation_id.encode('utf-8')).hexdigest(), 16) % 16
     table_name = get_arn_from_arn_string(table_arn).slash_resource()
     correlation_id_steps = '%s-%s' % (correlation_id, steps)
     item = {
@@ -2148,7 +2152,7 @@ def _stop_retries_dynamodb(table_arn, correlation_id, steps):
     if not dynamodb_conn:
         return  # pragma: no cover
 
-    partition = int(hashlib.md5(correlation_id).hexdigest(), 16) % 16
+    partition = int(hashlib.md5(correlation_id.encode('utf-8')).hexdigest(), 16) % 16
     table_name = get_arn_from_arn_string(table_arn).slash_resource()
     correlation_id_steps = '%s-%s' % (correlation_id, steps)
     key = {
@@ -2207,7 +2211,7 @@ def retriable_entities(table_arn, index, run_at, limit=100):
 
     table_name = get_arn_from_arn_string(table_arn).slash_resource()
 
-    for partition in xrange(16):
+    for partition in range(16):
 
         # query by partition
         results = _trace(
@@ -2354,7 +2358,7 @@ def _validate_sqs_urls():
 
     """
     if hasattr(settings, 'SQS_URLS'):
-        for queue_arn, entry in settings.SQS_URLS.iteritems():
+        for queue_arn, entry in settings.SQS_URLS.items():
             arn = get_arn_from_arn_string(queue_arn)
             if arn.service != AWS.SQS:
                 log_once(logger.warning, "SQS_URLS has invalid key '%s' (service)", queue_arn)
@@ -2417,7 +2421,7 @@ def _validate_elasticache_endpoints():
     }
     """
     if hasattr(settings, 'ELASTICACHE_ENDPOINTS'):
-        for cache_arn, entry in settings.ELASTICACHE_ENDPOINTS.iteritems():
+        for cache_arn, entry in settings.ELASTICACHE_ENDPOINTS.items():
             arn = get_arn_from_arn_string(cache_arn)
             if arn.service != AWS.ELASTICACHE:
                 log_once(logger.warning, "ELASTICACHE_ENDPOINTS has invalid key '%s'", cache_arn)

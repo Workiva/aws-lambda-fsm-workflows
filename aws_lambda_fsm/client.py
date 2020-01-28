@@ -13,6 +13,7 @@
 # limitations under the License.
 
 # system imports
+from builtins import range
 import uuid
 import json
 import time

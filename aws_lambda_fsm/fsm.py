@@ -13,6 +13,8 @@
 # limitations under the License.
 
 # system imports
+from builtins import int
+from builtins import object
 import json
 import importlib
 from threading import RLock
@@ -144,7 +146,7 @@ class FSM(object):
                         target = self.machines[machine_name][MACHINE.STATES][target_name]
                         self._add_transition(machine_name, state, target, event, action=action)
 
-            except (ImportError, ValueError), e:  # pragma: no cover
+            except (ImportError, ValueError) as e:  # pragma: no cover
                 logger.warning('Problem importing machine "%s": %s', machine_name, e)
                 self.machines.pop(machine_name, None)
 
@@ -694,7 +696,7 @@ class Context(dict):
             # False
             # >>>
             #
-            if fence_token is 0 or fence_token is 0L:
+            if not isinstance(fence_token, bool) and fence_token == 0:
                 self._queue_error(ERRORS.CACHE, 'System error acquiring primary=%s lease.' % self.lease_primary)
                 self.lease_primary = not self.lease_primary
                 fence_token = acquire_lease(self.correlation_id, self.steps, self.retries,
@@ -760,7 +762,7 @@ class Context(dict):
                 # understand fence tokens.
 
                 # make the fence token available
-                if isinstance(fence_token, (int, long)):
+                if isinstance(fence_token, int):
                     obj[OBJ.FENCE_TOKEN] = fence_token
 
                 self._dispatch_and_retry(event, obj)

@@ -16,6 +16,9 @@
 # FSM Data Related
 ################################################################################
 
+# system imports
+from builtins import object
+
 
 class ENVIRONMENT(object):
     FSM_CONTEXT = 'FSM_CONTEXT'
@@ -196,7 +199,7 @@ class AWS_ELASTICACHE(object):
     CacheNodes = 'CacheNodes'
     NodeGroups = 'NodeGroups'
 
-    class RESOURCE_TYPE:
+    class RESOURCE_TYPE(object):
 
         CLUSTER = 'cluster'
         SNAPSHOT = 'snapshot'

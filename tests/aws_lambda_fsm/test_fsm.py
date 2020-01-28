@@ -602,6 +602,28 @@ class TestDispatchExclusiveLock(TestFsmBase):
             {'foo': 'bar'}
         )
 
+    @mock.patch('aws_lambda_fsm.fsm.uuid')
+    @mock.patch('aws_lambda_fsm.fsm.acquire_lease')
+    @mock.patch('aws_lambda_fsm.fsm.release_lease')
+    @mock.patch('aws_lambda_fsm.fsm.Context._queue_error')
+    @mock.patch('aws_lambda_fsm.fsm.Context._retry')
+    def test_lease_fence_token_int(self,
+                                   mock_retry,
+                                   mock_queue_error,
+                                   mock_release_lease,
+                                   mock_acquire_lease,
+                                   mock_uuid):
+        mock_uuid.uuid4.return_value.hex = 'bobloblaw'
+        # equivalent to long in Python 2
+        mock_acquire_lease.return_value = int(500)
+        mock_release_lease.return_value = False
+        instance = Context('name')
+        obj = {'foo': 'bar'}
+        instance.dispatch('event', obj)
+        self.assertTrue('fence_token' in obj,
+                        "Fence token should be set on the object if it's a numeric type.")
+        self.assertEqual(obj['fence_token'], int(500))
+
 
 class TestContextPrimarySecondary(TestFsmBase):
 

@@ -163,7 +163,8 @@ class TestHandler(unittest.TestCase):
         return {
             'eventSource': 'aws:kinesis',
             'kinesis': {
-                'data': base64.b64encode(json.dumps({'machine_name': 'barfoo'}, **json_dumps_additional_kwargs()))
+                'data': base64.b64encode(
+                    json.dumps({'machine_name': 'barfoo'}, **json_dumps_additional_kwargs()).encode('utf-8'))
             }
         }
 
@@ -172,7 +173,7 @@ class TestHandler(unittest.TestCase):
                                     mock_process_payload):
         lambda_kinesis_handler(self.get_kinesis_record())
         mock_process_payload.assert_called_with(
-            '{"machine_name": "barfoo"}',
+            b'{"machine_name": "barfoo"}',
             {'source': 'kinesis', 'lambda_record': self.get_kinesis_record()}
         )
 

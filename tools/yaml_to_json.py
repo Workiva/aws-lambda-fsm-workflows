@@ -16,6 +16,7 @@
 # limitations under the License.
 
 # system imports
+from __future__ import print_function
 import argparse
 import json
 
@@ -103,7 +104,7 @@ def search_for_machine(filename='fsm.yaml'):
             continue
         if machine_dict[CONFIG.NAME] == args.machine_name:
             data = output_machine_dict(machine_dict)
-            print json.dumps(data, indent=2, **json_dumps_additional_kwargs())
+            print(json.dumps(data, indent=2, **json_dumps_additional_kwargs()))
             return
 
 # find the machine in the machine list
