@@ -24,3 +24,4 @@ settings.py
 *.graffle
 dump.rdb
 build
+dist
