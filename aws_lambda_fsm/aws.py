@@ -2009,7 +2009,7 @@ def _start_retries_dynamodb(table_arn, correlation_id, steps, run_at, payload):
     if not dynamodb_conn:
         return  # pragma: no cover
 
-    partition = int(hashlib.md5(correlation_id.encode('utf-8')).hexdigest(), 16) % 16
+    partition = int(hashlib.sha256(correlation_id.encode('utf-8')).hexdigest(), 16) % 16
     table_name = get_arn_from_arn_string(table_arn).slash_resource()
     correlation_id_steps = '%s-%s' % (correlation_id, steps)
     item = {
@@ -2152,7 +2152,7 @@ def _stop_retries_dynamodb(table_arn, correlation_id, steps):
     if not dynamodb_conn:
         return  # pragma: no cover
 
-    partition = int(hashlib.md5(correlation_id.encode('utf-8')).hexdigest(), 16) % 16
+    partition = int(hashlib.sha256(correlation_id.encode('utf-8')).hexdigest(), 16) % 16
     table_name = get_arn_from_arn_string(table_arn).slash_resource()
     correlation_id_steps = '%s-%s' % (correlation_id, steps)
     key = {

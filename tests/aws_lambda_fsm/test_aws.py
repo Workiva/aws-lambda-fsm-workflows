@@ -1250,7 +1250,7 @@ class TestAws(unittest.TestCase):
         mock_settings.PRIMARY_RETRY_SOURCE = _get_test_arn(AWS.DYNAMODB)
         start_retries(mock_context, 999, 'd', primary=True)
         mock_get_connection.return_value.put_item.assert_called_with(
-            Item={'partition': {'N': '15'},
+            Item={'partition': {'N': '13'},
                   'payload': {'S': 'd'},
                   'correlation_id_steps': {'S': 'b-z'},
                   'run_at': {'N': '999'}},
@@ -1269,7 +1269,7 @@ class TestAws(unittest.TestCase):
         mock_settings.PRIMARY_STREAM_SOURCE = _get_test_arn(AWS.DYNAMODB)
         start_retries(mock_context, 999, 'd', primary=True, recovering=True)
         mock_get_connection.return_value.put_item.assert_called_with(
-            Item={'partition': {'N': '15'},
+            Item={'partition': {'N': '13'},
                   'payload': {'S': 'd'},
                   'correlation_id_steps': {'S': 'b-z'},
                   'run_at': {'N': '999'}},
@@ -1389,7 +1389,7 @@ class TestAws(unittest.TestCase):
         mock_settings.PRIMARY_RETRY_SOURCE = _get_test_arn(AWS.DYNAMODB)
         stop_retries(mock_context, primary=True)
         mock_get_connection.return_value.delete_item.assert_called_with(
-            Key={'partition': {'N': '15'},
+            Key={'partition': {'N': '13'},
                  'correlation_id_steps': {'S': 'b-z'}},
             TableName='resourcename'
         )
