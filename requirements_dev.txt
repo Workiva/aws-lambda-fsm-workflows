@@ -21,10 +21,10 @@ flake8==2.5.4
 
 # AWS Libraries
 boto==2.40.0 # used in examples folder
-boto3==1.4.8
+boto3==1.12.1
 
 # Optional Cache Libraries
 python-memcached==1.59
-redis==2.10.6
+redis==3.4.1
 
 -r requirements.txt

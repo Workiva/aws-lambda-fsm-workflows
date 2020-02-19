@@ -55,6 +55,12 @@ setup_args = dict(
     author="Shawn Rusaw",
     author_email="shawn.rusaw@workiva.com",
     packages=get_packages(),
+    classifiers=[
+        'Programming Language :: Python :: 2',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.6',
+    ],
     scripts=["tools/experimental/fsm_docker_runner.py",
              "tools/dev_lambda.py",
              "tools/experimental/dev_ecs.py",
@@ -65,10 +71,12 @@ setup_args = dict(
              "tools/create_sqs_queue.py",
              "tools/start_state_machine.py",
              "tools/yaml_to_graphviz.py"],
-    url='http://github.com/Workiva/aws-lambda-fsm-workflows',
+    url='https://workiva.github.io/aws-lambda-fsm-workflows/',
     license="http://www.apache.org/licenses/LICENSE-2.0",
     description="AWS FSMs on Lambda/Kinesis",
-    long_description="",
+    long_description="A Python framework for developing finite state machine-based workflows on "
+                     "AWS Lambda.",
+    python_requires=">=2.7, >=3.6",
     install_requires=get_requirements('requirements.txt'),
     tests_require=get_requirements('requirements_dev.txt') + get_requirements('requirements.txt'),
 )
