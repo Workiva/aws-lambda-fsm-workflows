@@ -34,4 +34,4 @@ A Python 2.7 and 3.6 compatible framework for running Finite State Machine (FSM)
 1. [PyPI Page](https://pypi.org/project/aws-lambda-fsm/)
 
 
-This repo is maintained by an **SSAE 16 SOC 1 Type 2** compliant organization.
+This repository is managed to Workiva’s SSAE 16 SOC 1 Type 2/SOC 2 Type 2 standards and is deployed within a platform that is authorized to operate at FedRAMP Moderate.
