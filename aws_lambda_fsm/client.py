@@ -47,7 +47,8 @@ def start_state_machine(machine_name,
       define it automatically.
     :param current_state: the state to start the machine in.
     :param current_event: the event to start the machine with.
-    :param additional_delay_seconds: number of seconds to insert between state transitions (for streams that support delay)
+    :param additional_delay_seconds: number of seconds to insert between state transitions
+      (for streams that support delay)
     """
     correlation_id = correlation_id or uuid.uuid4().hex
     system_context = {
@@ -85,7 +86,8 @@ def start_state_machines(machine_name,
       if the system should define then automatically.
     :param current_state: the state to start the machines in.
     :param current_event: the event to start the machines with.
-    :param additional_delay_seconds: number of seconds to insert between state transitions (for streams that support delay)
+    :param additional_delay_seconds: number of seconds to insert between state transitions
+      (for streams that support delay)
     """
     all_data = []
     correlation_ids = correlation_ids or [uuid.uuid4().hex for i in range(len(user_contexts))]

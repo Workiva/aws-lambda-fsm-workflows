@@ -79,7 +79,8 @@ class TestClient(unittest.TestCase):
                                                            mock_time,
                                                            mock_send_next_event_for_dispatch):
         mock_time.time.return_value = 12345.
-        start_state_machines('name', [{'aaa': 'bbb'}, {'ccc': 'ddd'}], correlation_ids=['a', 'b'], additional_delay_seconds=999)
+        start_state_machines('name', [{'aaa': 'bbb'}, {'ccc': 'ddd'}], correlation_ids=['a', 'b'],
+                             additional_delay_seconds=999)
         mock_send_next_event_for_dispatch.assert_called_with(
             None,
             ['{"system_context": {"additional_delay_seconds": 999, "correlation_id": "a", "current_event": '
