@@ -15,7 +15,7 @@
 # CI Libraries
 nose==1.3.7
 rednose==1.3
-mock==1.0.1
+mock==4.0.2
 coverage==4.0.3
 flake8==2.5.4
 
