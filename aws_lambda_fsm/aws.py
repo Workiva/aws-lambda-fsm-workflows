@@ -1007,7 +1007,7 @@ def _acquire_lease_memcache(cache_arn, correlation_id, steps, retries, timeout=L
                 return new_fence_token if success else success
 
             logger.warn("Cannot acquire memcache lease: self %s, owner %s",
-                        (steps, retries), (current_steps, current_retries))
+                        (steps, retries, timestamp), (current_steps, current_retries, current_expires))
 
             # default fall-through is to re-try to acquire the lease
             return False
@@ -1091,7 +1091,7 @@ def _acquire_lease_redis(cache_arn, correlation_id, steps, retries, timeout=LEAS
                 # default fall-through is to re-try to acquire the lease
                 else:
                     logger.warn("Cannot acquire redis lease: self %s, owner %s",
-                                (steps, retries), (current_steps, current_retries))
+                                (steps, retries, timestamp), (current_steps, current_retries, current_expires))
                     return False
 
             else:
