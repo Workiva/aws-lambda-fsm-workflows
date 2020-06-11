@@ -26,6 +26,7 @@ from botocore.exceptions import ClientError
 from aws_lambda_fsm.client import start_state_machine
 from aws_lambda_fsm import handler
 from aws_lambda_fsm.constants import AWS as AWS_CONSTANTS
+from aws_lambda_fsm.constants import LEASE_DATA
 from aws_lambda_fsm.serialization import json_dumps_additional_kwargs
 from aws_lambda_fsm.serialization import json_loads_additional_kwargs
 
@@ -154,7 +155,7 @@ class AWSStub(object):
         else:
             return self._get_cache_source(primary).get('%s-%s' % (correlation_id, steps))
 
-    def acquire_lease(self, correlation_id, steps, retries, primary=True):
+    def acquire_lease(self, correlation_id, steps, retries, primary=True, timeout=LEASE_DATA.LEASE_TIMEOUT):
         chaos = {True: self.primary_cache_chaos, False: self.secondary_cache_chaos}[primary]
         if chaos and random.uniform(0.0, 1.0) < chaos:
             return 0

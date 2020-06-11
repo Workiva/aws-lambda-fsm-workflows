@@ -507,7 +507,8 @@ class TestDispatchExclusiveLock(TestFsmBase):
             'bobloblaw',
             0,
             0,
-            primary=True
+            primary=True,
+            timeout=905
         )
         mock_release_lease.assert_called_with(
             'bobloblaw',
@@ -542,7 +543,8 @@ class TestDispatchExclusiveLock(TestFsmBase):
             'bobloblaw',
             0,
             0,
-            primary=True
+            primary=True,
+            timeout=905
         )
         mock_release_lease.assert_called_with(
             'bobloblaw',
@@ -582,7 +584,8 @@ class TestDispatchExclusiveLock(TestFsmBase):
             'bobloblaw',
             0,
             0,
-            primary=False
+            primary=False,
+            timeout=905
         )
         mock_release_lease.assert_called_with(
             'bobloblaw',

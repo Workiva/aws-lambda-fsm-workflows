@@ -47,6 +47,7 @@ from aws_lambda_fsm.constants import SYSTEM_CONTEXT
 from aws_lambda_fsm.constants import PAYLOAD
 from aws_lambda_fsm.constants import AWS
 from aws_lambda_fsm.constants import ERRORS
+from aws_lambda_fsm.constants import LEASE_DATA
 from aws_lambda_fsm.serialization import json_dumps_additional_kwargs
 from aws_lambda_fsm.serialization import json_loads_additional_kwargs
 
@@ -298,6 +299,10 @@ class Context(dict):
         elif self.__system_context[SYSTEM_CONTEXT.MAX_RETRIES] is None:
             return CONFIG.DEFAULT_MAX_RETRIES
         return self.__system_context[SYSTEM_CONTEXT.MAX_RETRIES]
+
+    @property
+    def lease_timout(self):
+        return self.__system_context.get(SYSTEM_CONTEXT.LEASE_TIMEOUT) or LEASE_DATA.LEASE_TIMEOUT
 
     # Mutable properties
 
@@ -689,7 +694,7 @@ class Context(dict):
         try:
             # attempt to acquire the lease and execute the state transition
             fence_token = acquire_lease(self.correlation_id, self.steps, self.retries,
-                                        primary=self.lease_primary)
+                                        primary=self.lease_primary, timeout=self.lease_timout)
 
             # 0 indicates system error, False indicates lease acquisition failure
             #
@@ -705,7 +710,7 @@ class Context(dict):
                 self._queue_error(ERRORS.CACHE, 'System error acquiring primary=%s lease.' % self.lease_primary)
                 self.lease_primary = not self.lease_primary
                 fence_token = acquire_lease(self.correlation_id, self.steps, self.retries,
-                                            primary=self.lease_primary)
+                                            primary=self.lease_primary, timeout=self.lease_timout)
 
             if not fence_token:
                 # could not get the lease. something is going wrong

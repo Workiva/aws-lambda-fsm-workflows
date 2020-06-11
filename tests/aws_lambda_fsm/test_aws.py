@@ -1721,7 +1721,7 @@ class LeaseMemcacheTest(unittest.TestCase):
         ret = acquire_lease('a', 1, 1, primary=False)
         self.assertTrue(0 is ret)
         mock_get_connection.return_value.gets.assert_called_with('lease-a')
-        mock_get_connection.return_value.add.assert_called_with('lease-a', '1:1:1299:1', time=86400)
+        mock_get_connection.return_value.add.assert_called_with('lease-a', '1:1:1904:1', time=86400)
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.get_secondary_cache_source')
@@ -1740,7 +1740,7 @@ class LeaseMemcacheTest(unittest.TestCase):
         ret = acquire_lease('a', 1, 1, primary=False)
         self.assertFalse(ret)
         mock_get_connection.return_value.gets.assert_called_with('lease-a')
-        mock_get_connection.return_value.add.assert_called_with('lease-a', '1:1:1299:1', time=86400)
+        mock_get_connection.return_value.add.assert_called_with('lease-a', '1:1:1904:1', time=86400)
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
@@ -1759,7 +1759,7 @@ class LeaseMemcacheTest(unittest.TestCase):
         ret = acquire_lease('a', 1, 1)
         self.assertFalse(ret)
         mock_get_connection.return_value.gets.assert_called_with('lease-a')
-        mock_get_connection.return_value.add.assert_called_with('lease-a', '1:1:1299:1', time=86400)
+        mock_get_connection.return_value.add.assert_called_with('lease-a', '1:1:1904:1', time=86400)
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
@@ -1778,7 +1778,7 @@ class LeaseMemcacheTest(unittest.TestCase):
         ret = acquire_lease('a', 1, 1)
         self.assertTrue(ret)
         mock_get_connection.return_value.gets.assert_called_with('lease-a')
-        mock_get_connection.return_value.add.assert_called_with('lease-a', '1:1:1299:1', time=86400)
+        mock_get_connection.return_value.add.assert_called_with('lease-a', '1:1:1904:1', time=86400)
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
@@ -1797,7 +1797,7 @@ class LeaseMemcacheTest(unittest.TestCase):
         ret = acquire_lease('a', 1, 1)
         self.assertFalse(ret)
         mock_get_connection.return_value.gets.assert_called_with('lease-a')
-        mock_get_connection.return_value.cas.assert_called_with('lease-a', '1:1:1299:100', time=86400)
+        mock_get_connection.return_value.cas.assert_called_with('lease-a', '1:1:1904:100', time=86400)
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
@@ -1816,7 +1816,7 @@ class LeaseMemcacheTest(unittest.TestCase):
         ret = acquire_lease('a', 1, 1)
         self.assertTrue(ret)
         mock_get_connection.return_value.gets.assert_called_with('lease-a')
-        mock_get_connection.return_value.cas.assert_called_with('lease-a', '1:1:1299:100', time=86400)
+        mock_get_connection.return_value.cas.assert_called_with('lease-a', '1:1:1904:100', time=86400)
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
     @mock.patch('aws_lambda_fsm.aws.get_primary_cache_source')
@@ -1992,7 +1992,7 @@ class LeaseRedisTest(unittest.TestCase):
         mock_pipe.watch.assert_called_with('lease-a')
         mock_pipe.get.assert_called_with('lease-a')
         mock_pipe.multi.assert_called_with()
-        mock_pipe.setex.assert_called_with('lease-a', 86400, '1:1:1299:1')
+        mock_pipe.setex.assert_called_with('lease-a', 86400, '1:1:1904:1')
         mock_pipe.execute.assert_called_with()
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
@@ -2016,7 +2016,7 @@ class LeaseRedisTest(unittest.TestCase):
         mock_pipe.watch.assert_called_with('lease-a')
         mock_pipe.get.assert_called_with('lease-a')
         mock_pipe.multi.assert_called_with()
-        mock_pipe.setex.assert_called_with('lease-a', 86400, '1:1:1299:1')
+        mock_pipe.setex.assert_called_with('lease-a', 86400, '1:1:1904:1')
         mock_pipe.execute.assert_called_with()
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
@@ -2040,7 +2040,7 @@ class LeaseRedisTest(unittest.TestCase):
         mock_pipe.watch.assert_called_with('lease-a')
         mock_pipe.get.assert_called_with('lease-a')
         mock_pipe.multi.assert_called_with()
-        mock_pipe.setex.assert_called_with('lease-a', 86400, '1:1:1299:1')
+        mock_pipe.setex.assert_called_with('lease-a', 86400, '1:1:1904:1')
         mock_pipe.execute.assert_called_with()
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
@@ -2063,7 +2063,7 @@ class LeaseRedisTest(unittest.TestCase):
         mock_pipe.watch.assert_called_with('lease-a')
         mock_pipe.get.assert_called_with('lease-a')
         mock_pipe.multi.assert_called_with()
-        mock_pipe.setex.assert_called_with('lease-a', 86400, '1:1:1299:1')
+        mock_pipe.setex.assert_called_with('lease-a', 86400, '1:1:1904:1')
         mock_pipe.execute.assert_called_with()
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
@@ -2087,7 +2087,7 @@ class LeaseRedisTest(unittest.TestCase):
         mock_pipe.watch.assert_called_with('lease-a')
         mock_pipe.get.assert_called_with('lease-a')
         mock_pipe.multi.assert_called_with()
-        mock_pipe.setex.assert_called_with('lease-a', 86400, '1:1:1299:100')
+        mock_pipe.setex.assert_called_with('lease-a', 86400, '1:1:1904:100')
         mock_pipe.execute.assert_called_with()
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
@@ -2110,7 +2110,7 @@ class LeaseRedisTest(unittest.TestCase):
         mock_pipe.watch.assert_called_with('lease-a')
         mock_pipe.get.assert_called_with('lease-a')
         mock_pipe.multi.assert_called_with()
-        mock_pipe.setex.assert_called_with('lease-a', 86400, '1:1:1299:100')
+        mock_pipe.setex.assert_called_with('lease-a', 86400, '1:1:1904:100')
         mock_pipe.execute.assert_called_with()
 
     @mock.patch('aws_lambda_fsm.aws.get_connection')
@@ -2287,7 +2287,7 @@ class LeaseDynamodbTest(unittest.TestCase):
                                        ':o': {'S': 'open'},
                                        ':z': {'N': '0'},
                                        ':t': {'N': '999'},
-                                       ':e': {'N': '1299'},
+                                       ':e': {'N': '1904'},
                                        ':f': {'N': '1'},
                                        ':r': {'N': '1'},
                                        ':s': {'N': '1'}},
@@ -2318,7 +2318,7 @@ class LeaseDynamodbTest(unittest.TestCase):
                                        ':o': {'S': 'open'},
                                        ':z': {'N': '0'},
                                        ':t': {'N': '999'},
-                                       ':e': {'N': '1299'},
+                                       ':e': {'N': '1904'},
                                        ':f': {'N': '1'},
                                        ':r': {'N': '1'},
                                        ':s': {'N': '1'}},
@@ -2349,7 +2349,7 @@ class LeaseDynamodbTest(unittest.TestCase):
                                        ':o': {'S': 'open'},
                                        ':z': {'N': '0'},
                                        ':t': {'N': '999'},
-                                       ':e': {'N': '1299'},
+                                       ':e': {'N': '1904'},
                                        ':f': {'N': '1'},
                                        ':r': {'N': '1'},
                                        ':s': {'N': '1'}},

@@ -52,6 +52,7 @@ class SYSTEM_CONTEXT(object):
     METRICS = 'metrics'
     LEASE_PRIMARY = 'lease_primary'
     ADDITIONAL_DELAY_SECONDS = 'additional_delay_seconds'
+    LEASE_TIMEOUT = 'lease_timeout'
 
 
 class OBJ(object):
@@ -151,7 +152,7 @@ class CACHE_DATA(object):
 
 
 class LEASE_DATA(object):
-    LEASE_TIMEOUT = 5 * 60
+    LEASE_TIMEOUT = 15 * 60 + 5  # aws lambda max time + 5 seconds
     LEASE_CLEANUP_TIMEOUT = 24 * 60 * 60  # daily
     KEY = 'ckey'
     STATE = 'state'
