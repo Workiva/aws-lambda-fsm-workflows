@@ -985,7 +985,7 @@ def _acquire_lease_memcache(cache_arn, correlation_id, steps, retries, timeout=L
             if timestamp > current_expires:
                 new_fence_token = current_fence_token + 1
                 new_lease_value = _serialize_lease_value(steps, retries, new_expires, new_fence_token)
-                success = memcache_conn.cas(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_CLEANUP_TIMEOUT)
+                success = memcache_conn.cas(memcache_key, new_lease_value, time=timeout)
                 # >>> import memcache
                 # >>> c1=memcache.Client(['localhost:11211'],cache_cas=True)
                 # >>> c2=memcache.Client(['localhost:11211'],cache_cas=True)
@@ -1017,7 +1017,7 @@ def _acquire_lease_memcache(cache_arn, correlation_id, steps, retries, timeout=L
             # if there is no current lease, then get the lease and initialize the fence token
             new_fence_token = 1
             new_lease_value = _serialize_lease_value(steps, retries, new_expires, new_fence_token)
-            success = memcache_conn.add(memcache_key, new_lease_value, time=LEASE_DATA.LEASE_CLEANUP_TIMEOUT)
+            success = memcache_conn.add(memcache_key, new_lease_value, time=timeout)
             # >>> import memcache
             # >>> c1=memcache.Client(['localhost:11211'],cache_cas=True)
             # >>> c2=memcache.Client(['localhost:11211'],cache_cas=True)
@@ -1086,7 +1086,7 @@ def _acquire_lease_redis(cache_arn, correlation_id, steps, retries, timeout=LEAS
                 if timestamp > current_expires:
                     new_fence_token = current_fence_token + 1
                     new_lease_value = _serialize_lease_value(steps, retries, new_expires, new_fence_token)
-                    pipe.setex(redis_key, LEASE_DATA.LEASE_CLEANUP_TIMEOUT, new_lease_value)
+                    pipe.setex(redis_key, timeout, new_lease_value)
 
                 # default fall-through is to re-try to acquire the lease
                 else:
@@ -1098,7 +1098,7 @@ def _acquire_lease_redis(cache_arn, correlation_id, steps, retries, timeout=LEAS
                 # if there is no current lease, then get the lease
                 new_fence_token = 1
                 new_lease_value = _serialize_lease_value(steps, retries, new_expires, new_fence_token)
-                pipe.setex(redis_key, LEASE_DATA.LEASE_CLEANUP_TIMEOUT, new_lease_value)
+                pipe.setex(redis_key, timeout, new_lease_value)
 
             # execute the transaction
             pipe.execute()
@@ -1211,7 +1211,7 @@ def acquire_lease(correlation_id, steps, retries, primary=True, timeout=LEASE_DA
     :param timeout: an integer representing the number of seconds-since-epoch the lease
         should remain active. in the event of system error, we want to ensure an unreleased
         lease should eventually be acquired by another process.
-    :return: True if the lease was acquired, False if the lease was not acquired and 0 if
+    :return: "fence token" > 0 if the lease was acquired, False if the lease was not acquired and 0 if
         there was some sort of systems/communication error.
     """
     if primary:

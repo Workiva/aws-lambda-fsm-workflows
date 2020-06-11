@@ -28,6 +28,7 @@ from aws_lambda_fsm.fsm import FSM
 from aws_lambda_fsm import config
 from aws_lambda_fsm.fsm import Context
 from aws_lambda_fsm.fsm import json_dumps_additional_kwargs
+from aws_lambda_fsm.constants import CONFIG
 
 
 class TestAction(Action):
@@ -919,8 +920,32 @@ class TestProperties(TestFsmBase):
         instance = fsm.create_FSM_instance('foo', initial_system_context={})
         self.assertEqual(0, instance.additional_delay_seconds)
 
+    def test_additional_delay_seconds_defaults_to_0_when_None(self):
+        config._config = {'some/fsm.yaml': {'machines': []}}
+        fsm = FSM(config_dict=self.CONFIG_DICT)
+        instance = fsm.create_FSM_instance('foo', initial_system_context={'additional_delay_seconds': None})
+        self.assertEqual(0, instance.additional_delay_seconds)
+
     def test_additional_delay_seconds(self):
         config._config = {'some/fsm.yaml': {'machines': []}}
         fsm = FSM(config_dict=self.CONFIG_DICT)
         instance = fsm.create_FSM_instance('foo', initial_system_context={'additional_delay_seconds': 999})
         self.assertEqual(999, instance.additional_delay_seconds)
+
+    def test_max_retries_defaults_to_config(self):
+        config._config = {'some/fsm.yaml': {'machines': []}}
+        fsm = FSM(config_dict=self.CONFIG_DICT)
+        instance = fsm.create_FSM_instance('foo', initial_system_context={})
+        self.assertEqual(CONFIG.DEFAULT_MAX_RETRIES, instance.max_retries)
+
+    def test_max_retries_defaults_to_config_when_None(self):
+        config._config = {'some/fsm.yaml': {'machines': []}}
+        fsm = FSM(config_dict=self.CONFIG_DICT)
+        instance = fsm.create_FSM_instance('foo', initial_system_context={'max_retries': None})
+        self.assertEqual(CONFIG.DEFAULT_MAX_RETRIES, instance.max_retries)
+
+    def test_max_retries_defaults(self):
+        config._config = {'some/fsm.yaml': {'machines': []}}
+        fsm = FSM(config_dict=self.CONFIG_DICT)
+        instance = fsm.create_FSM_instance('foo', initial_system_context={'max_retries': 999})
+        self.assertEqual(999, instance.max_retries)

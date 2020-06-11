@@ -288,10 +288,15 @@ class Context(dict):
 
     @property
     def additional_delay_seconds(self):
-        return self.__system_context.get(SYSTEM_CONTEXT.ADDITIONAL_DELAY_SECONDS, 0)
+        return self.__system_context.get(SYSTEM_CONTEXT.ADDITIONAL_DELAY_SECONDS) or 0
 
     @property
     def max_retries(self):
+        # setting max_retries = 0 is valid, so we have to be careful about truthiness here
+        if SYSTEM_CONTEXT.MAX_RETRIES not in self.__system_context:
+            return CONFIG.DEFAULT_MAX_RETRIES
+        elif self.__system_context[SYSTEM_CONTEXT.MAX_RETRIES] is None:
+            return CONFIG.DEFAULT_MAX_RETRIES
         return self.__system_context[SYSTEM_CONTEXT.MAX_RETRIES]
 
     # Mutable properties
