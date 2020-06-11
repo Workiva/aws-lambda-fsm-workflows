@@ -269,9 +269,23 @@ class Context(dict):
 
         # immutable
         self.__system_context[SYSTEM_CONTEXT.MACHINE_NAME] = \
-            self.__system_context.get(SYSTEM_CONTEXT.MACHINE_NAME, name)  # prefer value in initial_system_context
+            self.__system_context.get(SYSTEM_CONTEXT.MACHINE_NAME) or name  # prefer value in initial_system_context
         self.__system_context[SYSTEM_CONTEXT.MAX_RETRIES] = \
-            self.__system_context.get(SYSTEM_CONTEXT.MAX_RETRIES, max_retries)  # prefer value in initial_system_context
+            self.__system_context.get(SYSTEM_CONTEXT.MAX_RETRIES) or max_retries  # prefer value in initial_system_context
+        self.__system_context[SYSTEM_CONTEXT.CORRELATION_ID] = \
+            self.__system_context.get(SYSTEM_CONTEXT.CORRELATION_ID) or uuid.uuid4().hex
+        self.__system_context[SYSTEM_CONTEXT.ADDITIONAL_DELAY_SECONDS] = \
+            self.__system_context.get(SYSTEM_CONTEXT.ADDITIONAL_DELAY_SECONDS) or 0
+        self.__system_context[SYSTEM_CONTEXT.LEASE_TIMEOUT] = \
+            self.__system_context.get(SYSTEM_CONTEXT.LEASE_TIMEOUT) or LEASE_DATA.LEASE_TIMEOUT
+
+        # mutable
+        self.__system_context[SYSTEM_CONTEXT.STEPS] = \
+            self.__system_context.get(SYSTEM_CONTEXT.STEPS) or 0
+        self.__system_context[SYSTEM_CONTEXT.RETRIES] = \
+            self.__system_context.get(SYSTEM_CONTEXT.RETRIES) or 0
+        self.__system_context[SYSTEM_CONTEXT.LEASE_PRIMARY] = \
+            self.__system_context.get(SYSTEM_CONTEXT.LEASE_PRIMARY) or True
 
         self._errors = {}
 
@@ -283,32 +297,25 @@ class Context(dict):
 
     @property
     def correlation_id(self):
-        if SYSTEM_CONTEXT.CORRELATION_ID not in self.__system_context:
-            self.__system_context[SYSTEM_CONTEXT.CORRELATION_ID] = uuid.uuid4().hex
         return self.__system_context[SYSTEM_CONTEXT.CORRELATION_ID]
 
     @property
     def additional_delay_seconds(self):
-        return self.__system_context.get(SYSTEM_CONTEXT.ADDITIONAL_DELAY_SECONDS) or 0
+        return self.__system_context[SYSTEM_CONTEXT.ADDITIONAL_DELAY_SECONDS]
 
     @property
     def max_retries(self):
-        # setting max_retries = 0 is valid, so we have to be careful about truthiness here
-        if SYSTEM_CONTEXT.MAX_RETRIES not in self.__system_context:
-            return CONFIG.DEFAULT_MAX_RETRIES
-        elif self.__system_context[SYSTEM_CONTEXT.MAX_RETRIES] is None:
-            return CONFIG.DEFAULT_MAX_RETRIES
         return self.__system_context[SYSTEM_CONTEXT.MAX_RETRIES]
 
     @property
     def lease_timout(self):
-        return self.__system_context.get(SYSTEM_CONTEXT.LEASE_TIMEOUT) or LEASE_DATA.LEASE_TIMEOUT
+        return self.__system_context[SYSTEM_CONTEXT.LEASE_TIMEOUT]
 
     # Mutable properties
 
     @property
     def current_event(self):
-        return self.__system_context.get(SYSTEM_CONTEXT.CURRENT_EVENT)
+        return self.__system_context[SYSTEM_CONTEXT.CURRENT_EVENT]
 
     @current_event.setter
     def current_event(self, current_event):
@@ -316,8 +323,6 @@ class Context(dict):
 
     @property
     def steps(self):
-        if SYSTEM_CONTEXT.STEPS not in self.__system_context:
-            self.__system_context[SYSTEM_CONTEXT.STEPS] = 0
         return self.__system_context[SYSTEM_CONTEXT.STEPS]
 
     @steps.setter
@@ -326,8 +331,6 @@ class Context(dict):
 
     @property
     def retries(self):
-        if SYSTEM_CONTEXT.RETRIES not in self.__system_context:
-            self.__system_context[SYSTEM_CONTEXT.RETRIES] = 0
         return self.__system_context[SYSTEM_CONTEXT.RETRIES]
 
     @retries.setter
@@ -341,8 +344,6 @@ class Context(dict):
 
     @property
     def lease_primary(self):
-        if SYSTEM_CONTEXT.LEASE_PRIMARY not in self.__system_context:
-            self.__system_context[SYSTEM_CONTEXT.LEASE_PRIMARY] = True
         return self.__system_context[SYSTEM_CONTEXT.LEASE_PRIMARY]
 
     @lease_primary.setter

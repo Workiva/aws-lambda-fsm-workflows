@@ -952,3 +952,21 @@ class TestProperties(TestFsmBase):
         fsm = FSM(config_dict=self.CONFIG_DICT)
         instance = fsm.create_FSM_instance('foo', initial_system_context={'max_retries': 999})
         self.assertEqual(999, instance.max_retries)
+
+    def test_lease_timeout_defaults_to_905(self):
+        config._config = {'some/fsm.yaml': {'machines': []}}
+        fsm = FSM(config_dict=self.CONFIG_DICT)
+        instance = fsm.create_FSM_instance('foo', initial_system_context={})
+        self.assertEqual(905, instance.lease_timout)
+
+    def test_lease_timeout_defaults_to_905_when_None(self):
+        config._config = {'some/fsm.yaml': {'machines': []}}
+        fsm = FSM(config_dict=self.CONFIG_DICT)
+        instance = fsm.create_FSM_instance('foo', initial_system_context={'lease_timeout': None})
+        self.assertEqual(905, instance.lease_timout)
+
+    def test_lease_timeout(self):
+        config._config = {'some/fsm.yaml': {'machines': []}}
+        fsm = FSM(config_dict=self.CONFIG_DICT)
+        instance = fsm.create_FSM_instance('foo', initial_system_context={'lease_timeout': 123})
+        self.assertEqual(123, instance.lease_timout)
