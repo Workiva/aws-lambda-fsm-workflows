@@ -28,6 +28,8 @@ from aws_lambda_fsm.fsm import FSM
 from aws_lambda_fsm import config
 from aws_lambda_fsm.fsm import Context
 from aws_lambda_fsm.fsm import json_dumps_additional_kwargs
+from aws_lambda_fsm.config import get_settings
+from aws_lambda_fsm.config import set_settings
 
 
 class TestAction(Action):
@@ -927,3 +929,23 @@ class TestProperties(TestFsmBase):
         fsm = FSM(config_dict=self.CONFIG_DICT)
         instance = fsm.create_FSM_instance('foo', initial_system_context={'additional_delay_seconds': 999})
         self.assertEqual(999, instance.additional_delay_seconds)
+
+    def test_lookup_property_uses_context(self):
+        config._config = {'some/fsm.yaml': {'machines': []}}
+        fsm = FSM(config_dict=self.CONFIG_DICT)
+        instance = fsm.create_FSM_instance('foo', initial_system_context={"key": "context"})
+        self.assertEqual("context", instance._lookup_property("key", "setting", "default"))
+
+    @mock.patch('aws_lambda_fsm.fsm.settings')
+    def test_lookup_property_uses_settings(self, mock_settings):
+        mock_settings.setting = "foobar"
+        config._config = {'some/fsm.yaml': {'machines': []}}
+        fsm = FSM(config_dict=self.CONFIG_DICT)
+        instance = fsm.create_FSM_instance('foo', initial_system_context={})
+        self.assertEqual("foobar", instance._lookup_property("key", "setting", "default"))
+
+    def test_lookup_property_uses_constant(self):
+        config._config = {'some/fsm.yaml': {'machines': []}}
+        fsm = FSM(config_dict=self.CONFIG_DICT)
+        instance = fsm.create_FSM_instance('foo', initial_system_context={})
+        self.assertEqual("default", instance._lookup_property("key", "setting", "default"))
