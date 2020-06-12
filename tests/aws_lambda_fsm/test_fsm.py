@@ -28,8 +28,6 @@ from aws_lambda_fsm.fsm import FSM
 from aws_lambda_fsm import config
 from aws_lambda_fsm.fsm import Context
 from aws_lambda_fsm.fsm import json_dumps_additional_kwargs
-from aws_lambda_fsm.config import get_settings
-from aws_lambda_fsm.config import set_settings
 
 
 class TestAction(Action):
