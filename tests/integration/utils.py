@@ -154,7 +154,7 @@ class AWSStub(object):
         else:
             return self._get_cache_source(primary).get('%s-%s' % (correlation_id, steps))
 
-    def acquire_lease(self, correlation_id, steps, retries, primary=True):
+    def acquire_lease(self, correlation_id, steps, retries, primary=True, timeout=None):
         chaos = {True: self.primary_cache_chaos, False: self.secondary_cache_chaos}[primary]
         if chaos and random.uniform(0.0, 1.0) < chaos:
             return 0

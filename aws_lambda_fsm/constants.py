@@ -52,6 +52,7 @@ class SYSTEM_CONTEXT(object):
     METRICS = 'metrics'
     LEASE_PRIMARY = 'lease_primary'
     ADDITIONAL_DELAY_SECONDS = 'additional_delay_seconds'
+    LEASE_TIMEOUT = 'lease_timeout'
 
 
 class OBJ(object):

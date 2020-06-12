@@ -14,6 +14,8 @@
 
 # system imports
 import mock
+import threading
+import time
 
 # library imports
 
@@ -399,6 +401,40 @@ class Test(BaseFunctionalTest):
             (2, ('middle', 'ok', 2, 0), ('<not_serializable>',))
         ]
         self.assertEqual(expected, AWS.all_sources.trace(uvars={"error"}))
+
+    ################################################################################
+    # START: machine_name="longpause"
+    ################################################################################
+
+    def test_two_at_same_time(self, *args):
+        thread1 = TestThread(self, "longpause", {'key': 'val1'})
+        thread2 = TestThread(self, "longpause", {'key': 'val2'})
+        thread1.start()
+        time.sleep(2)
+        thread2.start()
+        thread1.join()
+        thread2.join()
+        expected = [
+            (0, ('pseudo_init', 'pseudo_init', 0, 0), ('val1',)),
+            (1, ('pseudo_init', 'pseudo_init', 0, 0), ('val2',)),  # both start
+            (2, ('pseudo_init', 'pseudo_init', 0, 1), ('val2',)),  # second unable to acquire lease
+            (3, ('start', 'ok', 1, 0), ('val1',)),
+            (4, ('middle', 'ok', 2, 0), ('val1',)),  # first finished
+            (5, ('start', 'ok', 1, 0), ('val2',))  # second gets lease, but that has already run
+        ]
+        self.assertEqual(expected, AWS.all_sources.trace(uvars={"key"}))
+
+
+class TestThread(threading.Thread):
+
+    def __init__(self, test, name, context):
+        threading.Thread.__init__(self)
+        self.test = test
+        self.name = name
+        self.context = context
+
+    def run(self):
+        self.test._execute(AWS, self.name, self.context)
 
 
 class TestSqs(Test):
