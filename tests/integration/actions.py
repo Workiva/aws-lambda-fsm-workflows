@@ -12,7 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import time
 from aws_lambda_fsm.action import Action
+
+
+class LongPause(Action):
+    def execute(self, context, obj):
+        time.sleep(5)
+        return 'ok'
 
 
 class ReturnOK(Action):
