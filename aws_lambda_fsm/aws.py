@@ -2119,7 +2119,7 @@ def start_retries(context, run_at, payload, primary=True, recovering=False):
 
     service = get_arn_from_arn_string(source_arn).service
 
-    run_at = run_at + context.additional_delay_seconds
+    run_at = run_at + (context.additional_delay_seconds if context else 0)
 
     if not service:  # pragma: no cover
         log_once(logger.warning, "No retry source for primary=%s" % primary)
