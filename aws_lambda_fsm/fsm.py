@@ -289,26 +289,20 @@ class Context(dict):
             self.__system_context[SYSTEM_CONTEXT.CORRELATION_ID] = uuid.uuid4().hex
         return self.__system_context[SYSTEM_CONTEXT.CORRELATION_ID]
 
+    def _lookup_property(self, key, setting, default):
+        return self.__system_context.get(key, getattr(settings, setting, None)) or default
+
     @property
     def additional_delay_seconds(self):
-        return self.__system_context.get(
-            SYSTEM_CONTEXT.ADDITIONAL_DELAY_SECONDS,
-            getattr(settings, 'ADDITIONAL_DELAY_SECONDS', None)
-        ) or 0
+        return self._lookup_property(SYSTEM_CONTEXT.ADDITIONAL_DELAY_SECONDS, 'ADDITIONAL_DELAY_SECONDS', 0)
 
     @property
     def max_retries(self):
-        return self.__system_context.get(
-            SYSTEM_CONTEXT.MAX_RETRIES,
-            getattr(settings, 'MAX_RETRIES', None)
-        ) or CONFIG.MAX_RETRIES
+        return self._lookup_property(SYSTEM_CONTEXT.MAX_RETRIES, 'MAX_RETRIES', CONFIG.MAX_RETRIES)
 
     @property
     def lease_timeout(self):
-        return self.__system_context.get(
-            SYSTEM_CONTEXT.LEASE_TIMEOUT,
-            getattr(settings, 'LEASE_TIMEOUT', None)
-        ) or LEASE_DATA.LEASE_TIMEOUT
+        return self._lookup_property(SYSTEM_CONTEXT.LEASE_TIMEOUT, 'LEASE_TIMEOUT', LEASE_DATA.LEASE_TIMEOUT)
 
     # Mutable properties
 
