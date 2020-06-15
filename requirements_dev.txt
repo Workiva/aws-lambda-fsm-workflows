@@ -17,7 +17,7 @@ nose==1.3.7
 rednose==1.3
 mock==1.0.1
 coverage==4.0.3
-flake8==2.5.4
+flake8==3.8.3
 
 # AWS Libraries
 boto==2.49.0 # used in examples folder
