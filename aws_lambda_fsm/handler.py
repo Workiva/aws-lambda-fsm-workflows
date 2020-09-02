@@ -55,8 +55,8 @@ def _process_payload(payload_str, obj):
     payload = json.loads(payload_str, **json_loads_additional_kwargs())
     obj[OBJ.PAYLOAD] = payload_str
     fsm = Context.from_payload_dict(payload)
-    logger.info('system_context=%s', fsm.system_context())
-    logger.info('user_context.keys()=%s', fsm.user_context().keys())
+    logger.debug('system_context=%s', fsm.system_context())
+    logger.debug('user_context.keys()=%s', fsm.user_context().keys())
     current_event = fsm.system_context().get(SYSTEM_CONTEXT.CURRENT_EVENT, STATE.PSEUDO_INIT)
     fsm.dispatch(current_event, obj)
 
@@ -74,8 +74,8 @@ def _process_payload_step(payload_str, obj):
     payload = json.loads(payload_str, **json_loads_additional_kwargs())
     obj[OBJ.PAYLOAD] = payload_str
     fsm = Context.from_payload_dict(payload)
-    logger.info('system_context=%s', fsm.system_context())
-    logger.info('user_context.keys()=%s', fsm.user_context().keys())
+    logger.debug('system_context=%s', fsm.system_context())
+    logger.debug('user_context.keys()=%s', fsm.user_context().keys())
     current_event = fsm.system_context().get(SYSTEM_CONTEXT.CURRENT_EVENT, STATE.PSEUDO_INIT)
 
     # all retries etc. are handled by AWS Step Function infrastructure
@@ -230,7 +230,7 @@ def lambda_timer_handler():
         entities = []
 
     if entities:
-        logger.info('Processing %d entities from dynamodb retries...', len(entities))
+        logger.debug('Processing %d entities from dynamodb retries...', len(entities))
 
     for entity in entities:
 
@@ -274,7 +274,7 @@ def lambda_handler(lambda_event, lambda_context):
 
         records = lambda_event.get(AWS_LAMBDA.Records, [])
 
-        logger.info('Processing %s records...', Counter(_get_event_source(record) for record in records))
+        logger.debug('Processing %s records...', Counter(_get_event_source(record) for record in records))
 
         for record in records:
 
