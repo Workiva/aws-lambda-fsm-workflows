@@ -145,15 +145,16 @@ class FSM(object):
                     for transition_dict in state_dict.get(CONFIG.TRANSITIONS, []):
                         action = self._get_action(transition_dict.get(CONFIG.ACTION))
                         event = transition_dict[CONFIG.EVENT]
+                        local = transition_dict.get(CONFIG.LOCAL, False)
                         target_name = transition_dict[CONFIG.TARGET]
                         target = self.machines[machine_name][MACHINE.STATES][target_name]
-                        self._add_transition(machine_name, state, target, event, action=action)
+                        self._add_transition(machine_name, state, target, event, action=action, local=local)
 
             except (ImportError, ValueError) as e:  # pragma: no cover
                 logger.warning('Problem importing machine "%s": %s', machine_name, e)
                 self.machines.pop(machine_name, None)
 
-    def _add_transition(self, machine_name, source, target, event, action=None):
+    def _add_transition(self, machine_name, source, target, event, action=None, local=False):
         """
         A helper function to and an aws_lambda_fsm.transition.Transition instance to the machine.
 
@@ -164,7 +165,7 @@ class FSM(object):
         :param action: an optional aws_lambda_fsm.action.Action instance.
         """
         transition_name = source.name + '->' + target.name + ':' + event
-        transition = Transition(transition_name, target, action=action)
+        transition = Transition(transition_name, target, action=action, local=local)
         self.machines[machine_name][MACHINE.TRANSITIONS][transition_name] = transition
         source.add_transition(transition, event)
 
@@ -539,6 +540,12 @@ class Context(dict):
         """
         # dispatch the event using the user context only
         next_event = self.current_state.dispatch(self, event, obj)
+
+        # dispatch local transitions without enqueing more messages
+        while next_event \
+                and self.current_state.get_transition(next_event) \
+                and self.current_state.get_transition(next_event).local:
+            next_event = self.current_state.dispatch(self, next_event, obj)
 
         # if there are more events
         if next_event:

@@ -44,6 +44,24 @@ machines:
   - name: end
     final: true
 
+- name: looper-local
+
+  states:
+
+    - name: start
+      initial: true
+      do_action: tests.integration.actions.IncrementCounter
+      transitions:
+        - target: start
+          event: ok
+          local: true
+        - target: end
+          event: done
+          local: true
+
+    - name: end
+      final: true
+
 - name: serialization
 
   states:

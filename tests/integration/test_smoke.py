@@ -25,6 +25,8 @@ from aws_lambda_fsm.config import get_current_configuration
 from aws_lambda_fsm.constants import AWS as AWS_CONSTANTS
 from tests.integration.utils import AWSStub
 from tests.integration.utils import BaseFunctionalTest
+from .actions import get_counter
+from .actions import set_counter
 
 AWS = AWSStub()
 
@@ -202,7 +204,9 @@ class Test(BaseFunctionalTest):
     ################################################################################
 
     def test_looper(self, *args):
+        set_counter(0)
         self._execute(AWS, "looper", {"loops": 3})
+        self.assertEqual(3, get_counter())
 
         # check messages
         expected = [
@@ -386,6 +390,46 @@ class Test(BaseFunctionalTest):
             ]
         ]
         self.assertEqual(expected, AWS.errors.trace(raw=True))
+
+    ################################################################################
+    # START: machine_name="looper-local"
+    ################################################################################
+
+    def raising_send_next_event_for_dispatch(self, *args, **kwargs):
+        raise Exception()
+
+    def test_looper_local(self, *args):
+        original_send_next_event_for_dispatch = AWS.send_next_event_for_dispatch
+        try:
+            set_counter(0)
+            AWS.send_next_event_for_dispatch = self.raising_send_next_event_for_dispatch
+            self._execute(AWS, "looper-local", {"loops": 3})
+            self.assertEqual(3, get_counter())
+
+            # check messages
+            expected = [
+                (0, ('pseudo_init', 'pseudo_init', 0, 0), (None,)),
+            ]
+            self.assertEqual(expected, AWS.all_sources.trace(('counter',)))
+
+            # check cache
+            expected = {
+                'correlation_id-0': True
+            }
+            self.assertEqual(expected, AWS.primary_cache)
+            self.assertEqual(expected, AWS.secondary_cache)
+            expected = {
+                'correlation_id-0': True,
+                'lease-correlation_id-0': True
+            }
+            self.assertEqual(expected, AWS.all_caches)
+
+            # check errors
+            expected = []
+            self.assertEqual(expected, AWS.errors.trace(raw=True))
+
+        finally:
+            AWS.send_next_event_for_dispatch = original_send_next_event_for_dispatch
 
     ################################################################################
     # START: machine_name="serialization"

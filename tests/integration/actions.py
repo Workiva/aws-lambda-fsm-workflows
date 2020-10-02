@@ -29,10 +29,26 @@ class ReturnOK(Action):
         return 'ok'
 
 
+COUNTER = 0
+
+
+def get_counter():
+    global COUNTER
+    return COUNTER
+
+
+def set_counter(counter):
+    global COUNTER
+    COUNTER = counter
+
+
 class IncrementCounter(Action):
+
     def execute(self, context, obj):
+        global COUNTER
         if [context.steps, context.retries] in context.get('fail_at', []):
             raise Exception()
+        COUNTER += 1
         context['counter'] = context.get('counter', 0) + 1
         return 'ok' if (context['counter'] < context['loops']) else 'done'
 

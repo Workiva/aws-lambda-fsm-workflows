@@ -101,6 +101,7 @@ class CONFIG(object):
     EVENT = 'event'
     TARGET = 'target'
     TOPIC = 'topic'
+    LOCAL = 'local'
     MAX_RETRIES = 'max_retries'
     DEFAULT_MAX_RETRIES = 5
 
