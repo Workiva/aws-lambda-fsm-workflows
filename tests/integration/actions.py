@@ -53,6 +53,13 @@ class IncrementCounter(Action):
         return 'ok' if (context['counter'] < context['loops']) else 'done'
 
 
+class ResetCounter(Action):
+
+    def execute(self, context, obj):
+        del context['counter']
+        return 'done'
+
+
 class SerializationProblem(Action):
     def execute(self, context, obj):
         context['error'] = Exception()
