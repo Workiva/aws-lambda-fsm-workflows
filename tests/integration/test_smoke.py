@@ -433,7 +433,6 @@ class Test(BaseFunctionalTest):
         finally:
             AWS.send_next_event_for_dispatch = original_send_next_event_for_dispatch
 
-
     ################################################################################
     # START: machine_name="looper-mixed"
     ################################################################################
