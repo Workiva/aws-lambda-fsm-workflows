@@ -543,6 +543,7 @@ class Context(dict):
 
         # dispatch local transitions without enqueing more messages
         while next_event \
+                and self.current_state \
                 and self.current_state.get_transition(next_event) \
                 and self.current_state.get_transition(next_event).local:
             next_event = self.current_state.dispatch(self, next_event, obj)
