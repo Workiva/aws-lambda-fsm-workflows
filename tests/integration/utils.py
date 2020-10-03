@@ -86,6 +86,10 @@ class AWSStub(object):
         self.secondary_cache_chaos = 0.0
 
         self.errors = Messages()
+        self.callbacks = {}
+
+    def add_callback(self, method, callback=None):
+        self.callbacks[method] = callback
 
     def _get_stream_source(self, primary):
         chaos = {True: self.primary_stream_chaos, False: self.secondary_stream_chaos}[primary]
@@ -122,6 +126,8 @@ class AWSStub(object):
             self.secondary_retry_source.recv()
 
     def send_next_event_for_dispatch(self, context, data, correlation_id, delay=0, primary=True, recovering=False):
+        if 'send_next_event_for_dispatch' in self.callbacks:
+            self.callbacks['send_next_event_for_dispatch']()
         if recovering:
             self._get_retry_source(primary).send(data)
         else:
@@ -204,6 +210,7 @@ class AWSStub(object):
         self.secondary_cache_chaos = 0.0
         self.empty_primary_cache = False
         self.empty_secondary_cache = False
+        self.callbacks = {}
 
 
 def to_kinesis_message(data):
