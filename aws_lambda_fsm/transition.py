@@ -28,17 +28,19 @@ class Transition(object):
     State machine transition.
     """
 
-    def __init__(self, name, target, action=None):
+    def __init__(self, name, target, action=None, local=False):
         """
         Construct a state machine transition.
 
         :param name: a str name for the transition.
         :param target: an aws_lambda_fsm.state.State instance corresponding to the destination state of this transition.
         :param action: an optional aws_lambda_fsm.action.Action instance.
+        :param local: True if the transition can be executed locally.
         """
         self.name = name
         self.target = target
         self.action = action
+        self.local = local
 
     def execute(self, context, obj):
         """

@@ -44,6 +44,58 @@ machines:
   - name: end
     final: true
 
+- name: looper-local
+
+  states:
+
+    - name: start
+      initial: true
+      do_action: tests.integration.actions.IncrementCounter
+      transitions:
+        - target: start
+          event: ok
+          local: true
+        - target: end
+          event: done
+          local: true
+
+    - name: end
+      final: true
+
+
+- name: looper-mixed
+
+  states:
+
+    - name: start
+      initial: true
+      do_action: tests.integration.actions.IncrementCounter
+      transitions:
+        - target: start
+          event: ok
+          local: true
+        - target: reset
+          event: done
+
+    - name: reset
+      do_action: tests.integration.actions.ResetCounter
+      transitions:
+        - target: loop
+          event: done
+
+    - name: loop
+      do_action: tests.integration.actions.IncrementCounter
+      transitions:
+        - target: loop
+          event: ok
+          local: true
+        - target: end
+          event: done
+
+    - name: end
+      final: true
+
+
 - name: serialization
 
   states:
