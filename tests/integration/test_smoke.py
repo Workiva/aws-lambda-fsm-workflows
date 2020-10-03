@@ -431,7 +431,7 @@ class Test(BaseFunctionalTest):
         self.assertEqual(0, get_counter())
 
         AWS.add_callback('send_next_event_for_dispatch', mock.Mock(side_effect=([None] + [Exception()] * 100)))
-        self._execute(AWS, "looper-local", {"loops": 3, 'fail_at': [(0, 0), (1, 0), (2, 0)]})
+        self._execute(AWS, "looper-local", {"loops": 3, 'fail_at': [(i, 0) for i in range(100)]})
         self.assertEqual(3, get_counter())
 
         # check messages
@@ -509,7 +509,7 @@ class Test(BaseFunctionalTest):
     def test_looper_mixed_with_failure(self, *args):
         set_counter(0)
         self.assertEqual(0, get_counter())
-        self._execute(AWS, "looper-mixed", {"loops": 3, 'fail_at': [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)]})
+        self._execute(AWS, "looper-mixed", {"loops": 3, 'fail_at': [(i, 0) for i in range(100)]})
         self.assertEqual(6, get_counter())
 
         # check messages
