@@ -88,7 +88,7 @@ class AWSStub(object):
         self.errors = Messages()
         self.callbacks = {}
 
-    def add_callback(self, method, callback=None):
+    def add_callback(self, method, callback):
         self.callbacks[method] = callback
 
     def _get_stream_source(self, primary):
