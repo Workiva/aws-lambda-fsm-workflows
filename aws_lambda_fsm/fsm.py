@@ -299,7 +299,7 @@ class Context(dict):
 
     @property
     def max_retries(self):
-        return self._lookup_property(SYSTEM_CONTEXT.MAX_RETRIES, 'MAX_RETRIES', CONFIG.MAX_RETRIES)
+        return self._lookup_property(SYSTEM_CONTEXT.MAX_RETRIES, 'MAX_RETRIES', CONFIG.DEFAULT_MAX_RETRIES)
 
     @property
     def lease_timeout(self):
