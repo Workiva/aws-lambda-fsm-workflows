@@ -125,8 +125,12 @@ class TestHandler(unittest.TestCase):
         event = {
             'foo': 'bar'
         }
-        lambda_api_handler(event)
-        mock_process_payload.assert_called_with('{"foo": "bar"}', {'source': 'gateway'})
+        context = {
+            'gateway': 'context'
+        }
+        lambda_api_handler(event, context)
+        mock_process_payload.assert_called_with(
+            '{"foo": "bar"}', {'source': 'gateway', 'lambda_context': {'gateway': 'context'}})
 
     @mock.patch('aws_lambda_fsm.handler.FSM')
     @mock.patch('aws_lambda_fsm.handler.logger')
@@ -136,8 +140,11 @@ class TestHandler(unittest.TestCase):
         event = {
             'foo': 'bar'
         }
+        context = {
+            'gateway': 'context'
+        }
         mock_FSM.return_value.create_FSM_instance.side_effect = Exception()
-        lambda_api_handler(event)
+        lambda_api_handler(event, context)
         mock_logging.exception.assert_called_with(
             'Critical error handling lambda: %s', '[REDACTED]'
         )
@@ -152,8 +159,12 @@ class TestHandler(unittest.TestCase):
         event = {
             'foo': 'bar'
         }
-        lambda_step_handler(event)
-        mock_process_payload_step.assert_called_with('{"foo": "bar"}', {'source': 'step_function'})
+        context = {
+            'step': 'context'
+        }
+        lambda_step_handler(event, context)
+        mock_process_payload_step.assert_called_with(
+            '{"foo": "bar"}', {'source': 'step_function', 'lambda_context': {'step': 'context'}})
 
 ################################################################################
 # START: kinesis tests
@@ -168,13 +179,20 @@ class TestHandler(unittest.TestCase):
             }
         }
 
+    def get_kinesis_context(self):
+        return {
+            'kinesis': 'context'
+        }
+
     @mock.patch('aws_lambda_fsm.handler._process_payload')
     def test_lambda_kinesis_handler(self,
                                     mock_process_payload):
-        lambda_kinesis_handler(self.get_kinesis_record())
+        lambda_kinesis_handler(self.get_kinesis_record(), self.get_kinesis_context())
         mock_process_payload.assert_called_with(
             b'{"machine_name": "barfoo"}',
-            {'source': 'kinesis', 'lambda_record': self.get_kinesis_record()}
+            {'source': 'kinesis',
+             'lambda_record': self.get_kinesis_record(),
+             'lambda_context': self.get_kinesis_context()}
         )
 
     @mock.patch('aws_lambda_fsm.handler.FSM')
@@ -183,7 +201,7 @@ class TestHandler(unittest.TestCase):
                                           mock_logging,
                                           mock_FSM):
         mock_FSM.return_value.create_FSM_instance.side_effect = Exception()
-        lambda_kinesis_handler(self.get_kinesis_record())
+        lambda_kinesis_handler(self.get_kinesis_record(), self.get_kinesis_context())
         mock_logging.exception.assert_called_with(
             'Critical error handling record: %s',
             {'eventSource': 'aws:kinesis', 'kinesis': {'data': '[REDACTED]'}}
@@ -205,13 +223,20 @@ class TestHandler(unittest.TestCase):
             }
         }
 
+    def get_dynamodb_context(self):
+        return {
+            'dynamodb': 'context'
+        }
+
     @mock.patch('aws_lambda_fsm.handler._process_payload')
     def test_lambda_dynamodb_handler(self,
                                      mock_process_payload):
-        lambda_dynamodb_handler(self.get_dynamodb_record())
+        lambda_dynamodb_handler(self.get_dynamodb_record(), self.get_dynamodb_context())
         mock_process_payload.assert_called_with(
             '{"pay":"load"}',
-            {'source': 'dynamodb_stream', 'lambda_record': self.get_dynamodb_record()}
+            {'source': 'dynamodb_stream',
+             'lambda_record': self.get_dynamodb_record(),
+             'lambda_context': self.get_dynamodb_context()}
         )
 
     @mock.patch('aws_lambda_fsm.handler.FSM')
@@ -220,7 +245,7 @@ class TestHandler(unittest.TestCase):
                                            mock_logging,
                                            mock_FSM):
         mock_FSM.return_value.create_FSM_instance.side_effect = Exception()
-        lambda_dynamodb_handler(self.get_dynamodb_record())
+        lambda_dynamodb_handler(self.get_dynamodb_record(), self.get_dynamodb_context())
         mock_logging.exception.assert_called_with(
             'Critical error handling record: %s',
             {'eventSource': 'aws:dynamodb', 'dynamodb': {'NewImage': {'payload': {'S': '[REDACTED]'}}}}
@@ -236,7 +261,7 @@ class TestHandler(unittest.TestCase):
                                   mock_process_payload,
                                   mock_retriable_entities):
         mock_retriable_entities.return_value = [{'payload': 'payloadZ', 'correlation_id': 'abc123'}]
-        lambda_timer_handler()
+        lambda_timer_handler({}, {})
         mock_process_payload.assert_called_with('payloadZ', {'source': 'dynamodb_retry'})
 
     @mock.patch('aws_lambda_fsm.handler.retriable_entities')
@@ -248,7 +273,7 @@ class TestHandler(unittest.TestCase):
                                         mock_retriable_entities):
         mock_retriable_entities.return_value = [{'payload': 'payloadZ'}]
         mock_FSM.return_value.create_FSM_instance.side_effect = Exception()
-        lambda_timer_handler()
+        lambda_timer_handler({}, {})
         mock_logging.exception.assert_called_with(
             'Critical error handling entity: %s', {'payload': 'payloadZ'}
         )
@@ -265,13 +290,18 @@ class TestHandler(unittest.TestCase):
             }
         }
 
+    def get_sns_context(self):
+        return {
+            'sns': 'context'
+        }
+
     @mock.patch('aws_lambda_fsm.handler._process_payload')
     def test_lambda_sns_handler(self,
                                 mock_process_payload):
-        lambda_sns_handler(self.get_sns_record())
+        lambda_sns_handler(self.get_sns_record(), self.get_sns_context())
         mock_process_payload.assert_called_with(
             '{"mess": "age"}',
-            {'source': 'sns', 'lambda_record': self.get_sns_record()}
+            {'source': 'sns', 'lambda_record': self.get_sns_record(), 'lambda_context': self.get_sns_context()}
         )
 
     @mock.patch('aws_lambda_fsm.handler.FSM')
@@ -280,7 +310,7 @@ class TestHandler(unittest.TestCase):
                                       mock_logging,
                                       mock_FSM):
         mock_FSM.return_value.create_FSM_instance.side_effect = Exception()
-        lambda_sns_handler(self.get_sns_record())
+        lambda_sns_handler(self.get_sns_record(), self.get_sns_context())
         mock_logging.exception.assert_called_with(
             'Critical error handling record: %s',
             {'eventSource': 'aws:sns', 'Sns': {'Message': '[REDACTED]'}}
@@ -296,13 +326,18 @@ class TestHandler(unittest.TestCase):
             'body': json.dumps({"mess": "age"}, **json_dumps_additional_kwargs())
         }
 
+    def get_sqs_context(self):
+        return {
+            'sqs': 'context'
+        }
+
     @mock.patch('aws_lambda_fsm.handler._process_payload')
     def test_lambda_sqs_handler(self,
                                 mock_process_payload):
-        lambda_sqs_handler(self.get_sqs_record())
+        lambda_sqs_handler(self.get_sqs_record(), self.get_sqs_context())
         mock_process_payload.assert_called_with(
             '{"mess": "age"}',
-            {'source': 'sqs', 'lambda_record': self.get_sqs_record()}
+            {'source': 'sqs', 'lambda_record': self.get_sqs_record(), 'lambda_context': self.get_sqs_context()}
         )
 
     @mock.patch('aws_lambda_fsm.handler.FSM')
@@ -311,7 +346,7 @@ class TestHandler(unittest.TestCase):
                                       mock_logging,
                                       mock_FSM):
         mock_FSM.return_value.create_FSM_instance.side_effect = Exception()
-        lambda_sqs_handler(self.get_sqs_record())
+        lambda_sqs_handler(self.get_sqs_record(), self.get_sqs_context())
         mock_logging.exception.assert_called_with(
             'Critical error handling record: %s',
             {'eventSource': 'aws:sqs', 'body': '[REDACTED]'}
@@ -339,7 +374,7 @@ class TestHandler(unittest.TestCase):
                                   mock_lambda_dynamodb_handler):
         lambda_handler({'source': 'aws.events'}, 'a')
         self.assertFalse(mock_lambda_kinesis_handler.called)
-        mock_lambda_timer_handler.assert_called_with()
+        mock_lambda_timer_handler.assert_called_with({'source': 'aws.events'}, 'a')
         self.assertFalse(mock_lambda_dynamodb_handler.called)
         self.assertFalse(mock_lambda_sns_handler.called)
         self.assertFalse(mock_lambda_sqs_handler.called)
@@ -362,7 +397,7 @@ class TestHandler(unittest.TestCase):
                                     mock_lambda_kinesis_handler,
                                     mock_lambda_dynamodb_handler):
         lambda_handler({'Records': [{'eventSource': 'aws:kinesis', 'kinesis': 'abc123'}]}, 'a')
-        mock_lambda_kinesis_handler.assert_called_with({'eventSource': 'aws:kinesis', 'kinesis': 'abc123'})
+        mock_lambda_kinesis_handler.assert_called_with({'eventSource': 'aws:kinesis', 'kinesis': 'abc123'}, 'a')
         self.assertFalse(mock_lambda_timer_handler.called)
         self.assertFalse(mock_lambda_dynamodb_handler.called)
         self.assertFalse(mock_lambda_sns_handler.called)
@@ -388,7 +423,7 @@ class TestHandler(unittest.TestCase):
         lambda_handler({'Records': [{'eventSource': 'aws:dynamodb', 'dynamodb': {}}]}, 'a')
         self.assertFalse(mock_lambda_kinesis_handler.called)
         self.assertFalse(mock_lambda_timer_handler.called)
-        mock_lambda_dynamodb_handler.assert_called_with({'eventSource': 'aws:dynamodb', 'dynamodb': {}})
+        mock_lambda_dynamodb_handler.assert_called_with({'eventSource': 'aws:dynamodb', 'dynamodb': {}}, 'a')
         self.assertFalse(mock_lambda_sns_handler.called)
         self.assertFalse(mock_lambda_sqs_handler.called)
         self.assertFalse(mock_lambda_api_handler.called)
@@ -413,7 +448,7 @@ class TestHandler(unittest.TestCase):
         self.assertFalse(mock_lambda_kinesis_handler.called)
         self.assertFalse(mock_lambda_timer_handler.called)
         self.assertFalse(mock_lambda_dynamodb_handler.called)
-        mock_lambda_sns_handler.assert_called_with({'eventSource': 'aws:sns', 'Sns': {'Message': 'message'}})
+        mock_lambda_sns_handler.assert_called_with({'eventSource': 'aws:sns', 'Sns': {'Message': 'message'}}, 'a')
         self.assertFalse(mock_lambda_sqs_handler.called)
         self.assertFalse(mock_lambda_api_handler.called)
         self.assertFalse(mock_lambda_step_handler.called)
@@ -438,7 +473,7 @@ class TestHandler(unittest.TestCase):
         self.assertFalse(mock_lambda_timer_handler.called)
         self.assertFalse(mock_lambda_dynamodb_handler.called)
         self.assertFalse(mock_lambda_sns_handler.called)
-        mock_lambda_sqs_handler.assert_called_with({'eventSource': 'aws:sqs', 'body': '{"Message": "message"}'})
+        mock_lambda_sqs_handler.assert_called_with({'eventSource': 'aws:sqs', 'body': '{"Message": "message"}'}, 'a')
         self.assertFalse(mock_lambda_api_handler.called)
         self.assertFalse(mock_lambda_step_handler.called)
 
@@ -463,7 +498,7 @@ class TestHandler(unittest.TestCase):
         self.assertFalse(mock_lambda_dynamodb_handler.called)
         self.assertFalse(mock_lambda_sns_handler.called)
         self.assertFalse(mock_lambda_sqs_handler.called)
-        mock_lambda_api_handler.assert_called_with({'foo': 'bar'})
+        mock_lambda_api_handler.assert_called_with({'foo': 'bar'}, 'a')
         self.assertFalse(mock_lambda_step_handler.called)
 
     @mock.patch('aws_lambda_fsm.handler.lambda_dynamodb_handler')
@@ -488,4 +523,4 @@ class TestHandler(unittest.TestCase):
         self.assertFalse(mock_lambda_sns_handler.called)
         self.assertFalse(mock_lambda_sqs_handler.called)
         self.assertFalse(mock_lambda_api_handler.called)
-        mock_lambda_step_handler.assert_called_with({'step_function': True, 'foo': 'bar'})
+        mock_lambda_step_handler.assert_called_with({'step_function': True, 'foo': 'bar'}, 'a')

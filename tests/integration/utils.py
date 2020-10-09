@@ -271,9 +271,9 @@ class BaseFunctionalTest(unittest.TestCase):
         message = aws.get_message()
         while message:
             if AWS_CONSTANTS.KINESIS == self.MESSAGE_TYPE:
-                handler.lambda_kinesis_handler(to_kinesis_message(message))
+                handler.lambda_kinesis_handler(to_kinesis_message(message), {})
             elif AWS_CONSTANTS.SQS == self.MESSAGE_TYPE:
-                handler.lambda_sqs_handler(to_sqs_message(message))
+                handler.lambda_sqs_handler(to_sqs_message(message), {})
             elif AWS_CONSTANTS.SNS == self.MESSAGE_TYPE:
-                handler.lambda_sns_handler(to_sns_message(message))
+                handler.lambda_sns_handler(to_sns_message(message), {})
             message = aws.get_message()
