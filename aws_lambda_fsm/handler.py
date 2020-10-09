@@ -89,14 +89,15 @@ def _process_payload_step(payload_str, obj):
         return data
 
 
-def lambda_api_handler(lambda_event):
+def lambda_api_handler(lambda_event, lambda_context):
     """
     AWS Lambda handler for executing state machines.
 
     :param lambda_event: a dict event from AWS Lambda
+    :param lambda_context: a dict context from AWS Lambda
     """
     try:
-        obj = {OBJ.SOURCE: AWS.GATEWAY}
+        obj = {OBJ.SOURCE: AWS.GATEWAY, OBJ.LAMBDA_CONTEXT: lambda_context}
         payload = json.dumps(lambda_event, **json_dumps_additional_kwargs())  # API Gateway just passes straight though
         _process_payload(payload, obj)
 
@@ -108,27 +109,29 @@ def lambda_api_handler(lambda_event):
         logger.exception('Critical error handling lambda: %s', lambda_event)
 
 
-def lambda_step_handler(lambda_event):
+def lambda_step_handler(lambda_event, lambda_context):
     """
     AWS Lambda handler for executing state machines.
 
     :param lambda_event: a dict event from AWS Lambda
+    :param lambda_context: a dict context from AWS Lambda
     :return: a dict event to pass along to AWS Step Functions orchestration
     """
-    obj = {OBJ.SOURCE: AWS.STEP_FUNCTION}
+    obj = {OBJ.SOURCE: AWS.STEP_FUNCTION, OBJ.LAMBDA_CONTEXT: lambda_context}
     payload = json.dumps(lambda_event, **json_dumps_additional_kwargs())  # Step Function just passes straight though
     return _process_payload_step(payload, obj)
 
 
-def lambda_sqs_handler(record):
+def lambda_sqs_handler(record, lambda_context):
     """
     AWS Lambda handler for executing state machines.
 
     :param record: a dict event from AWS Lambda
+    :param lambda_context: a dict context from AWS Lambda
     """
 
     try:
-        obj = {OBJ.SOURCE: AWS.SQS, OBJ.LAMBDA_RECORD: record}
+        obj = {OBJ.SOURCE: AWS.SQS, OBJ.LAMBDA_RECORD: record, OBJ.LAMBDA_CONTEXT: lambda_context}
         payload = record[AWS_LAMBDA.SQS_RECORD.BODY]
         _process_payload(payload, obj)
 
@@ -140,15 +143,16 @@ def lambda_sqs_handler(record):
         logger.exception('Critical error handling record: %s', record)
 
 
-def lambda_kinesis_handler(record):
+def lambda_kinesis_handler(record, lambda_context):
     """
     AWS Lambda handler for executing state machines.
 
     :param record: a dict event from AWS Lambda
+    :param lambda_context: a dict context from AWS Lambda
     """
 
     try:
-        obj = {OBJ.SOURCE: AWS.KINESIS, OBJ.LAMBDA_RECORD: record}
+        obj = {OBJ.SOURCE: AWS.KINESIS, OBJ.LAMBDA_RECORD: record, OBJ.LAMBDA_CONTEXT: lambda_context}
         kinesis = record[AWS_LAMBDA.KINESIS_RECORD.KINESIS]
         encoded = kinesis[AWS_LAMBDA.KINESIS_RECORD.DATA]
         payload = base64.b64decode(encoded)
@@ -162,15 +166,16 @@ def lambda_kinesis_handler(record):
         logger.exception('Critical error handling record: %s', record)
 
 
-def lambda_dynamodb_handler(record):
+def lambda_dynamodb_handler(record, lambda_context):
     """
     AWS Lambda handler for executing state machines.
 
     :param record: a dict event from AWS Lambda
+    :param lambda_context: a dict context from AWS Lambda
     """
 
     try:
-        obj = {OBJ.SOURCE: AWS.DYNAMODB_STREAM, OBJ.LAMBDA_RECORD: record}
+        obj = {OBJ.SOURCE: AWS.DYNAMODB_STREAM, OBJ.LAMBDA_RECORD: record, OBJ.LAMBDA_CONTEXT: lambda_context}
         dynamodb = record[AWS_LAMBDA.DYNAMODB_RECORD.DYNAMODB]
         new_image = dynamodb[AWS_LAMBDA.DYNAMODB_RECORD.NewImage]
         payload = new_image[STREAM_DATA.PAYLOAD][AWS_DYNAMODB.STRING]
@@ -186,15 +191,16 @@ def lambda_dynamodb_handler(record):
         logger.exception('Critical error handling record: %s', record)
 
 
-def lambda_sns_handler(record):
+def lambda_sns_handler(record, lambda_context):
     """
     AWS Lambda handler for executing state machines.
 
     :param record: a dict event from AWS Lambda
+    :param lambda_context: a dict context from AWS Lambda
     """
 
     try:
-        obj = {OBJ.SOURCE: AWS.SNS, OBJ.LAMBDA_RECORD: record}
+        obj = {OBJ.SOURCE: AWS.SNS, OBJ.LAMBDA_RECORD: record, OBJ.LAMBDA_CONTEXT: lambda_context}
         sns = record[AWS_LAMBDA.SNS_RECORD.SNS]
         payload = sns[AWS_LAMBDA.SNS_RECORD.Message]
         _process_payload(payload, obj)
@@ -207,9 +213,12 @@ def lambda_sns_handler(record):
         logger.exception('Critical error handling record: %s', record)
 
 
-def lambda_timer_handler():
+def lambda_timer_handler(lambda_event, lambda_context):
     """
     AWS Lambda handler that runs periodically.
+
+    :param lambda_event: a dict event from AWS Lambda
+    :param lambda_context: a dict context from AWS Lambda
     """
     try:
         # TODO: hide these details behind an interface
@@ -268,7 +277,7 @@ def lambda_handler(lambda_event, lambda_context):
     #     ]
     # }
     if lambda_event.get(AWS_LAMBDA.Source) == AWS_LAMBDA.SOURCE.EVENTS:
-        lambda_timer_handler()
+        lambda_timer_handler(lambda_event, lambda_context)
 
     elif AWS_LAMBDA.Records in lambda_event:
 
@@ -300,7 +309,7 @@ def lambda_handler(lambda_event, lambda_context):
             #     ]
             # }
             if record.get(AWS_LAMBDA.EventSource) == AWS_LAMBDA.EVENT_SOURCE.KINESIS:
-                lambda_kinesis_handler(record)
+                lambda_kinesis_handler(record, lambda_context)
 
             # https://docs.aws.amazon.com/lambda/latest/dg/eventsources.html#eventsources-ddb-update
             #
@@ -335,7 +344,7 @@ def lambda_handler(lambda_event, lambda_context):
             #     ]
             # }
             elif record.get(AWS_LAMBDA.EventSource) == AWS_LAMBDA.EVENT_SOURCE.DYNAMODB:
-                lambda_dynamodb_handler(record)
+                lambda_dynamodb_handler(record, lambda_context)
 
             # https://docs.aws.amazon.com/lambda/latest/dg/eventsources.html#eventsources-sns
             #
@@ -371,7 +380,7 @@ def lambda_handler(lambda_event, lambda_context):
             #     ]
             # }
             elif record.get(AWS_LAMBDA.EventSource) == AWS_LAMBDA.EVENT_SOURCE.SNS:
-                lambda_sns_handler(record)
+                lambda_sns_handler(record, lambda_context)
 
             # https://docs.aws.amazon.com/lambda/latest/dg/eventsources.html#eventsources-sqs
             #
@@ -396,15 +405,15 @@ def lambda_handler(lambda_event, lambda_context):
             #     ]
             # }
             elif record.get(AWS_LAMBDA.EventSource) == AWS_LAMBDA.EVENT_SOURCE.SQS:
-                lambda_sqs_handler(record)
+                lambda_sqs_handler(record, lambda_context)
 
     # TODO: see if there is some other way to distinguish step function calls from api gateway calls
     #       injecting a parameter is not ideal
 
     # Step Functions
     elif lambda_event.get(AWS.STEP_FUNCTION):
-        return lambda_step_handler(lambda_event)
+        return lambda_step_handler(lambda_event, lambda_context)
 
     # API Gateway
     else:
-        lambda_api_handler(lambda_event)
+        lambda_api_handler(lambda_event, lambda_context)
