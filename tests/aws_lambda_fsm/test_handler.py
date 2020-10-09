@@ -190,7 +190,9 @@ class TestHandler(unittest.TestCase):
         lambda_kinesis_handler(self.get_kinesis_record(), self.get_kinesis_context())
         mock_process_payload.assert_called_with(
             b'{"machine_name": "barfoo"}',
-            {'source': 'kinesis', 'lambda_record': self.get_kinesis_record(), 'lambda_context': self.get_kinesis_context()}
+            {'source': 'kinesis',
+             'lambda_record': self.get_kinesis_record(),
+             'lambda_context': self.get_kinesis_context()}
         )
 
     @mock.patch('aws_lambda_fsm.handler.FSM')
