@@ -21,7 +21,7 @@ flake8==2.5.4
 
 # AWS Libraries
 boto==2.49.0 # used in examples folder
-boto3==1.12.1
+boto3==1.16.13
 
 # Optional Cache Libraries
 python-memcached==1.59
