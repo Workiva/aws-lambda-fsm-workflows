@@ -17,7 +17,7 @@ import logging
 import requests.packages.urllib3 as urllib3
 from botocore.exceptions import ClientError
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-logging.getLogger("botocore.vendored.requests.packages.urllib3").setLevel(logging.WARNING)
+logging.getLogger("requests.packages.urllib3").setLevel(logging.WARNING)
 
 PRIMARY_METRICS_SOURCE = None
 SECONDARY_METRICS_SOURCE = None
