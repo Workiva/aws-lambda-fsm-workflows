@@ -1,29 +1,17 @@
-# Copyright 2016-2020 Workiva Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 language: python
 sudo: false
 python:
-  - "2.7"
-  - "3.6"
-install: 
-  - pip install -r requirements_dev.txt
+- '2.7'
+- '3.6'
+install:
+- pip install -r requirements_dev.txt
 script:
-  - make clean coverage flake8
+- make clean coverage flake8
 env:
+  matrix:
   - BOTO_CONFIG=/dev/null
-  
+  global:
+    secure: vzdpnYSh2Y7pgELTOZcdzLjJlLu4ZqHt/N+teA0LwhLA3/lfNt6NPXtPyyDw7AdZsT4KQ7I12iKbfhxN1agJslYYERhBATWjEU7B6sSTYHJHI0xSfmoRFwvyOAUmFJzVd+rO+VlPqlilyjFyf6NWW5ucH3fZEjo+mWJA+2a27fi/uzFqyXGj/17qzch5ZeDruRWpCP8HIFVOtZEHX2195rO2f0knmS0ZFKpDPCdyo6cdWPoShfB0ebHHOgPC7LLn5+oBkXC7Xp8bQwhXhwnmsXYelk1xnx57QmpBD9s2vJrYYw8DJMjhQMzm4olCJd+GHjthSmEphlYpmQOB7mZuJ8oaHBu2uqB5+EGhBWk/GNUugoT+uzQg+2pYsl5D5X77jbB6nHOsY8+LzUqjl++K0ONqtaQ4vwagrif6emWVQ1LuEBRlgBIHNl2EnOXJJuf58BkvrE5os2BR5bCXwKRi06/LrKTVbKN7owlfe3aTSq8odnpfcfQUL/xrz4uwSauB+V8j0FE1eRJ1HKhnHiQyBPubkqPE7ZmQFYpOe47giNbFtWz1Ds1RQ01WYmm0/7OVPWuMYCAcCcz00SBzgacDg0fiy37E+277QGY6V18pyrYPpIWrx3Glkgo0zU8wvrSwmdIfLNYrXi/gqUPvxTh/hBzQXyWonIc73FHwzAJgzsA=
 deploy:
   provider: pypi
   skip_existing: true
@@ -32,4 +20,3 @@ deploy:
     secure: o8EnPhFqIEe2Vum8NBWJ9xt2W8BaFlkQNJc7Ryk3LQWomeIb8jG6RsVvcNiQPI/XMLoST5TO9/dx5FeaDZ6mEKiXtApPGZYct38bvp34hpo0Zy52fhLYx5ebxjgz9UCp0DkrqR4mPHU2z5sx0rPMuhXGAzNgWX4zce6AVDgR/l/ZzDQabjRM/cGWF7lfmGZvE1XUZep2nqz1C6DRJ6a6cjuZtUwIe30I93CzyNnSgid8IZ4V69/aKfNm65t/fkXRuGAt9HY6RMdav9SS4atVK43d0s5NqF+3EI9XWxYH9Z9AtNLAV6iCiruQFUnaTQc/alMLgoTY6Y/N8w5yHbacnnQ2UKxu0NGOadK4cBDoiT4slUIudrv02//ItRSx1k/4T8HaSsAZK9tshoa8HvRD7Bjiz0dsqpqlZnjxhc28mYTAm5fwjF0r1vumFCMp7/VAMNIpoDatLe7t1KqoIArsNMKQxxiRfRYTRHM/rBMY567ocag1pRNET/DPQzBBaxYXecS5njlq3EhK/JBwJyMvCFHeMxMQO06Scyd8JgE+stLa2z1DvkYG5w1LvFI0Mey+a0P8qmkg841AdpYrtHeny+R3bbTcYxyGsp9JH1S6eq6Uuhg6n93HU5No1yhyiV3J7jHRoWWUH3AvXsn/TjXFpD0dCLlQPF97ECcIx827WFs=
   on:
     tags: true
-
