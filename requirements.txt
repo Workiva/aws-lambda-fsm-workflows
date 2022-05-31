@@ -12,6 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-pyyaml==5.3.1
+pyyaml==5.4
 future==0.16
 requests==2.24.0
