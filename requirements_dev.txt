@@ -25,6 +25,6 @@ boto3==1.12.1
 
 # Optional Cache Libraries
 python-memcached==1.59
-redis==3.4.1
+redis==4.4.4
 
 -r requirements.txt
