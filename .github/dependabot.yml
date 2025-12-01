@@ -1,0 +1,44 @@
+version: 2
+registries:
+  python-index-workivaeast-jfrog-io-workivaeast-api-pypi-pypi-prod:
+    type: python-index
+    url: https://workivaeast.jfrog.io/workivaeast/api/pypi/pypi-prod/simple
+    replaces-base: true
+    username: "${{secrets.PYTHON_INDEX_WORKIVAEAST_JFROG_IO_WORKIVAEAST_API_PYPI_PYPI_PROD_USERNAME}}"
+    password: "${{secrets.PYTHON_INDEX_WORKIVAEAST_JFROG_IO_WORKIVAEAST_API_PYPI_PYPI_PROD_PASSWORD}}"
+
+updates:
+- package-ecosystem: pip
+  directory: "/"
+  schedule:
+    interval: weekly
+    day: sunday
+    time: "20:00"
+    timezone: America/Chicago
+  open-pull-requests-limit: 3
+  ignore:
+  - dependency-name: boto3
+    versions:
+    - 1.16.59
+    - 1.16.63
+    - 1.17.12
+    - 1.17.17
+    - 1.17.22
+    - 1.17.27
+    - 1.17.3
+    - 1.17.33
+    - 1.17.39
+    - 1.17.44
+    - 1.17.49
+    - 1.17.53
+    - 1.17.7
+  - dependency-name: coverage
+    versions:
+    - 5.3.1
+    - "5.4"
+  commit-message:
+    prefix: fix
+    prefix-development: chore
+    include: scope
+  registries:
+  - python-index-workivaeast-jfrog-io-workivaeast-api-pypi-pypi-prod
