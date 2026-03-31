@@ -13,5 +13,5 @@
 # limitations under the License.
 
 pyyaml==5.3.1
-future==0.16
+future==1.0.0
 requests==2.24.0
