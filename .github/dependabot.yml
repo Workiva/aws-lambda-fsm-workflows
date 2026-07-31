@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 4
+  - package-ecosystem: "docker"
+    directory: "/tests/functional"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      exclude:
+        - "*"
+  - package-ecosystem: "docker-compose"
+    directory: "/tests/functional"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      exclude:
+        - "*"
